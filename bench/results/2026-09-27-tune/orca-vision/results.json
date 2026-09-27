@@ -1,0 +1,158 @@
+{
+  "label": "orca-vision",
+  "config": "strata-orca-iq3_xxs-local.json",
+  "engine_args": [
+    "--pack",
+    "D:\\Workspace\\Personal_Project\\Strata\\packs\\orca-iq3_xxs",
+    "--native",
+    "D:\\Workspace\\Personal_Project\\Strata\\models\\orca-IQ3_XXS\\Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+    "--ple-gguf",
+    "D:\\Workspace\\Personal_Project\\Strata\\models\\orca-IQ3_XXS\\Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+    "--expert-profile",
+    "D:\\Workspace\\Personal_Project\\Strata\\data\\expert-profile.bin",
+    "--expert-cache",
+    "auto",
+    "--spec",
+    "4",
+    "--spec-min-p",
+    "0.5",
+    "--mtp",
+    "D:\\Workspace\\Personal_Project\\Strata\\mtp\\rt",
+    "--kv",
+    "int8",
+    "--vision",
+    "--vram-reserve-mib",
+    "700",
+    "--max-context",
+    "204800",
+    "--prefill",
+    "8192",
+    "--mtp-window",
+    "65536",
+    "--pcie-frac",
+    "0.40"
+  ],
+  "token_count_method": "tokenizer",
+  "max_tokens": 2000,
+  "contexts": [
+    {
+      "target": 1024,
+      "runs": [
+        {
+          "prompt_tokens": 1024,
+          "generated_tokens": 2000,
+          "usage": {
+            "prompt_tokens": 1024,
+            "completion_tokens": 2000,
+            "total_tokens": 3024
+          },
+          "ttft_s": 6.018,
+          "prefill_tok_s": 170.16,
+          "decode_tok_s": 27.49,
+          "elapsed_s": 78.725,
+          "answer_first_200": "We need answer user's request. Need produce final answer: detailed, 600-word technical summary of files above. User provided benchmark nonce and files section with two tables: Output decode tok/s esti",
+          "answer": "We need answer user's request. Need produce final answer: detailed, 600-word technical summary of files above. User provided benchmark nonce and files section with two tables: Output decode tok/s estimated and Prompt processing tok/s estimated. Need summarize in ~600 words. Need likely mention data incomplete? The prompt processing table truncated at RTX 3090 IQ2_XS 422? It says ~422 then no more. Need summarize available data. Need maybe 600 words exactly? \"600-word technical summary\" likely around 600 words. Need produce detailed technical summary. Need count words? Aim ~600. Let's draft around 600 words. Need maybe mention benchmark nonce bench-1024-0. Need summarize cards: RTX 5070 12GB measured, RTX 5060 Ti 16GB, RTX 3090 24GB; models Q2_0, IQ2_XS, IQ3_XXS; context lengths 1k,4k,32k,64k,128k,262k. Need discuss trends: decode throughput generally peaks around 4k then declines with longer context due to KV cache bandwidth/latency; 3090 highest absolute throughput despite older architecture due to higher memory bandwidth? 5070 measured close to 3090? Actually 3090 Q2_0 128/140/130/115/100/85, 5070 89/95/88/76/65/56, 5060 Ti 80/87/81/72/62/53. 3090 ~40-50% higher than 5070? 140/95=1.47. 5070 slightly higher than 5060 Ti. IQ2_XS lower than Q2_0 for 5070? Q2_0 89 vs IQ2_XS 82 at 1k, but at 4k Q2_0 95 vs IQ2_XS 78? Wait table: 5070 Q2_0 1k ~89, 4k ~95, 32k ~88, 64k ~76, 128k ~65, 262k ~56. IQ2_XS 1k ~82, 4k ~78, 32k ~65, 64k ~64, 128k ~52, 262k ~48. So Q2_0 faster than IQ2_XS? Usually IQ2_XS may be faster? But data says Q2_0 faster. Need not challenge. IQ3_XXS lower than IQ2_XS? 5070 IQ3_XXS 65,66,57,54,45, missing 262k. So lower throughput. For 3090 Q2_0 > IQ2_XS > IQ3_XXS. Need mention missing 262k for IQ3_XXS. Prompt processing: 5070 Q2_0 389,539,571,561,543,496; IQ2_XS 332,463,495,486,472,437; IQ3_XXS 285,410,435,427,414, missing. 5060 Ti lower than 5070 by ~12-15%. 3090 Q2_0 355,491,521,512,495,453; IQ2_XS 303,422, then truncated. Need mention incomplete data. Need technical summary: likely about inference performance, quantization, memory bandwidth, KV cache, batch? Need mention units tokens/sec. Need maybe discuss implications: for long context, prompt processing remains high but decode degrades; 3090 best for throughput, 5070 good for 12GB, 5060 Ti lower. Need mention 262k context likely near memory limits. Need maybe mention 5070 measured vs estimated? The table says RTX 5070 12GB (measured), others estimated? Actually first table: RTX 5070 12GB (measured), others estimated? It says Card: RTX 5070 12GB (measured), RTX 5060 Ti 16GB, RTX 3090 24GB. The file title says estimated. Need mention measured/estimated. Need maybe mention benchmark nonce. Need 600 words. Let's draft and count roughly. Need final only summary. Need ensure around 600 words. Let's draft 600 words. I'll count manually approximate.\n\nDraft:\n\"The benchmark file bench-1024-0 presents estimated and measured inference throughput for three consumer GPUs—RTX 5070 12GB, RTX 5060 Ti 16GB, and RTX 3090 24GB—across three quantized model formats: Q2_0, IQ2_XS, and IQ3_XXS. The data are organized into two performance dimensions: output decode throughput and prompt processing throughput, evaluated at context lengths of 1k, 4k, 32k, 64k, 128k, and 262k tokens. The 5070 entries are labeled measured, while the remaining figures appear to be estimates, making the dataset useful for relative comparisons but not for precise absolute performance claims.\n\nThe decode table shows that the RTX 3090 consistently delivers the highest token generation rates. For Q2_0, it reaches approximately 128 tokens/s at 1k context, peaks near 140 tokens/s at 4k, then declines to 130, 115, 100, and 85 tokens/s at 32k, 64k, 128k, and 262k. The 5070 follows at roughly 89, 95, 88, 76, 65, and 56 tokens/s, while the 5060 Ti trails slightly with 80, 87, 81, 72, 62, and 53 tokens/s. This ordering suggests that memory bandwidth and memory subsystem efficiency remain dominant factors for autoregressive decoding, especially as context length increases and the KV cache grows. The 3090’s larger memory capacity and bandwidth advantage translate into higher sustained throughput, even though the 5070 is a newer architecture.\n\nQuantization format also affects throughput. In these results, Q2_0 generally outperforms IQ2_XS, and IQ2_XS outperforms IQ3_XXS. This is counterintuitive if one expects lower-bit quantization to always increase speed, but it likely reflects implementation overhead, kernel efficiency, dequantization cost, or the specific model configuration used. The 5070’s Q2_0 decode rates are roughly 8–10 percent higher than IQ2_XS at short contexts and remain higher at longer contexts. The 3090 shows a similar pattern, with Q2_0 delivering the highest values across all reported context lengths. IQ3_XXS is consistently the slowest, and its 262k entry is missing, suggesting either unsupported configurations, measurement gaps, or data truncation.\n\nThe prompt processing table follows a similar hierarchy. The 5070 leads with Q2_0 values of approximately 389, 539, 571, 561, 543, and 496 tokens/s across the six context lengths. The 5060 Ti is lower by roughly 12–15 percent, while the 3090 is also lower than the 5070 in this table, with Q2_0 values of 355, 491, 521, 512, 495, and 453 tokens/s. This reversal relative to the decode table is notable: the 3090’s advantage in decode throughput does not fully translate to prompt processing in these estimates. It may indicate that the 5070 benefits from newer software optimizations, different batch behavior, or that the 3090 figures are less representative. The 3090 IQ2_XS row is incomplete, ending at 422 tokens/s at 4k context, which limits conclusions about its long-context prompt performance.\n\nA key trend is that prompt processing throughput peaks around 32k to 64k context before declining at 128",
+          "peaks": {
+            "gpus": {
+              "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+                "memory_mib": 13997,
+                "utilization_pct": 100
+              },
+              "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+                "memory_mib": 1191,
+                "utilization_pct": 0
+              }
+            },
+            "ram_mib": 90774
+          },
+          "mtp_acceptance": 0.795,
+          "engine_prompt_tokens": 1024,
+          "engine_prompt_ms": 5907.0,
+          "engine_prefill_tok_s": 173.4,
+          "engine_generated_tokens": 2000,
+          "engine_decode_ms": 72798.0,
+          "engine_decode_tok_s": 27.5,
+          "estimated_prompt_tokens": 1024
+        }
+      ],
+      "median": {
+        "prompt_tokens": 1024,
+        "generated_tokens": 2000,
+        "usage": {
+          "prompt_tokens": 1024,
+          "completion_tokens": 2000,
+          "total_tokens": 3024
+        },
+        "ttft_s": 6.018,
+        "prefill_tok_s": 170.16,
+        "decode_tok_s": 27.49,
+        "elapsed_s": 78.725,
+        "answer_first_200": "We need answer user's request. Need produce final answer: detailed, 600-word technical summary of files above. User provided benchmark nonce and files section with two tables: Output decode tok/s esti",
+        "answer": "We need answer user's request. Need produce final answer: detailed, 600-word technical summary of files above. User provided benchmark nonce and files section with two tables: Output decode tok/s estimated and Prompt processing tok/s estimated. Need summarize in ~600 words. Need likely mention data incomplete? The prompt processing table truncated at RTX 3090 IQ2_XS 422? It says ~422 then no more. Need summarize available data. Need maybe 600 words exactly? \"600-word technical summary\" likely around 600 words. Need produce detailed technical summary. Need count words? Aim ~600. Let's draft around 600 words. Need maybe mention benchmark nonce bench-1024-0. Need summarize cards: RTX 5070 12GB measured, RTX 5060 Ti 16GB, RTX 3090 24GB; models Q2_0, IQ2_XS, IQ3_XXS; context lengths 1k,4k,32k,64k,128k,262k. Need discuss trends: decode throughput generally peaks around 4k then declines with longer context due to KV cache bandwidth/latency; 3090 highest absolute throughput despite older architecture due to higher memory bandwidth? 5070 measured close to 3090? Actually 3090 Q2_0 128/140/130/115/100/85, 5070 89/95/88/76/65/56, 5060 Ti 80/87/81/72/62/53. 3090 ~40-50% higher than 5070? 140/95=1.47. 5070 slightly higher than 5060 Ti. IQ2_XS lower than Q2_0 for 5070? Q2_0 89 vs IQ2_XS 82 at 1k, but at 4k Q2_0 95 vs IQ2_XS 78? Wait table: 5070 Q2_0 1k ~89, 4k ~95, 32k ~88, 64k ~76, 128k ~65, 262k ~56. IQ2_XS 1k ~82, 4k ~78, 32k ~65, 64k ~64, 128k ~52, 262k ~48. So Q2_0 faster than IQ2_XS? Usually IQ2_XS may be faster? But data says Q2_0 faster. Need not challenge. IQ3_XXS lower than IQ2_XS? 5070 IQ3_XXS 65,66,57,54,45, missing 262k. So lower throughput. For 3090 Q2_0 > IQ2_XS > IQ3_XXS. Need mention missing 262k for IQ3_XXS. Prompt processing: 5070 Q2_0 389,539,571,561,543,496; IQ2_XS 332,463,495,486,472,437; IQ3_XXS 285,410,435,427,414, missing. 5060 Ti lower than 5070 by ~12-15%. 3090 Q2_0 355,491,521,512,495,453; IQ2_XS 303,422, then truncated. Need mention incomplete data. Need technical summary: likely about inference performance, quantization, memory bandwidth, KV cache, batch? Need mention units tokens/sec. Need maybe discuss implications: for long context, prompt processing remains high but decode degrades; 3090 best for throughput, 5070 good for 12GB, 5060 Ti lower. Need mention 262k context likely near memory limits. Need maybe mention 5070 measured vs estimated? The table says RTX 5070 12GB (measured), others estimated? Actually first table: RTX 5070 12GB (measured), others estimated? It says Card: RTX 5070 12GB (measured), RTX 5060 Ti 16GB, RTX 3090 24GB. The file title says estimated. Need mention measured/estimated. Need maybe mention benchmark nonce. Need 600 words. Let's draft and count roughly. Need final only summary. Need ensure around 600 words. Let's draft 600 words. I'll count manually approximate.\n\nDraft:\n\"The benchmark file bench-1024-0 presents estimated and measured inference throughput for three consumer GPUs—RTX 5070 12GB, RTX 5060 Ti 16GB, and RTX 3090 24GB—across three quantized model formats: Q2_0, IQ2_XS, and IQ3_XXS. The data are organized into two performance dimensions: output decode throughput and prompt processing throughput, evaluated at context lengths of 1k, 4k, 32k, 64k, 128k, and 262k tokens. The 5070 entries are labeled measured, while the remaining figures appear to be estimates, making the dataset useful for relative comparisons but not for precise absolute performance claims.\n\nThe decode table shows that the RTX 3090 consistently delivers the highest token generation rates. For Q2_0, it reaches approximately 128 tokens/s at 1k context, peaks near 140 tokens/s at 4k, then declines to 130, 115, 100, and 85 tokens/s at 32k, 64k, 128k, and 262k. The 5070 follows at roughly 89, 95, 88, 76, 65, and 56 tokens/s, while the 5060 Ti trails slightly with 80, 87, 81, 72, 62, and 53 tokens/s. This ordering suggests that memory bandwidth and memory subsystem efficiency remain dominant factors for autoregressive decoding, especially as context length increases and the KV cache grows. The 3090’s larger memory capacity and bandwidth advantage translate into higher sustained throughput, even though the 5070 is a newer architecture.\n\nQuantization format also affects throughput. In these results, Q2_0 generally outperforms IQ2_XS, and IQ2_XS outperforms IQ3_XXS. This is counterintuitive if one expects lower-bit quantization to always increase speed, but it likely reflects implementation overhead, kernel efficiency, dequantization cost, or the specific model configuration used. The 5070’s Q2_0 decode rates are roughly 8–10 percent higher than IQ2_XS at short contexts and remain higher at longer contexts. The 3090 shows a similar pattern, with Q2_0 delivering the highest values across all reported context lengths. IQ3_XXS is consistently the slowest, and its 262k entry is missing, suggesting either unsupported configurations, measurement gaps, or data truncation.\n\nThe prompt processing table follows a similar hierarchy. The 5070 leads with Q2_0 values of approximately 389, 539, 571, 561, 543, and 496 tokens/s across the six context lengths. The 5060 Ti is lower by roughly 12–15 percent, while the 3090 is also lower than the 5070 in this table, with Q2_0 values of 355, 491, 521, 512, 495, and 453 tokens/s. This reversal relative to the decode table is notable: the 3090’s advantage in decode throughput does not fully translate to prompt processing in these estimates. It may indicate that the 5070 benefits from newer software optimizations, different batch behavior, or that the 3090 figures are less representative. The 3090 IQ2_XS row is incomplete, ending at 422 tokens/s at 4k context, which limits conclusions about its long-context prompt performance.\n\nA key trend is that prompt processing throughput peaks around 32k to 64k context before declining at 128",
+        "peaks": {
+          "gpus": {
+            "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+              "memory_mib": 13997,
+              "utilization_pct": 100
+            },
+            "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+              "memory_mib": 1191,
+              "utilization_pct": 0
+            }
+          },
+          "ram_mib": 90774
+        },
+        "mtp_acceptance": 0.795,
+        "engine_prompt_tokens": 1024,
+        "engine_prompt_ms": 5907.0,
+        "engine_prefill_tok_s": 173.4,
+        "engine_generated_tokens": 2000,
+        "engine_decode_ms": 72798.0,
+        "engine_decode_tok_s": 27.5,
+        "estimated_prompt_tokens": 1024
+      }
+    }
+  ],
+  "vision": {
+    "prompt_tokens": 535,
+    "generated_tokens": 651,
+    "usage": {
+      "prompt_tokens": 535,
+      "completion_tokens": 651,
+      "total_tokens": 1186
+    },
+    "ttft_s": 4.956,
+    "prefill_tok_s": 107.95,
+    "decode_tok_s": 26.96,
+    "elapsed_s": 29.25,
+    "answer_first_200": "The user wants a detailed description of the image. Let me carefully examine what's present.\n\nThe image has a white background. There's a thin black border at the top and bottom edges (horizontal line",
+    "answer": "The user wants a detailed description of the image. Let me carefully examine what's present.\n\nThe image has a white background. There's a thin black border at the top and bottom edges (horizontal lines).\n\nElements I can identify:\n1. A red circle in the upper-left area.\n2. A blue square in the upper-right area.\n3. A green triangle in the lower-middle/left area.\n4. Black text reading \"STRATA 42\" (the \"42\" is partially cut off at the right edge) in the lower-right area.\n\nLet me look at positions more carefully. The red circle is on the left, roughly centered vertically in the upper half. The blue square is on the right, also in the upper half, aligned roughly with the circle's vertical position. The green triangle is in the lower portion, positioned roughly below the gap between the circle and square, maybe slightly left of center. The text \"STRATA 42\" is in the lower right, with the baseline near the bottom.\n\nThe text font appears to be a sans-serif, fairly large. The \"42\" is cut off at the right edge of the image.\n\nLet me describe colors precisely: red is pure red (#FF0000-ish), blue is pure blue (#0000FF-ish), green is pure green (#008000-ish, a medium green). The text is black.\n\nI should describe layout, shapes, colors, positions, and the partial text.\n\nLet me note the triangle points upward. The square's edges are axis-aligned. The circle is a perfect circle.\n\nI'll write a clear, detailed description. No need for tools. Final answer in English.\nThe image is a wide, landscape-oriented graphic set against a plain white background, framed by thin black horizontal lines along the very top and bottom edges. It contains four distinct elements arranged in a loose two-row layout.\n\n**Top row:**\n- On the left is a solid **red circle** (a pure, saturated red). It is a perfect circle with no outline.\n- On the right is a solid **blue square** (a pure, saturated blue), with its sides aligned horizontally and vertically. It sits at roughly the same vertical level as the red circle, separated from it by a gap of white space.\n\n**Bottom row:**\n- Toward the lower-center/left is a solid **green triangle** (a medium, slightly dark green), oriented with one vertex pointing straight up and its base horizontal.\n- To the right of the triangle, in the lower-right area, is **black text** in a clean sans-serif typeface that reads **\"STRATA 42\"**. The text is large, and the final digits (\"42\") are partially cut off by the right edge of the image.\n\nIn summary, the composition places three brightly colored geometric shapes—a red circle, a blue square, and a green triangle—alongside the black wordmark \"STRATA 42,\" all on a white field. The shapes are flat, solid fills with no gradients, shadows, or borders.",
+    "peaks": {
+      "gpus": {
+        "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+          "memory_mib": 13990,
+          "utilization_pct": 100
+        },
+        "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+          "memory_mib": 1191,
+          "utilization_pct": 0
+        }
+      },
+      "ram_mib": 90841
+    },
+    "mtp_acceptance": 0.711,
+    "engine_prompt_tokens": 535,
+    "engine_prompt_ms": 4420.0,
+    "engine_prefill_tok_s": 121.0,
+    "engine_generated_tokens": 651,
+    "engine_decode_ms": 24354.0,
+    "engine_decode_tok_s": 26.7
+  },
+  "health": {
+    "status": "ok",
+    "max_context": 204800,
+    "model": "qwen3.8-flash-next-uncensored-iq3_xxs",
+    "images": true,
+    "api_key": false
+  }
+}

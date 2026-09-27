@@ -1,0 +1,28 @@
+{
+  "config": "strata-orca-iq3_xxs-local.json",
+  "exe": "D:\\Workspace\\Personal_Project\\Strata\\engine-local\\strata.exe",
+  "200k": {
+    "overrides": [
+      "--max-context=204800",
+      "--prefill=8192",
+      "--mtp-window=65536",
+      "--pcie-frac=0.40"
+    ]
+  },
+  "262k": {
+    "overrides": [
+      "--max-context=262144",
+      "--prefill=8192",
+      "--mtp-window=65536",
+      "--pcie-frac=0.40"
+    ]
+  },
+  "unchanged": [
+    "--spec=4",
+    "--spec-min-p=0.5",
+    "--kv=int8",
+    "--mtp=D:\\Workspace\\Personal_Project\\Strata\\mtp\\rt",
+    "--vram-reserve-mib=700"
+  ],
+  "notes": "Short-run decode is the average of the 1K and 8K engine_decode_tok_s medians. orca-mtp-orca averaged 30.23 tok/s versus 31.20 for the original MTP on the same 200K / prefill 8192 / mtp-window 65536 args, so the abliterated MTP was not kept. On top of that reference, --pcie-frac=0.40 averaged 32.75 (+5.0%, and both contexts were more than 3% faster: 33.35 and 32.15 versus 31.40 and 31.00). --pcie-frac=0.75 averaged 28.43. --spec=3 averaged 32.05 (+2.7%), short of the 3% bar. Those probes were not stacked. Both context ladders with these args completed, including a 261232-token prompt at max-context 262144. orca-vision, using the 200K list, named a red circle, a blue square, a green triangle, and the text STRATA 42. The engine still warns that the expert-cache GPU hit path makes generated text diverge from a cache-off run."
+}

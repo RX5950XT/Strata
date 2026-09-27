@@ -1,0 +1,300 @@
+strata serve: prompt 1024 tokens = 0 reused + 1024 read in 4423 ms (231.5 tok/s), 400 generated in 12122 ms (33.0 tok/s), drafts accepted 208 of 294, 1 checkpoints
+strata serve: prompt 8192 tokens = 0 reused + 8192 read in 18752 ms (436.9 tok/s), 400 generated in 11721 ms (34.1 tok/s), drafts accepted 242 of 295, 1 checkpoints
+strata serve: prompt 8192 tokens = 0 reused + 8192 read in 18377 ms (445.8 tok/s), 400 generated in 11574 ms (34.6 tok/s), drafts accepted 219 of 305, 1 checkpoints
+strata generate: this CPU has no AVX-512: the expert kernels run on AVX2
+strata generate: native pack: D:\Workspace\Personal_Project\Strata\packs\iq3_xxs experts (largest blob 2.33 MB), token embedding type 21 in mapped host memory (260 MiB)
+strata generate: 1466 MiB of weights loaded from D:\Workspace\Personal_Project\Strata\packs\iq3_xxs (302 canonical tensors skipped: served natively)
+strata generate: 300 native projection matrices, 1781.11 MiB of weights
+strata generate: PLE on, table 320001536 rows of D:\Workspace\Personal_Project\Strata\models\IQ3_XXS\Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00002-of-00002.gguf
+strata generate: expert arena: locked 2 MiB via working-set minimum + VirtualLock; cudaHostRegister of the whole arena FAILED (out of memory); 48 slices pinned (39 GiB); large pages refused (GetLargePageMinimum=2097152, VirtualAlloc error 87 - needs SeLockMemoryPrivilege); using 4 KB pages
+strata generate: loaded 39.97 GiB at 1.53 GiB/s
+strata mtp: draft layer loaded, 1044 MiB of VRAM (experts 675, dense 111)
+strata generate: profile D:\Workspace\Personal_Project\Strata\data\expert-profile.bin: 8000 ranked pairs, built for 8000 slots
+strata generate: expert cache auto: 7.54 GiB free, 700 MiB reserved -> 3162 slots
+strata generate: only 124 MiB free once the slots are written (reserve 700 MiB); shrinking the expert cache
+strata generate: expert cache 3825 slots, 6.23 GiB of VRAM; policy is
+strata generate: *** WARNING: --expert-cache is enabled and the GPU hit path is NOT
+                 CORRECT. The generated tokens diverge from a cache-off run (measured:
+                 first difference at token 40 at 2.97% hits, token 0 at 54.4%). Any
+                 timing from this run is real; any OUTPUT from it is not. ***
+                 PROFILE, ranked by routing frequency, no eviction.
+strata generate: pre-filled 3825 of 3825 slots from the profile; slot 0 verified
+strata generate: R4 hit path ON - resident experts are computed on the GPU
+strata generate: 7 expert-pool workers + the host thread
+strata generate: session is up; locating the head
+strata generate: experimental native Q5_K head, 437043200 bytes
+strata generate: token graph hit path: 3825 resident experts, decided on the device
+strata serve: the prompt path borrows 1789 cache slots (2.89 GiB)
+strata verify: window up to 4 tokens, 58.5 MiB of device buffers
+strata mtp: draft head over 40525 tokens (68.0 MiB)
+strata serve: 202 MiB of VRAM free with everything loaded
+strata verify: captured the 4-token window (upload no error, sync no error)
+strata verify: captured the 1-token window (upload no error, sync no error)
+strata verify: captured the 3-token window (upload no error, sync no error)
+strata verify: captured the 2-token window (upload no error, sync no error)
+strata serve: prompt 1024 tokens = 0 reused + 1024 read in 5088 ms (201.3 tok/s), 400 generated in 10576 ms (37.8 tok/s), drafts accepted 226 of 285, 1 checkpoints
+strata serve: prompt 1024 tokens = 0 reused + 1024 read in 4384 ms (233.6 tok/s), 400 generated in 10196 ms (39.2 tok/s), drafts accepted 232 of 316, 1 checkpoints
+strata serve: prompt 8192 tokens = 0 reused + 8192 read in 18635 ms (439.6 tok/s), 400 generated in 11738 ms (34.1 tok/s), drafts accepted 215 of 286, 1 checkpoints
+strata serve: prompt 8192 tokens = 0 reused + 8192 read in 17972 ms (455.8 tok/s), 400 generated in 10870 ms (36.8 tok/s), drafts accepted 232 of 315, 1 checkpoints
+strata generate: this CPU has no AVX-512: the expert kernels run on AVX2
+strata generate: native pack: D:\Workspace\Personal_Project\Strata\packs\iq3_xxs experts (largest blob 2.33 MB), token embedding type 21 in mapped host memory (260 MiB)
+strata generate: 1466 MiB of weights loaded from D:\Workspace\Personal_Project\Strata\packs\iq3_xxs (302 canonical tensors skipped: served natively)
+strata generate: 300 native projection matrices, 1781.11 MiB of weights
+strata generate: PLE on, table 320001536 rows of D:\Workspace\Personal_Project\Strata\models\IQ3_XXS\Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00002-of-00002.gguf
+strata generate: expert arena: locked 2 MiB via working-set minimum + VirtualLock; cudaHostRegister of the whole arena FAILED (out of memory); 48 slices pinned (39 GiB); large pages refused (GetLargePageMinimum=2097152, VirtualAlloc error 87 - needs SeLockMemoryPrivilege); using 4 KB pages
+strata generate: loaded 39.97 GiB at 1.52 GiB/s
+strata mtp: draft layer loaded, 1044 MiB of VRAM (experts 675, dense 111)
+strata generate: profile D:\Workspace\Personal_Project\Strata\data\expert-profile.bin: 8000 ranked pairs, built for 8000 slots
+strata generate: expert cache auto: 7.54 GiB free, 700 MiB reserved -> 3162 slots
+strata generate: only 125 MiB free once the slots are written (reserve 700 MiB); shrinking the expert cache
+strata generate: expert cache 3826 slots, 6.24 GiB of VRAM; policy is
+strata generate: *** WARNING: --expert-cache is enabled and the GPU hit path is NOT
+                 CORRECT. The generated tokens diverge from a cache-off run (measured:
+                 first difference at token 40 at 2.97% hits, token 0 at 54.4%). Any
+                 timing from this run is real; any OUTPUT from it is not. ***
+                 PROFILE, ranked by routing frequency, no eviction.
+strata generate: pre-filled 3826 of 3826 slots from the profile; slot 0 verified
+strata generate: R4 hit path ON - resident experts are computed on the GPU
+strata generate: 7 expert-pool workers + the host thread
+strata generate: session is up; locating the head
+strata generate: experimental native Q5_K head, 437043200 bytes
+strata generate: token graph hit path: 3826 resident experts, decided on the device
+strata serve: the prompt path borrows 1788 cache slots (2.89 GiB)
+strata verify: window up to 4 tokens, 58.5 MiB of device buffers
+strata mtp: draft head over 40525 tokens (68.0 MiB)
+strata serve: 201 MiB of VRAM free with everything loaded
+strata verify: captured the 4-token window (upload no error, sync no error)
+strata verify: captured the 1-token window (upload no error, sync no error)
+strata verify: captured the 3-token window (upload no error, sync no error)
+strata verify: captured the 2-token window (upload no error, sync no error)
+strata serve: prompt 1024 tokens = 0 reused + 1024 read in 4871 ms (210.2 tok/s), 400 generated in 12408 ms (32.2 tok/s), drafts accepted 222 of 301, 1 checkpoints
+strata serve: prompt 1024 tokens = 0 reused + 1024 read in 4457 ms (229.8 tok/s), 400 generated in 10080 ms (39.7 tok/s), drafts accepted 259 of 297, 1 checkpoints
+strata serve: prompt 8192 tokens = 0 reused + 8192 read in 18356 ms (446.3 tok/s), 400 generated in 11501 ms (34.8 tok/s), drafts accepted 203 of 288, 1 checkpoints
+strata serve: prompt 8192 tokens = 0 reused + 8192 read in 17950 ms (456.4 tok/s), 400 generated in 10599 ms (37.7 tok/s), drafts accepted 231 of 289, 1 checkpoints
+strata generate: this CPU has no AVX-512: the expert kernels run on AVX2
+strata generate: native pack: D:\Workspace\Personal_Project\Strata\packs\iq3_xxs experts (largest blob 2.33 MB), token embedding type 21 in mapped host memory (260 MiB)
+strata generate: 1466 MiB of weights loaded from D:\Workspace\Personal_Project\Strata\packs\iq3_xxs (302 canonical tensors skipped: served natively)
+strata generate: 300 native projection matrices, 1781.11 MiB of weights
+strata generate: PLE on, table 320001536 rows of D:\Workspace\Personal_Project\Strata\models\IQ3_XXS\Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00002-of-00002.gguf
+strata generate: expert arena: locked 2 MiB via working-set minimum + VirtualLock; cudaHostRegister of the whole arena FAILED (out of memory); 48 slices pinned (39 GiB); large pages refused (GetLargePageMinimum=2097152, VirtualAlloc error 87 - needs SeLockMemoryPrivilege); using 4 KB pages
+strata generate: loaded 39.97 GiB at 1.53 GiB/s
+strata mtp: draft layer loaded, 1032 MiB of VRAM (experts 675, dense 111)
+strata generate: profile D:\Workspace\Personal_Project\Strata\data\expert-profile.bin: 8000 ranked pairs, built for 8000 slots
+strata generate: expert cache auto: 7.56 GiB free, 700 MiB reserved -> 3167 slots
+strata generate: only 126 MiB free once the slots are written (reserve 700 MiB); shrinking the expert cache
+strata generate: expert cache 3833 slots, 6.25 GiB of VRAM; policy is
+strata generate: *** WARNING: --expert-cache is enabled and the GPU hit path is NOT
+                 CORRECT. The generated tokens diverge from a cache-off run (measured:
+                 first difference at token 40 at 2.97% hits, token 0 at 54.4%). Any
+                 timing from this run is real; any OUTPUT from it is not. ***
+                 PROFILE, ranked by routing frequency, no eviction.
+strata generate: pre-filled 3833 of 3833 slots from the profile; slot 0 verified
+strata generate: R4 hit path ON - resident experts are computed on the GPU
+strata generate: 7 expert-pool workers + the host thread
+strata generate: session is up; locating the head
+strata generate: experimental native Q5_K head, 437043200 bytes
+strata generate: token graph hit path: 3833 resident experts, decided on the device
+strata serve: the prompt path borrows 3424 cache slots (5.57 GiB)
+strata verify: window up to 4 tokens, 58.5 MiB of device buffers
+strata mtp: draft head over 40525 tokens (68.0 MiB)
+strata serve: 200 MiB of VRAM free with everything loaded
+strata verify: captured the 4-token window (upload no error, sync no error)
+strata verify: captured the 1-token window (upload no error, sync no error)
+strata verify: captured the 3-token window (upload no error, sync no error)
+strata verify: captured the 2-token window (upload no error, sync no error)
+strata serve: prompt 32769 tokens = 0 reused + 32769 read in 60952 ms (537.6 tok/s), 64 generated in 1708 ms (37.5 tok/s), drafts accepted 43 of 47, 2 checkpoints
+strata generate: this CPU has no AVX-512: the expert kernels run on AVX2
+strata generate: native pack: D:\Workspace\Personal_Project\Strata\packs\iq3_xxs experts (largest blob 2.33 MB), token embedding type 21 in mapped host memory (260 MiB)
+strata generate: 1466 MiB of weights loaded from D:\Workspace\Personal_Project\Strata\packs\iq3_xxs (302 canonical tensors skipped: served natively)
+strata generate: 300 native projection matrices, 1781.11 MiB of weights
+strata generate: PLE on, table 320001536 rows of D:\Workspace\Personal_Project\Strata\models\IQ3_XXS\Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00002-of-00002.gguf
+strata generate: expert arena: locked 2 MiB via working-set minimum + VirtualLock; cudaHostRegister of the whole arena FAILED (out of memory); 48 slices pinned (39 GiB); large pages refused (GetLargePageMinimum=2097152, VirtualAlloc error 87 - needs SeLockMemoryPrivilege); using 4 KB pages
+strata generate: loaded 39.97 GiB at 1.54 GiB/s
+strata mtp: draft layer loaded, 1109 MiB of VRAM (experts 675, dense 111)
+strata generate: profile D:\Workspace\Personal_Project\Strata\data\expert-profile.bin: 8000 ranked pairs, built for 8000 slots
+strata generate: expert cache auto: 6.71 GiB free, 700 MiB reserved -> 2776 slots
+strata generate: only 125 MiB free once the slots are written (reserve 700 MiB); shrinking the expert cache
+strata generate: expert cache 3305 slots, 5.40 GiB of VRAM; policy is
+strata generate: *** WARNING: --expert-cache is enabled and the GPU hit path is NOT
+                 CORRECT. The generated tokens diverge from a cache-off run (measured:
+                 first difference at token 40 at 2.97% hits, token 0 at 54.4%). Any
+                 timing from this run is real; any OUTPUT from it is not. ***
+                 PROFILE, ranked by routing frequency, no eviction.
+strata generate: pre-filled 3305 of 3305 slots from the profile; slot 0 verified
+strata generate: R4 hit path ON - resident experts are computed on the GPU
+strata generate: 7 expert-pool workers + the host thread
+strata generate: session is up; locating the head
+strata generate: experimental native Q5_K head, 437043200 bytes
+strata generate: token graph hit path: 3305 resident experts, decided on the device
+strata serve: prompt chunk 8192 -> 4096 tokens so its buffers fit in the expert cache
+strata serve: the prompt path borrows 1789 cache slots (2.90 GiB)
+strata verify: window up to 4 tokens, 58.8 MiB of device buffers
+strata mtp: draft head over 40525 tokens (68.0 MiB)
+strata serve: 199 MiB of VRAM free with everything loaded
+strata verify: captured the 4-token window (upload no error, sync no error)
+strata verify: captured the 1-token window (upload no error, sync no error)
+strata verify: captured the 3-token window (upload no error, sync no error)
+strata verify: captured the 2-token window (upload no error, sync no error)
+strata serve: prompt 1024 tokens = 0 reused + 1024 read in 4884 ms (209.7 tok/s), 400 generated in 10252 ms (39.0 tok/s), drafts accepted 258 of 315, 1 checkpoints
+strata serve: prompt 1024 tokens = 0 reused + 1024 read in 4410 ms (232.2 tok/s), 400 generated in 10289 ms (38.9 tok/s), drafts accepted 256 of 294, 1 checkpoints
+strata serve: prompt 8192 tokens = 0 reused + 8192 read in 18482 ms (443.2 tok/s), 400 generated in 11551 ms (34.6 tok/s), drafts accepted 236 of 314, 1 checkpoints
+strata serve: prompt 8192 tokens = 0 reused + 8192 read in 17928 ms (456.9 tok/s), 400 generated in 11037 ms (36.2 tok/s), drafts accepted 224 of 310, 1 checkpoints
+load_hparams: Qwen-VL models require at minimum 1024 image tokens to function correctly on grounding tasks
+load_hparams: if you encounter problems with accuracy, try adding --image-min-tokens 1024
+load_hparams: more info: https://github.com/ggml-org/llama.cpp/issues/16842
+
+strata-vision: warmed up at 1024 image tokens
+strata generate: this CPU has no AVX-512: the expert kernels run on AVX2
+strata generate: native pack: D:\Workspace\Personal_Project\Strata\packs\iq3_xxs experts (largest blob 2.33 MB), token embedding type 21 in mapped host memory (260 MiB)
+strata generate: 1466 MiB of weights loaded from D:\Workspace\Personal_Project\Strata\packs\iq3_xxs (302 canonical tensors skipped: served natively)
+strata generate: 300 native projection matrices, 1781.11 MiB of weights
+strata generate: PLE on, table 320001536 rows of D:\Workspace\Personal_Project\Strata\models\IQ3_XXS\Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00002-of-00002.gguf
+strata generate: expert arena: locked 2 MiB via working-set minimum + VirtualLock; cudaHostRegister of the whole arena FAILED (out of memory); 48 slices pinned (39 GiB); large pages refused (GetLargePageMinimum=2097152, VirtualAlloc error 87 - needs SeLockMemoryPrivilege); using 4 KB pages
+strata generate: loaded 39.97 GiB at 1.53 GiB/s
+strata mtp: draft layer loaded, 1109 MiB of VRAM (experts 675, dense 111)
+strata generate: profile D:\Workspace\Personal_Project\Strata\data\expert-profile.bin: 8000 ranked pairs, built for 8000 slots
+strata generate: expert cache auto: 6.70 GiB free, 700 MiB reserved -> 2774 slots
+strata generate: only 124 MiB free once the slots are written (reserve 700 MiB); shrinking the expert cache
+strata generate: expert cache 3303 slots, 5.39 GiB of VRAM; policy is
+strata generate: *** WARNING: --expert-cache is enabled and the GPU hit path is NOT
+                 CORRECT. The generated tokens diverge from a cache-off run (measured:
+                 first difference at token 40 at 2.97% hits, token 0 at 54.4%). Any
+                 timing from this run is real; any OUTPUT from it is not. ***
+                 PROFILE, ranked by routing frequency, no eviction.
+strata generate: pre-filled 3303 of 3303 slots from the profile; slot 0 verified
+strata generate: R4 hit path ON - resident experts are computed on the GPU
+strata generate: 7 expert-pool workers + the host thread
+strata generate: session is up; locating the head
+strata generate: experimental native Q5_K head, 437043200 bytes
+strata generate: token graph hit path: 3303 resident experts, decided on the device
+strata serve: the prompt path borrows 1790 cache slots (2.90 GiB)
+strata verify: window up to 4 tokens, 58.8 MiB of device buffers
+strata mtp: draft head over 40525 tokens (68.0 MiB)
+strata serve: 200 MiB of VRAM free with everything loaded
+strata verify: captured the 4-token window (upload no error, sync no error)
+strata verify: captured the 1-token window (upload no error, sync no error)
+strata verify: captured the 3-token window (upload no error, sync no error)
+strata verify: captured the 2-token window (upload no error, sync no error)
+strata serve: prompt 1024 tokens = 0 reused + 1024 read in 4764 ms (214.9 tok/s), 400 generated in 11109 ms (36.0 tok/s), drafts accepted 233 of 305, 1 checkpoints
+strata serve: prompt 8192 tokens = 0 reused + 8192 read in 18573 ms (441.1 tok/s), 400 generated in 11974 ms (33.4 tok/s), drafts accepted 238 of 314, 1 checkpoints
+strata serve: prompt 32769 tokens = 0 reused + 32769 read in 73908 ms (443.4 tok/s), 400 generated in 10755 ms (37.2 tok/s), drafts accepted 229 of 293, 2 checkpoints
+strata serve: prompt 65536 tokens = 0 reused + 65536 read in 148465 ms (441.4 tok/s), 400 generated in 10945 ms (36.5 tok/s), drafts accepted 230 of 290, 4 checkpoints
+strata serve: prompt 131072 tokens = 0 reused + 131072 read in 304434 ms (430.5 tok/s), 400 generated in 12053 ms (33.2 tok/s), drafts accepted 219 of 327, 6 checkpoints
+strata serve: prompt 204800 tokens = 0 reused + 204800 read in 492893 ms (415.5 tok/s), 400 generated in 11789 ms (33.9 tok/s), drafts accepted 227 of 317, 6 checkpoints
+strata serve: prompt 261232 tokens = 0 reused + 261232 read in 654160 ms (399.3 tok/s), 400 generated in 12522 ms (31.9 tok/s), drafts accepted 210 of 315, 6 checkpoints
+strata serve: prompt 535 tokens = 0 reused + 535 read in 4169 ms (128.3 tok/s), 400 generated in 10572 ms (37.8 tok/s), drafts accepted 255 of 350, 1 checkpoints
+load_hparams: Qwen-VL models require at minimum 1024 image tokens to function correctly on grounding tasks
+load_hparams: if you encounter problems with accuracy, try adding --image-min-tokens 1024
+load_hparams: more info: https://github.com/ggml-org/llama.cpp/issues/16842
+
+strata-vision: warmed up at 1024 image tokens
+strata generate: this CPU has no AVX-512: the expert kernels run on AVX2
+strata generate: native pack: D:\Workspace\Personal_Project\Strata\packs\iq3_xxs experts (largest blob 2.33 MB), token embedding type 21 in mapped host memory (260 MiB)
+strata generate: 1466 MiB of weights loaded from D:\Workspace\Personal_Project\Strata\packs\iq3_xxs (302 canonical tensors skipped: served natively)
+strata generate: 300 native projection matrices, 1781.11 MiB of weights
+strata generate: PLE on, table 320001536 rows of D:\Workspace\Personal_Project\Strata\models\IQ3_XXS\Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00002-of-00002.gguf
+strata generate: expert arena: locked 2 MiB via working-set minimum + VirtualLock; cudaHostRegister of the whole arena FAILED (out of memory); 48 slices pinned (39 GiB); large pages refused (GetLargePageMinimum=2097152, VirtualAlloc error 87 - needs SeLockMemoryPrivilege); using 4 KB pages
+strata generate: loaded 39.97 GiB at 1.53 GiB/s
+strata mtp: draft layer loaded, 1044 MiB of VRAM (experts 675, dense 111)
+strata generate: profile D:\Workspace\Personal_Project\Strata\data\expert-profile.bin: 8000 ranked pairs, built for 8000 slots
+strata generate: expert cache auto: 7.54 GiB free, 700 MiB reserved -> 3160 slots
+strata generate: only 126 MiB free once the slots are written (reserve 700 MiB); shrinking the expert cache
+strata generate: expert cache 3823 slots, 6.23 GiB of VRAM; policy is
+strata generate: *** WARNING: --expert-cache is enabled and the GPU hit path is NOT
+                 CORRECT. The generated tokens diverge from a cache-off run (measured:
+                 first difference at token 40 at 2.97% hits, token 0 at 54.4%). Any
+                 timing from this run is real; any OUTPUT from it is not. ***
+                 PROFILE, ranked by routing frequency, no eviction.
+strata generate: pre-filled 3823 of 3823 slots from the profile; slot 0 verified
+strata generate: R4 hit path ON - resident experts are computed on the GPU
+strata generate: 7 expert-pool workers + the host thread
+strata generate: session is up; locating the head
+strata generate: experimental native Q5_K head, 437043200 bytes
+strata generate: token graph hit path: 3823 resident experts, decided on the device
+strata serve: the prompt path borrows 3425 cache slots (5.57 GiB)
+strata verify: window up to 4 tokens, 58.5 MiB of device buffers
+strata mtp: draft head over 40525 tokens (68.0 MiB)
+strata serve: 200 MiB of VRAM free with everything loaded
+strata verify: captured the 4-token window (upload no error, sync no error)
+strata verify: captured the 1-token window (upload no error, sync no error)
+strata verify: captured the 3-token window (upload no error, sync no error)
+strata verify: captured the 2-token window (upload no error, sync no error)
+strata serve: prompt 1024 tokens = 0 reused + 1024 read in 5624 ms (182.1 tok/s), 2000 generated in 44981 ms (44.5 tok/s), drafts accepted 1297 of 1539, 1 checkpoints
+strata serve: prompt 535 tokens = 0 reused + 535 read in 4305 ms (124.3 tok/s), 871 generated in 23814 ms (36.6 tok/s), drafts accepted 535 of 812, 1 checkpoints
+load_hparams: Qwen-VL models require at minimum 1024 image tokens to function correctly on grounding tasks
+load_hparams: if you encounter problems with accuracy, try adding --image-min-tokens 1024
+load_hparams: more info: https://github.com/ggml-org/llama.cpp/issues/16842
+
+strata-vision: warmed up at 1024 image tokens
+strata generate: this CPU has no AVX-512: the expert kernels run on AVX2
+strata generate: native pack: D:\Workspace\Personal_Project\Strata\packs\iq3_xxs experts (largest blob 2.33 MB), token embedding type 21 in mapped host memory (260 MiB)
+strata generate: 1466 MiB of weights loaded from D:\Workspace\Personal_Project\Strata\packs\iq3_xxs (302 canonical tensors skipped: served natively)
+strata generate: 300 native projection matrices, 1781.11 MiB of weights
+strata generate: PLE on, table 320001536 rows of D:\Workspace\Personal_Project\Strata\models\IQ3_XXS\Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00002-of-00002.gguf
+strata generate: expert arena: locked 2 MiB via working-set minimum + VirtualLock; cudaHostRegister of the whole arena FAILED (out of memory); 48 slices pinned (39 GiB); large pages refused (GetLargePageMinimum=2097152, VirtualAlloc error 87 - needs SeLockMemoryPrivilege); using 4 KB pages
+strata generate: loaded 39.97 GiB at 1.27 GiB/s
+strata mtp: draft layer loaded, 1109 MiB of VRAM (experts 675, dense 111)
+strata generate: profile D:\Workspace\Personal_Project\Strata\data\expert-profile.bin: 8000 ranked pairs, built for 8000 slots
+strata generate: expert cache auto: 6.70 GiB free, 700 MiB reserved -> 2774 slots
+strata generate: only 124 MiB free once the slots are written (reserve 700 MiB); shrinking the expert cache
+strata generate: expert cache 3303 slots, 5.39 GiB of VRAM; policy is
+strata generate: *** WARNING: --expert-cache is enabled and the GPU hit path is NOT
+                 CORRECT. The generated tokens diverge from a cache-off run (measured:
+                 first difference at token 40 at 2.97% hits, token 0 at 54.4%). Any
+                 timing from this run is real; any OUTPUT from it is not. ***
+                 PROFILE, ranked by routing frequency, no eviction.
+strata generate: pre-filled 3303 of 3303 slots from the profile; slot 0 verified
+strata generate: R4 hit path ON - resident experts are computed on the GPU
+strata generate: 7 expert-pool workers + the host thread
+strata generate: session is up; locating the head
+strata generate: experimental native Q5_K head, 437043200 bytes
+strata generate: token graph hit path: 3303 resident experts, decided on the device
+strata serve: prompt chunk 8192 -> 4096 tokens so its buffers fit in the expert cache
+strata serve: the prompt path borrows 1790 cache slots (2.90 GiB)
+strata verify: window up to 4 tokens, 58.8 MiB of device buffers
+strata mtp: draft head over 40525 tokens (68.0 MiB)
+strata serve: 76 MiB of VRAM free with everything loaded - LOW: requests may stall; lower --max-context or raise --vram-reserve-mib
+strata verify: captured the 4-token window (upload no error, sync no error)
+strata verify: captured the 1-token window (upload no error, sync no error)
+strata verify: captured the 3-token window (upload no error, sync no error)
+strata verify: captured the 2-token window (upload no error, sync no error)
+strata serve: prompt 1024 tokens = 0 reused + 1024 read in 4945 ms (207.1 tok/s), 400 generated in 11554 ms (34.6 tok/s), drafts accepted 233 of 305, 1 checkpoints
+strata serve: prompt 32769 tokens = 0 reused + 32769 read in 75703 ms (432.9 tok/s), 400 generated in 11176 ms (35.8 tok/s), drafts accepted 239 of 287, 2 checkpoints
+load_hparams: Qwen-VL models require at minimum 1024 image tokens to function correctly on grounding tasks
+load_hparams: if you encounter problems with accuracy, try adding --image-min-tokens 1024
+load_hparams: more info: https://github.com/ggml-org/llama.cpp/issues/16842
+
+strata-vision: warmed up at 1024 image tokens
+strata generate: this CPU has no AVX-512: the expert kernels run on AVX2
+strata generate: native pack: D:\Workspace\Personal_Project\Strata\packs\iq3_xxs experts (largest blob 2.33 MB), token embedding type 21 in mapped host memory (260 MiB)
+strata generate: 1466 MiB of weights loaded from D:\Workspace\Personal_Project\Strata\packs\iq3_xxs (302 canonical tensors skipped: served natively)
+strata generate: 300 native projection matrices, 1781.11 MiB of weights
+strata generate: PLE on, table 320001536 rows of D:\Workspace\Personal_Project\Strata\models\IQ3_XXS\Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00002-of-00002.gguf
+strata generate: expert arena: locked 2 MiB via working-set minimum + VirtualLock; cudaHostRegister of the whole arena FAILED (out of memory); 48 slices pinned (39 GiB); large pages refused (GetLargePageMinimum=2097152, VirtualAlloc error 87 - needs SeLockMemoryPrivilege); using 4 KB pages
+strata generate: loaded 39.97 GiB at 1.46 GiB/s
+strata mtp: draft layer loaded, 1109 MiB of VRAM (experts 675, dense 111)
+strata generate: profile D:\Workspace\Personal_Project\Strata\data\expert-profile.bin: 8000 ranked pairs, built for 8000 slots
+strata generate: expert cache auto: 6.70 GiB free, 700 MiB reserved -> 2774 slots
+strata generate: only 0 MiB free once the slots are written (reserve 700 MiB); shrinking the expert cache
+strata generate: expert cache 2753 slots, 4.51 GiB of VRAM; policy is
+strata generate: *** WARNING: --expert-cache is enabled and the GPU hit path is NOT
+                 CORRECT. The generated tokens diverge from a cache-off run (measured:
+                 first difference at token 40 at 2.97% hits, token 0 at 54.4%). Any
+                 timing from this run is real; any OUTPUT from it is not. ***
+                 PROFILE, ranked by routing frequency, no eviction.
+strata generate: pre-filled 2753 of 2753 slots from the profile; slot 0 verified
+strata generate: R4 hit path ON - resident experts are computed on the GPU
+strata generate: 7 expert-pool workers + the host thread
+strata generate: session is up; locating the head
+strata generate: experimental native Q5_K head, 437043200 bytes
+strata generate: token graph hit path: 2753 resident experts, decided on the device
+strata serve: the prompt path borrows 1775 cache slots (2.91 GiB)
+strata verify: window up to 4 tokens, 58.8 MiB of device buffers
+strata mtp: draft head over 40525 tokens (68.0 MiB)
+strata serve: 1088 MiB of VRAM free with everything loaded
+strata verify: captured the 4-token window (upload no error, sync no error)
+strata verify: captured the 1-token window (upload no error, sync no error)
+strata verify: captured the 3-token window (upload no error, sync no error)
+strata verify: captured the 2-token window (upload no error, sync no error)
+strata serve: prompt 1024 tokens = 0 reused + 1024 read in 4974 ms (205.9 tok/s), 400 generated in 12176 ms (32.9 tok/s), drafts accepted 222 of 292, 1 checkpoints
+strata serve: prompt 32769 tokens = 0 reused + 32769 read in 75726 ms (432.7 tok/s), 400 generated in 12172 ms (32.9 tok/s), drafts accepted 231 of 298, 2 checkpoints

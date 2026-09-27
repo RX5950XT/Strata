@@ -1,0 +1,156 @@
+{
+  "label": "ista-vision-200k",
+  "config": "D:\\Workspace\\Personal_Project\\Strata\\strata-iq3_xxs.json",
+  "engine_args": [
+    "--pack",
+    "D:\\Workspace\\Personal_Project\\Strata\\packs\\iq3_xxs",
+    "--native",
+    "D:\\Workspace\\Personal_Project\\Strata\\models\\IQ3_XXS\\Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00001-of-00002.gguf",
+    "--ple-gguf",
+    "D:\\Workspace\\Personal_Project\\Strata\\models\\IQ3_XXS\\Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00002-of-00002.gguf",
+    "--expert-profile",
+    "D:\\Workspace\\Personal_Project\\Strata\\data\\expert-profile.bin",
+    "--expert-cache",
+    "auto",
+    "--spec",
+    "4",
+    "--spec-min-p",
+    "0.5",
+    "--mtp",
+    "D:\\Workspace\\Personal_Project\\Strata\\mtp\\rt",
+    "--kv",
+    "int8",
+    "--vision",
+    "--vram-reserve-mib",
+    "700",
+    "--max-context",
+    "204800",
+    "--prefill",
+    "8192",
+    "--mtp-window",
+    "65536"
+  ],
+  "token_count_method": "tokenizer",
+  "max_tokens": 2000,
+  "contexts": [
+    {
+      "target": 1024,
+      "runs": [
+        {
+          "prompt_tokens": 1024,
+          "generated_tokens": 2000,
+          "usage": {
+            "prompt_tokens": 1024,
+            "completion_tokens": 2000,
+            "total_tokens": 3024
+          },
+          "ttft_s": 5.715,
+          "prefill_tok_s": 179.18,
+          "decode_tok_s": 44.52,
+          "elapsed_s": 50.621,
+          "answer_first_200": "We need answer user's request: \"Benchmark nonce: bench-1024-0\nFiles: ... Now write a detailed, 600-word technical summary of the files above.\"\n\nNeed produce final answer likely around 600 words. Need ",
+          "answer": "We need answer user's request: \"Benchmark nonce: bench-1024-0\nFiles: ... Now write a detailed, 600-word technical summary of the files above.\"\n\nNeed produce final answer likely around 600 words. Need analyze data. Need maybe mention incomplete table? The prompt processing table truncated at RTX 3090 IQ2_XS row: \"~303 | ~422 |\" missing rest. Need summarize available data, note truncation. Need likely exactly 600 words? User says detailed, 600-word technical summary. We should aim ~600 words. Need maybe include benchmark nonce. Need technical summary of files above. Need maybe count words? We can craft ~600 words. Need ensure not too short. Let's draft around 600 words. Need maybe no markdown? Could use headings. Need maybe mention estimates, measured, cards, quantizations, context lengths, decode vs prompt processing, trends, anomalies, implications. Need maybe 600 words exactly? Let's target 600-650. Need maybe count manually? Let's draft and count approximate.\n\nDraft:\n\n\"Benchmark nonce bench-1024-0 identifies the dataset as a benchmark snapshot dated 2026-09-24. The file estimates.md contains two performance tables for local inference on consumer GPUs: output decode throughput and prompt-processing throughput, measured in tokens per second. The tables compare three quantized model formats—Q2_0, IQ2_XS, and IQ3_XXS—across three GPUs: RTX 5070 12GB, RTX 5060 Ti 16GB, and RTX 3090 24GB. Context lengths are 1k, 4k, 32k, 64k, 128k, and 262k tokens. The RTX 5070 rows are marked measured, while the others are estimated, so the RTX 5070 data should be treated as the empirical anchor and the remaining values as extrapolations or modeled projections.\n\nThe decode table shows a clear hierarchy. For Q2_0, the RTX 3090 is fastest at every context length, reaching about 128 tok/s at 1k, peaking near 140 tok/s at 4k, then declining to about 85 tok/s at 262k. The RTX 5070 follows with about 89 tok/s at 1k, peaking near 95 tok/s at 4k, and falling to about 56 tok/s at 262k. The RTX 5060 Ti is slightly slower than the 5070 in Q2_0, ranging from about 80 tok/s at 1k to about 53 tok/s at 262k. IQ2_XS is generally close to Q2_0 on the 3090, even exceeding it at 1k with about 131 tok/s, but it degrades more sharply at longer contexts, dropping to about 78 tok/s at 262k. IQ3_XXS is consistently slower than both Q2_0 and IQ2_XS, and the table omits 262k values for IQ3_XXS, suggesting either insufficient VRAM, unacceptable latency, or missing measurements.\n\nThe prompt-processing table reveals a different pattern. Prompt throughput is much higher than decode throughput, as expected because prompt processing is compute-bound and can be batched, while decode is memory-bandwidth-bound and sequential. For Q2_0, the RTX 5070 reaches about 389 tok/s at 1k, peaks around 571 tok/s at 32k, then declines to about 496 tok/s at 262k. The RTX 3090 is slightly slower than the 5070 in the visible Q2_0 prompt rows, about 355 tok/s at 1k and 453 tok/s at 262k, which is notable because the 3090 dominates decode performance. This suggests the estimates may reflect different bottlenecks: the 3090’s larger memory and bandwidth help decode, while the 5070’s newer architecture or estimated compute efficiency may favor prompt processing. The RTX 5060 Ti is lower than both, with Q2_0 prompt throughput from about 341 tok/s at 1k to about 435 tok/s at 262k.\n\nQuantization effects are visible in prompt processing as well. IQ2_XS is slower than Q2_0 on all cards, for example about 332 tok/s versus 389 tok/s on the 5070 at 1k. IQ3_XXS is slower still, about 285 tok/s on the 5070 at 1k. The 3090 IQ2_XS row is truncated in the provided file, showing only 1k and 4k values, about 303 and 422 tok/s, so longer-context prompt estimates for that configuration cannot be assessed.\n\nOverall, the file presents a benchmark model in which Q2_0 offers the best balance of speed and long-context usability, IQ2_XS is competitive on the 3090 but weaker at long contexts, and IQ3_XXS trades throughput for higher quantization quality. The RTX 3090 remains the strongest decode platform, especially for long contexts, while the RTX 5070 appears strong for prompt processing in the estimated data. The missing IQ3_XXS 262k entries and truncated 3090 prompt row limit completeness, and the estimates should be interpreted cautiously because only the RTX 5070 rows are explicitly measured.\"\n\nCount words? Let's count roughly. Paragraph1: Benchmark(1) nonce2 bench-1024-0 3 identifies4 the5 dataset6 as7 a8 benchmark9 snapshot10 dated11 2026-09-24 12. The13 file14 estimates.md15 contains16 two17 performance18 tables19 for20 local21 inference22 on23 consumer24 GPUs25: output26 decode27 throughput28 and29 prompt-processing30 throughput31, measured32 in33 tokens34 per35 second36. The37 tables38 compare39 three40 quantized41 model42 formats43—Q2_044, IQ2_XS45, and46 IQ3_XXS47—across48 three49 GPUs50: RTX51 5070 52 12GB53, RTX54 5060 55 Ti56 16GB57, and58 RTX59 3090 60 24GB61. Context62 lengths63 are64 1k65, 4k66, 32k67, 64k68, 128k69, and70 262k71 tokens72. The73 RTX74 5070 75 rows76 are77 marked78 measured79, while80 the81 others82 are83 estimated84, so85 the86 RTX87 5070 88 data89 should90 be91 treated92 as93 the94 empirical95 anchor96 and97 the98 remaining99 values100 as101 extrapolations102 or103 modeled104 projections105.\n\nPara2: The106 decode107 table108 shows109 a110 clear111 hierarchy112. For113 Q2_0 114, the115 RTX116 3090 117 is118 fastest119 at120 every121 context122 length123, reaching124 about125 128 126 tok/s127 at128 1k129, peaking130 near131 140 132 tok/s133 at134 4k135, then136 declining137 to138 about139 85 140 tok/s141 at142 262k143. The144 RTX145 5070 146 follows147 with148 about149 89 150 tok/s151 at152 1k153, peaking154 near155 95 156 tok/s157 at158 4k159, and160 falling161 to162 about163",
+          "peaks": {
+            "gpus": {
+              "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+                "memory_mib": 15230,
+                "utilization_pct": 100
+              },
+              "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+                "memory_mib": 1191,
+                "utilization_pct": 0
+              }
+            },
+            "ram_mib": 78005
+          },
+          "mtp_acceptance": 0.843,
+          "engine_prompt_tokens": 1024,
+          "engine_prompt_ms": 5624.0,
+          "engine_prefill_tok_s": 182.1,
+          "engine_generated_tokens": 2000,
+          "engine_decode_ms": 44981.0,
+          "engine_decode_tok_s": 44.5,
+          "estimated_prompt_tokens": 1024
+        }
+      ],
+      "median": {
+        "prompt_tokens": 1024,
+        "generated_tokens": 2000,
+        "usage": {
+          "prompt_tokens": 1024,
+          "completion_tokens": 2000,
+          "total_tokens": 3024
+        },
+        "ttft_s": 5.715,
+        "prefill_tok_s": 179.18,
+        "decode_tok_s": 44.52,
+        "elapsed_s": 50.621,
+        "answer_first_200": "We need answer user's request: \"Benchmark nonce: bench-1024-0\nFiles: ... Now write a detailed, 600-word technical summary of the files above.\"\n\nNeed produce final answer likely around 600 words. Need ",
+        "answer": "We need answer user's request: \"Benchmark nonce: bench-1024-0\nFiles: ... Now write a detailed, 600-word technical summary of the files above.\"\n\nNeed produce final answer likely around 600 words. Need analyze data. Need maybe mention incomplete table? The prompt processing table truncated at RTX 3090 IQ2_XS row: \"~303 | ~422 |\" missing rest. Need summarize available data, note truncation. Need likely exactly 600 words? User says detailed, 600-word technical summary. We should aim ~600 words. Need maybe include benchmark nonce. Need technical summary of files above. Need maybe count words? We can craft ~600 words. Need ensure not too short. Let's draft around 600 words. Need maybe no markdown? Could use headings. Need maybe mention estimates, measured, cards, quantizations, context lengths, decode vs prompt processing, trends, anomalies, implications. Need maybe 600 words exactly? Let's target 600-650. Need maybe count manually? Let's draft and count approximate.\n\nDraft:\n\n\"Benchmark nonce bench-1024-0 identifies the dataset as a benchmark snapshot dated 2026-09-24. The file estimates.md contains two performance tables for local inference on consumer GPUs: output decode throughput and prompt-processing throughput, measured in tokens per second. The tables compare three quantized model formats—Q2_0, IQ2_XS, and IQ3_XXS—across three GPUs: RTX 5070 12GB, RTX 5060 Ti 16GB, and RTX 3090 24GB. Context lengths are 1k, 4k, 32k, 64k, 128k, and 262k tokens. The RTX 5070 rows are marked measured, while the others are estimated, so the RTX 5070 data should be treated as the empirical anchor and the remaining values as extrapolations or modeled projections.\n\nThe decode table shows a clear hierarchy. For Q2_0, the RTX 3090 is fastest at every context length, reaching about 128 tok/s at 1k, peaking near 140 tok/s at 4k, then declining to about 85 tok/s at 262k. The RTX 5070 follows with about 89 tok/s at 1k, peaking near 95 tok/s at 4k, and falling to about 56 tok/s at 262k. The RTX 5060 Ti is slightly slower than the 5070 in Q2_0, ranging from about 80 tok/s at 1k to about 53 tok/s at 262k. IQ2_XS is generally close to Q2_0 on the 3090, even exceeding it at 1k with about 131 tok/s, but it degrades more sharply at longer contexts, dropping to about 78 tok/s at 262k. IQ3_XXS is consistently slower than both Q2_0 and IQ2_XS, and the table omits 262k values for IQ3_XXS, suggesting either insufficient VRAM, unacceptable latency, or missing measurements.\n\nThe prompt-processing table reveals a different pattern. Prompt throughput is much higher than decode throughput, as expected because prompt processing is compute-bound and can be batched, while decode is memory-bandwidth-bound and sequential. For Q2_0, the RTX 5070 reaches about 389 tok/s at 1k, peaks around 571 tok/s at 32k, then declines to about 496 tok/s at 262k. The RTX 3090 is slightly slower than the 5070 in the visible Q2_0 prompt rows, about 355 tok/s at 1k and 453 tok/s at 262k, which is notable because the 3090 dominates decode performance. This suggests the estimates may reflect different bottlenecks: the 3090’s larger memory and bandwidth help decode, while the 5070’s newer architecture or estimated compute efficiency may favor prompt processing. The RTX 5060 Ti is lower than both, with Q2_0 prompt throughput from about 341 tok/s at 1k to about 435 tok/s at 262k.\n\nQuantization effects are visible in prompt processing as well. IQ2_XS is slower than Q2_0 on all cards, for example about 332 tok/s versus 389 tok/s on the 5070 at 1k. IQ3_XXS is slower still, about 285 tok/s on the 5070 at 1k. The 3090 IQ2_XS row is truncated in the provided file, showing only 1k and 4k values, about 303 and 422 tok/s, so longer-context prompt estimates for that configuration cannot be assessed.\n\nOverall, the file presents a benchmark model in which Q2_0 offers the best balance of speed and long-context usability, IQ2_XS is competitive on the 3090 but weaker at long contexts, and IQ3_XXS trades throughput for higher quantization quality. The RTX 3090 remains the strongest decode platform, especially for long contexts, while the RTX 5070 appears strong for prompt processing in the estimated data. The missing IQ3_XXS 262k entries and truncated 3090 prompt row limit completeness, and the estimates should be interpreted cautiously because only the RTX 5070 rows are explicitly measured.\"\n\nCount words? Let's count roughly. Paragraph1: Benchmark(1) nonce2 bench-1024-0 3 identifies4 the5 dataset6 as7 a8 benchmark9 snapshot10 dated11 2026-09-24 12. The13 file14 estimates.md15 contains16 two17 performance18 tables19 for20 local21 inference22 on23 consumer24 GPUs25: output26 decode27 throughput28 and29 prompt-processing30 throughput31, measured32 in33 tokens34 per35 second36. The37 tables38 compare39 three40 quantized41 model42 formats43—Q2_044, IQ2_XS45, and46 IQ3_XXS47—across48 three49 GPUs50: RTX51 5070 52 12GB53, RTX54 5060 55 Ti56 16GB57, and58 RTX59 3090 60 24GB61. Context62 lengths63 are64 1k65, 4k66, 32k67, 64k68, 128k69, and70 262k71 tokens72. The73 RTX74 5070 75 rows76 are77 marked78 measured79, while80 the81 others82 are83 estimated84, so85 the86 RTX87 5070 88 data89 should90 be91 treated92 as93 the94 empirical95 anchor96 and97 the98 remaining99 values100 as101 extrapolations102 or103 modeled104 projections105.\n\nPara2: The106 decode107 table108 shows109 a110 clear111 hierarchy112. For113 Q2_0 114, the115 RTX116 3090 117 is118 fastest119 at120 every121 context122 length123, reaching124 about125 128 126 tok/s127 at128 1k129, peaking130 near131 140 132 tok/s133 at134 4k135, then136 declining137 to138 about139 85 140 tok/s141 at142 262k143. The144 RTX145 5070 146 follows147 with148 about149 89 150 tok/s151 at152 1k153, peaking154 near155 95 156 tok/s157 at158 4k159, and160 falling161 to162 about163",
+        "peaks": {
+          "gpus": {
+            "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+              "memory_mib": 15230,
+              "utilization_pct": 100
+            },
+            "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+              "memory_mib": 1191,
+              "utilization_pct": 0
+            }
+          },
+          "ram_mib": 78005
+        },
+        "mtp_acceptance": 0.843,
+        "engine_prompt_tokens": 1024,
+        "engine_prompt_ms": 5624.0,
+        "engine_prefill_tok_s": 182.1,
+        "engine_generated_tokens": 2000,
+        "engine_decode_ms": 44981.0,
+        "engine_decode_tok_s": 44.5,
+        "estimated_prompt_tokens": 1024
+      }
+    }
+  ],
+  "vision": {
+    "prompt_tokens": 535,
+    "generated_tokens": 871,
+    "usage": {
+      "prompt_tokens": 535,
+      "completion_tokens": 871,
+      "total_tokens": 1406
+    },
+    "ttft_s": 4.776,
+    "prefill_tok_s": 112.03,
+    "decode_tok_s": 36.61,
+    "elapsed_s": 28.54,
+    "answer_first_200": "The user wants a detailed description of the image. Let me carefully examine every element.\n\nThe image has a white background. There's a thin black horizontal line at the very top edge and another at ",
+    "answer": "The user wants a detailed description of the image. Let me carefully examine every element.\n\nThe image has a white background. There's a thin black horizontal line at the very top edge and another at the very bottom edge, framing the content.\n\nLet me catalog the shapes:\n\n1. Top left: a red circle. It's a solid red fill, no outline visible (or maybe a thin outline). It's positioned in the upper-left quadrant.\n\n2. Top right: a blue square. Solid blue fill. Positioned in the upper-right area.\n\n3. Bottom center-left: a green triangle. Solid green fill, pointing upward (apex at top, base at bottom). Positioned in the lower-middle area.\n\n4. Bottom right: text reading \"STRATA 42\" in black, sans-serif font. The text appears cut off on the right edge—the \"2\" is partially visible, and there might be more characters cut off. Actually it reads \"STRATA 42\" with the 2 partially cut. Let me look: \"STRATA 4\" then a \"2\" that's cut at the right edge. So the text is \"STRATA 42\" but the 2 is clipped.\n\nLet me look at positions more precisely. The red circle center is roughly at (170, 185) in some coordinate sense. The blue square spans roughly x from 400 to 680, y from 85 to 330. The green triangle apex around (310, 375), base from (185, 555) to (435, 555). The text \"STRATA 42\" baseline around y=480, starting x around 430.\n\nColors: red is pure red (#FF0000-ish), blue pure blue (#0000FF-ish), green pure green (#008000-ish, a medium green). Text black.\n\nThe layout: shapes arranged in a loose grid—circle top-left, square top-right, triangle bottom-center, text bottom-right.\n\nI should describe in detail, mentioning the framing lines, the white background, each shape's color, shape, position, and the text including the cutoff.\n\nLet me write a thorough, organized description.\nThe image is a simple graphic composition set against a plain white background. The entire scene is bounded by two thin, solid black horizontal lines—one running along the very top edge of the image and another along the very bottom edge—giving the layout a framed appearance.\n\nWithin this frame there are four distinct elements arranged in a loose two‑by‑two grid:\n\n1. **Red circle (upper left):** A large, solid, uniformly filled circle in a bright primary red. It has no visible border or shading and sits in the top‑left quadrant of the image, with its center roughly aligned with the vertical midpoint of the upper half.\n\n2. **Blue square (upper right):** A large, solid square filled with a vivid primary blue. Like the circle, it has no outline or gradient. It occupies the top‑right portion of the image, positioned to the right of the red circle and at approximately the same vertical level.\n\n3. **Green triangle (lower center):** A solid, medium‑green triangle oriented with its apex pointing upward and its flat base resting horizontally near the bottom of the image. It is located in the lower‑middle area, below the gap between the circle and the square.\n\n4. **Text (lower right):** The words **\"STRATA 42\"** appear in a black, sans‑typeface, all‑caps font. The text is placed in the bottom‑right region, roughly level with the lower part of the green triangle. The text is clipped by the right edge of the image: the final digit \"2\" is partially cut off, suggesting the label continues beyond the visible frame.\n\nOverall, the image presents three primary‑colored geometric shapes (red circle, blue square, green triangle) paired with a black text label, all on a clean white field enclosed by thin black top and bottom borders.",
+    "peaks": {
+      "gpus": {
+        "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+          "memory_mib": 15198,
+          "utilization_pct": 100
+        },
+        "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+          "memory_mib": 1191,
+          "utilization_pct": 100
+        }
+      },
+      "ram_mib": 77992
+    },
+    "mtp_acceptance": 0.659,
+    "engine_prompt_tokens": 535,
+    "engine_prompt_ms": 4305.0,
+    "engine_prefill_tok_s": 124.3,
+    "engine_generated_tokens": 871,
+    "engine_decode_ms": 23814.0,
+    "engine_decode_tok_s": 36.6
+  },
+  "health": {
+    "status": "ok",
+    "max_context": 204800,
+    "model": "qwen3.8-flash-next-iq3_xxs",
+    "images": true,
+    "api_key": false
+  }
+}

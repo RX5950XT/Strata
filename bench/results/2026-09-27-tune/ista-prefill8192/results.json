@@ -1,0 +1,117 @@
+{
+  "label": "ista-prefill8192",
+  "config": "D:\\Workspace\\Personal_Project\\Strata\\strata-iq3_xxs.json",
+  "engine_args": [
+    "--pack",
+    "D:\\Workspace\\Personal_Project\\Strata\\packs\\iq3_xxs",
+    "--native",
+    "D:\\Workspace\\Personal_Project\\Strata\\models\\IQ3_XXS\\Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00001-of-00002.gguf",
+    "--ple-gguf",
+    "D:\\Workspace\\Personal_Project\\Strata\\models\\IQ3_XXS\\Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00002-of-00002.gguf",
+    "--expert-profile",
+    "D:\\Workspace\\Personal_Project\\Strata\\data\\expert-profile.bin",
+    "--expert-cache",
+    "auto",
+    "--spec",
+    "4",
+    "--spec-min-p",
+    "0.5",
+    "--mtp",
+    "D:\\Workspace\\Personal_Project\\Strata\\mtp\\rt",
+    "--kv",
+    "int8",
+    "--max-context",
+    "204800",
+    "--prefill",
+    "8192"
+  ],
+  "token_count_method": "tokenizer",
+  "max_tokens": 64,
+  "contexts": [
+    {
+      "target": 32768,
+      "runs": [
+        {
+          "prompt_tokens": 32769,
+          "generated_tokens": 64,
+          "usage": {
+            "prompt_tokens": 32769,
+            "completion_tokens": 64,
+            "total_tokens": 32833
+          },
+          "ttft_s": 61.181,
+          "prefill_tok_s": 535.61,
+          "decode_tok_s": 38.39,
+          "elapsed_s": 62.822,
+          "answer_first_200": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words. Need analyze files. Need likely summarize benchmark, chat.py, docs, heade",
+          "answer": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words. Need analyze files. Need likely summarize benchmark, chat.py, docs, headers. Need ensure 600 words? \"detailed, 60",
+          "peaks": {
+            "gpus": {
+              "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+                "memory_mib": 15184,
+                "utilization_pct": 100
+              },
+              "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+                "memory_mib": 0,
+                "utilization_pct": 0
+              }
+            },
+            "ram_mib": 77646
+          },
+          "mtp_acceptance": 0.915,
+          "engine_prompt_tokens": 32769,
+          "engine_prompt_ms": 60952.0,
+          "engine_prefill_tok_s": 537.6,
+          "engine_generated_tokens": 64,
+          "engine_decode_ms": 1708.0,
+          "engine_decode_tok_s": 37.5,
+          "estimated_prompt_tokens": 32769
+        }
+      ],
+      "median": {
+        "prompt_tokens": 32769,
+        "generated_tokens": 64,
+        "usage": {
+          "prompt_tokens": 32769,
+          "completion_tokens": 64,
+          "total_tokens": 32833
+        },
+        "ttft_s": 61.181,
+        "prefill_tok_s": 535.61,
+        "decode_tok_s": 38.39,
+        "elapsed_s": 62.822,
+        "answer_first_200": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words. Need analyze files. Need likely summarize benchmark, chat.py, docs, heade",
+        "answer": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words. Need analyze files. Need likely summarize benchmark, chat.py, docs, headers. Need ensure 600 words? \"detailed, 60",
+        "peaks": {
+          "gpus": {
+            "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+              "memory_mib": 15184,
+              "utilization_pct": 100
+            },
+            "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+              "memory_mib": 0,
+              "utilization_pct": 0
+            }
+          },
+          "ram_mib": 77646
+        },
+        "mtp_acceptance": 0.915,
+        "engine_prompt_tokens": 32769,
+        "engine_prompt_ms": 60952.0,
+        "engine_prefill_tok_s": 537.6,
+        "engine_generated_tokens": 64,
+        "engine_decode_ms": 1708.0,
+        "engine_decode_tok_s": 37.5,
+        "estimated_prompt_tokens": 32769
+      }
+    }
+  ],
+  "vision": null,
+  "health": {
+    "status": "ok",
+    "max_context": 204800,
+    "model": "qwen3.8-flash-next-iq3_xxs",
+    "images": false,
+    "api_key": false
+  }
+}

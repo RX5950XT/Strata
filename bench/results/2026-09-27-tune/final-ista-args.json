@@ -1,0 +1,9 @@
+{
+  "overrides": [
+    "--max-context=204800",
+    "--prefill=8192",
+    "--mtp-window=65536"
+  ],
+  "drop": [],
+  "notes": "200K config. Stage 1 kept --max-context=204800 only (+12.7% short decode vs default). pcie-frac 0.30/0.20/0.10 on these args did not beat that (medians 31.45/34.35, 38.50/35.45, 35.95/36.25 vs 40.40/38.15); default 0.55 stays. Stage 2 prefill 8192 is 537.6 tok/s at 32K vs 403.6 at 4096, no chunk halving, 200 MiB free. Stage 3 kept --mtp-window=65536. The original ista-final-ladder used --prefill=4096. Engine warns that the expert-cache GPU hit path makes generated output incorrect."
+}

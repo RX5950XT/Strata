@@ -1,0 +1,619 @@
+{
+  "label": "ista-final-ladder-262k",
+  "config": "D:\\Workspace\\Personal_Project\\Strata\\strata-iq3_xxs.json",
+  "engine_args": [
+    "--pack",
+    "D:\\Workspace\\Personal_Project\\Strata\\packs\\iq3_xxs",
+    "--native",
+    "D:\\Workspace\\Personal_Project\\Strata\\models\\IQ3_XXS\\Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00001-of-00002.gguf",
+    "--ple-gguf",
+    "D:\\Workspace\\Personal_Project\\Strata\\models\\IQ3_XXS\\Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00002-of-00002.gguf",
+    "--expert-profile",
+    "D:\\Workspace\\Personal_Project\\Strata\\data\\expert-profile.bin",
+    "--expert-cache",
+    "auto",
+    "--spec",
+    "4",
+    "--spec-min-p",
+    "0.5",
+    "--mtp",
+    "D:\\Workspace\\Personal_Project\\Strata\\mtp\\rt",
+    "--kv",
+    "int8",
+    "--vision",
+    "--vram-reserve-mib",
+    "700",
+    "--max-context",
+    "262144",
+    "--prefill",
+    "4096",
+    "--mtp-window",
+    "65536"
+  ],
+  "token_count_method": "tokenizer",
+  "max_tokens": 400,
+  "contexts": [
+    {
+      "target": 1024,
+      "runs": [
+        {
+          "prompt_tokens": 1024,
+          "generated_tokens": 400,
+          "usage": {
+            "prompt_tokens": 1024,
+            "completion_tokens": 400,
+            "total_tokens": 1424
+          },
+          "ttft_s": 4.858,
+          "prefill_tok_s": 210.77,
+          "decode_tok_s": 36.14,
+          "elapsed_s": 15.9,
+          "answer_first_200": "We need answer user's request: \"Benchmark nonce: bench-1024-0\nFiles: ... Now write a detailed, 600-word technical summary of the files above.\"\n\nNeed produce final answer likely around 600 words. Need ",
+          "answer": "We need answer user's request: \"Benchmark nonce: bench-1024-0\nFiles: ... Now write a detailed, 600-word technical summary of the files above.\"\n\nNeed produce final answer likely around 600 words. Need analyze data. Need maybe mention incomplete table? The prompt processing table truncated at RTX 3090 IQ2_XS 32k? It says:\n| RTX 3090 24GB | IQ2_XS | ~303 | ~422 |\nThen no more columns? Need summarize available data, note truncation. Need 600 words detailed technical summary. Need likely include nonce? Maybe include benchmark nonce. Need ensure word count around 600. Could produce exactly? User asks 600-word. We can aim ~600 words. Need maybe count? Let's draft around 600 words. Need technical summary of files above: estimates.md with output decode tok/s and prompt processing tok/s for cards/models/context lengths. Need discuss trends: Q2_0 generally faster decode than IQ2_XS/IQ3_XXS on 5070/5060Ti? On 3090 IQ2_XS slightly faster at 1k/4k than Q2_0 but Q2_0 faster at longer? Need note missing IQ3_XXS at 262k likely OOM or not measured. Prompt processing: 5070 highest among 12/16GB? 3090 lower than 5070? Interesting: 5070 prompt processing estimated higher than 3090 for Q2_0: 389 vs 355 at 1k, 539 vs 491 at 4k, etc. Decode 3090 much",
+          "peaks": {
+            "gpus": {
+              "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+                "memory_mib": 15198,
+                "utilization_pct": 100
+              },
+              "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+                "memory_mib": 1191,
+                "utilization_pct": 0
+              }
+            },
+            "ram_mib": 77989
+          },
+          "mtp_acceptance": 0.764,
+          "engine_prompt_tokens": 1024,
+          "engine_prompt_ms": 4764.0,
+          "engine_prefill_tok_s": 214.9,
+          "engine_generated_tokens": 400,
+          "engine_decode_ms": 11109.0,
+          "engine_decode_tok_s": 36.0,
+          "estimated_prompt_tokens": 1024
+        }
+      ],
+      "median": {
+        "prompt_tokens": 1024,
+        "generated_tokens": 400,
+        "usage": {
+          "prompt_tokens": 1024,
+          "completion_tokens": 400,
+          "total_tokens": 1424
+        },
+        "ttft_s": 4.858,
+        "prefill_tok_s": 210.77,
+        "decode_tok_s": 36.14,
+        "elapsed_s": 15.9,
+        "answer_first_200": "We need answer user's request: \"Benchmark nonce: bench-1024-0\nFiles: ... Now write a detailed, 600-word technical summary of the files above.\"\n\nNeed produce final answer likely around 600 words. Need ",
+        "answer": "We need answer user's request: \"Benchmark nonce: bench-1024-0\nFiles: ... Now write a detailed, 600-word technical summary of the files above.\"\n\nNeed produce final answer likely around 600 words. Need analyze data. Need maybe mention incomplete table? The prompt processing table truncated at RTX 3090 IQ2_XS 32k? It says:\n| RTX 3090 24GB | IQ2_XS | ~303 | ~422 |\nThen no more columns? Need summarize available data, note truncation. Need 600 words detailed technical summary. Need likely include nonce? Maybe include benchmark nonce. Need ensure word count around 600. Could produce exactly? User asks 600-word. We can aim ~600 words. Need maybe count? Let's draft around 600 words. Need technical summary of files above: estimates.md with output decode tok/s and prompt processing tok/s for cards/models/context lengths. Need discuss trends: Q2_0 generally faster decode than IQ2_XS/IQ3_XXS on 5070/5060Ti? On 3090 IQ2_XS slightly faster at 1k/4k than Q2_0 but Q2_0 faster at longer? Need note missing IQ3_XXS at 262k likely OOM or not measured. Prompt processing: 5070 highest among 12/16GB? 3090 lower than 5070? Interesting: 5070 prompt processing estimated higher than 3090 for Q2_0: 389 vs 355 at 1k, 539 vs 491 at 4k, etc. Decode 3090 much",
+        "peaks": {
+          "gpus": {
+            "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+              "memory_mib": 15198,
+              "utilization_pct": 100
+            },
+            "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+              "memory_mib": 1191,
+              "utilization_pct": 0
+            }
+          },
+          "ram_mib": 77989
+        },
+        "mtp_acceptance": 0.764,
+        "engine_prompt_tokens": 1024,
+        "engine_prompt_ms": 4764.0,
+        "engine_prefill_tok_s": 214.9,
+        "engine_generated_tokens": 400,
+        "engine_decode_ms": 11109.0,
+        "engine_decode_tok_s": 36.0,
+        "estimated_prompt_tokens": 1024
+      }
+    },
+    {
+      "target": 8192,
+      "runs": [
+        {
+          "prompt_tokens": 8192,
+          "generated_tokens": 400,
+          "usage": {
+            "prompt_tokens": 8192,
+            "completion_tokens": 400,
+            "total_tokens": 8592
+          },
+          "ttft_s": 18.66,
+          "prefill_tok_s": 439.02,
+          "decode_tok_s": 33.46,
+          "elapsed_s": 30.586,
+          "answer_first_200": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce final ~600 words. Need likely summarize benchmark nonce, files: estimates.md, matrix.",
+          "answer": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce final ~600 words. Need likely summarize benchmark nonce, files: estimates.md, matrix.md, vision.md, chat.py, DETAILS.md. Need detailed technical summary. Need maybe exactly 600 words? User says detailed, 600-word technical summary. Aim around 600 words. Need ensure no unsupported? We can synthesize. Need maybe mention benchmark nonce bench-8192-0. Need cover performance estimates, measured matrix, vision impact, chat.py client, docs details architecture, requirements, API, vision, limitations. Need maybe count words? Let's draft around 600 words. Need maybe include tables? Summary prose. Need ensure 600 words maybe approximate. Let's craft ~600 words. Need maybe count manually? Let's draft and count roughly.\n\nDraft:\n\n\"The benchmark nonce bench-8192-0 accompanies a set of files documenting a local inference stack called Strata, centered on quantized Qwen3.8-Flash-Next GGUF models and a custom server. estimates.md provides estimated prompt-processing and output token rates for RTX 5070 12GB, RTX 5060 Ti 16GB, and RTX 3090 24GB across Q2_0, IQ2_XS, and IQ3_XXS at context lengths from 1K to 262K. The RTX 5070 rows are measured; the others are estimates scaled by GPU memory bandwidth and VRAM expert capacity. Q2_0 is generally fastest, IQ2_XS close behind, IQ3_XXS slower but higher quality. Output speed falls with context, especially for IQ2_XS and IQ3_XXS, while prompt speed peaks around 32",
+          "peaks": {
+            "gpus": {
+              "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+                "memory_mib": 15198,
+                "utilization_pct": 99
+              },
+              "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+                "memory_mib": 1191,
+                "utilization_pct": 0
+              }
+            },
+            "ram_mib": 78082
+          },
+          "mtp_acceptance": 0.758,
+          "engine_prompt_tokens": 8192,
+          "engine_prompt_ms": 18573.0,
+          "engine_prefill_tok_s": 441.1,
+          "engine_generated_tokens": 400,
+          "engine_decode_ms": 11974.0,
+          "engine_decode_tok_s": 33.4,
+          "estimated_prompt_tokens": 8192
+        }
+      ],
+      "median": {
+        "prompt_tokens": 8192,
+        "generated_tokens": 400,
+        "usage": {
+          "prompt_tokens": 8192,
+          "completion_tokens": 400,
+          "total_tokens": 8592
+        },
+        "ttft_s": 18.66,
+        "prefill_tok_s": 439.02,
+        "decode_tok_s": 33.46,
+        "elapsed_s": 30.586,
+        "answer_first_200": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce final ~600 words. Need likely summarize benchmark nonce, files: estimates.md, matrix.",
+        "answer": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce final ~600 words. Need likely summarize benchmark nonce, files: estimates.md, matrix.md, vision.md, chat.py, DETAILS.md. Need detailed technical summary. Need maybe exactly 600 words? User says detailed, 600-word technical summary. Aim around 600 words. Need ensure no unsupported? We can synthesize. Need maybe mention benchmark nonce bench-8192-0. Need cover performance estimates, measured matrix, vision impact, chat.py client, docs details architecture, requirements, API, vision, limitations. Need maybe count words? Let's draft around 600 words. Need maybe include tables? Summary prose. Need ensure 600 words maybe approximate. Let's craft ~600 words. Need maybe count manually? Let's draft and count roughly.\n\nDraft:\n\n\"The benchmark nonce bench-8192-0 accompanies a set of files documenting a local inference stack called Strata, centered on quantized Qwen3.8-Flash-Next GGUF models and a custom server. estimates.md provides estimated prompt-processing and output token rates for RTX 5070 12GB, RTX 5060 Ti 16GB, and RTX 3090 24GB across Q2_0, IQ2_XS, and IQ3_XXS at context lengths from 1K to 262K. The RTX 5070 rows are measured; the others are estimates scaled by GPU memory bandwidth and VRAM expert capacity. Q2_0 is generally fastest, IQ2_XS close behind, IQ3_XXS slower but higher quality. Output speed falls with context, especially for IQ2_XS and IQ3_XXS, while prompt speed peaks around 32",
+        "peaks": {
+          "gpus": {
+            "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+              "memory_mib": 15198,
+              "utilization_pct": 99
+            },
+            "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+              "memory_mib": 1191,
+              "utilization_pct": 0
+            }
+          },
+          "ram_mib": 78082
+        },
+        "mtp_acceptance": 0.758,
+        "engine_prompt_tokens": 8192,
+        "engine_prompt_ms": 18573.0,
+        "engine_prefill_tok_s": 441.1,
+        "engine_generated_tokens": 400,
+        "engine_decode_ms": 11974.0,
+        "engine_decode_tok_s": 33.4,
+        "estimated_prompt_tokens": 8192
+      }
+    },
+    {
+      "target": 32768,
+      "runs": [
+        {
+          "prompt_tokens": 32769,
+          "generated_tokens": 400,
+          "usage": {
+            "prompt_tokens": 32769,
+            "completion_tokens": 400,
+            "total_tokens": 33169
+          },
+          "ttft_s": 74.076,
+          "prefill_tok_s": 442.37,
+          "decode_tok_s": 37.27,
+          "elapsed_s": 84.783,
+          "answer_first_200": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words. Need analyze files. Need likely summarize benchmark, docs, code headers. ",
+          "answer": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words. Need analyze files. Need likely summarize benchmark, docs, code headers. Need ensure 600 words? \"detailed, 600-word technical summary\" likely around 600 words. Need maybe exactly? We can aim ~600 words. Need include technical details: benchmark estimates, matrix, vision, chat.py, DETAILS.md, dequant.hpp, gguf_reader.hpp, device.hpp, expert_cache.hpp, expert_source.hpp, graph.hpp, hit_hook.hpp, layer.hpp. Need maybe mention Strata engine, Qwen3.8-Flash-Next, quantizations, performance, architecture, memory tiers, expert cache, graph capture, dequantization. Need 600 words. Let's draft around 600. Need count? Let's produce maybe 600-650. Need detailed technical summary. Ensure no unsupported claims? Use given data. Need maybe mention measured RTX 5070, estimates for 5060 Ti, 3090. Need mention prompt/output tok/s, vision overhead, API, chat.py. Need mention code: GGUF reader, dequantizers, device arena, expert cache, expert source, graph registry, hit hook, layer. Need maybe mention Q2_0 contract 64 elements 18 bytes, code mapping. Need mention expert cache design, per-layer admission, hit/miss split, GPU overlap. Need mention graph capture fixed addresses, driver polling. Need mention layer composition GDN order. Need maybe mention limitations: one request, greedy, no cache, images optional. Need 600 words. Let's count approximate.\n\nDraft:\n\n\"The files describe Strata, a local inference stack for Qwen3.8-Flash-Next...\" Need ",
+          "peaks": {
+            "gpus": {
+              "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+                "memory_mib": 15206,
+                "utilization_pct": 100
+              },
+              "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+                "memory_mib": 1191,
+                "utilization_pct": 0
+              }
+            },
+            "ram_mib": 78126
+          },
+          "mtp_acceptance": 0.782,
+          "engine_prompt_tokens": 32769,
+          "engine_prompt_ms": 73908.0,
+          "engine_prefill_tok_s": 443.4,
+          "engine_generated_tokens": 400,
+          "engine_decode_ms": 10755.0,
+          "engine_decode_tok_s": 37.2,
+          "estimated_prompt_tokens": 32769
+        }
+      ],
+      "median": {
+        "prompt_tokens": 32769,
+        "generated_tokens": 400,
+        "usage": {
+          "prompt_tokens": 32769,
+          "completion_tokens": 400,
+          "total_tokens": 33169
+        },
+        "ttft_s": 74.076,
+        "prefill_tok_s": 442.37,
+        "decode_tok_s": 37.27,
+        "elapsed_s": 84.783,
+        "answer_first_200": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words. Need analyze files. Need likely summarize benchmark, docs, code headers. ",
+        "answer": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words. Need analyze files. Need likely summarize benchmark, docs, code headers. Need ensure 600 words? \"detailed, 600-word technical summary\" likely around 600 words. Need maybe exactly? We can aim ~600 words. Need include technical details: benchmark estimates, matrix, vision, chat.py, DETAILS.md, dequant.hpp, gguf_reader.hpp, device.hpp, expert_cache.hpp, expert_source.hpp, graph.hpp, hit_hook.hpp, layer.hpp. Need maybe mention Strata engine, Qwen3.8-Flash-Next, quantizations, performance, architecture, memory tiers, expert cache, graph capture, dequantization. Need 600 words. Let's draft around 600. Need count? Let's produce maybe 600-650. Need detailed technical summary. Ensure no unsupported claims? Use given data. Need maybe mention measured RTX 5070, estimates for 5060 Ti, 3090. Need mention prompt/output tok/s, vision overhead, API, chat.py. Need mention code: GGUF reader, dequantizers, device arena, expert cache, expert source, graph registry, hit hook, layer. Need maybe mention Q2_0 contract 64 elements 18 bytes, code mapping. Need mention expert cache design, per-layer admission, hit/miss split, GPU overlap. Need mention graph capture fixed addresses, driver polling. Need mention layer composition GDN order. Need maybe mention limitations: one request, greedy, no cache, images optional. Need 600 words. Let's count approximate.\n\nDraft:\n\n\"The files describe Strata, a local inference stack for Qwen3.8-Flash-Next...\" Need ",
+        "peaks": {
+          "gpus": {
+            "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+              "memory_mib": 15206,
+              "utilization_pct": 100
+            },
+            "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+              "memory_mib": 1191,
+              "utilization_pct": 0
+            }
+          },
+          "ram_mib": 78126
+        },
+        "mtp_acceptance": 0.782,
+        "engine_prompt_tokens": 32769,
+        "engine_prompt_ms": 73908.0,
+        "engine_prefill_tok_s": 443.4,
+        "engine_generated_tokens": 400,
+        "engine_decode_ms": 10755.0,
+        "engine_decode_tok_s": 37.2,
+        "estimated_prompt_tokens": 32769
+      }
+    },
+    {
+      "target": 65536,
+      "runs": [
+        {
+          "prompt_tokens": 65536,
+          "generated_tokens": 400,
+          "usage": {
+            "prompt_tokens": 65536,
+            "completion_tokens": 400,
+            "total_tokens": 65936
+          },
+          "ttft_s": 148.727,
+          "prefill_tok_s": 440.64,
+          "decode_tok_s": 36.6,
+          "elapsed_s": 159.63,
+          "answer_first_200": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words technical summary. Need likely summarize benchmark files, chat.py, docs, C",
+          "answer": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words technical summary. Need likely summarize benchmark files, chat.py, docs, C++ headers. Need ensure around 600 words? User says detailed, 600-word technical summary. We should aim close to 600 words. Need maybe count? We can craft ~600 words. Need include key points: benchmark estimates, matrix, vision, chat.py, DETAILS.md, C++ headers architecture, quantization, expert cache, session graphs, verify, weights, kernels. Need maybe mention nonce? Not necessary. Need final only summary. Need maybe exactly 600 words? Let's draft and count roughly. Need detailed technical summary. Let's produce around 600 words. Need maybe no headings? Could use paragraphs. Need count. Let's draft with 600 words maybe 600-650. Need ensure technical. Let's compose and count manually.\n\nDraft:\n\n\"The provided files describe a local inference stack for a large MoE model, Qwen3.8-Flash-Next, quantized to Q2_0, IQ2_XS, and IQ3_XXS, with benchmark estimates, a terminal chat client, documentation, and C++ engine headers. The benchmark tables estimate prompt-processing and output throughput across RTX 5070 12GB, RTX 5060 Ti 16GB, and RTX 3090 24GB for context lengths from 1K to 262K. Q2_0 is fastest, IQ2_XS close behind, IQ3_XXS slower but higher quality. Prompt speed peaks around 32K–64K, then declines with longer contexts; output speed falls more sharply. The 3090’s larger",
+          "peaks": {
+            "gpus": {
+              "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+                "memory_mib": 15198,
+                "utilization_pct": 100
+              },
+              "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+                "memory_mib": 1191,
+                "utilization_pct": 0
+              }
+            },
+            "ram_mib": 78242
+          },
+          "mtp_acceptance": 0.793,
+          "engine_prompt_tokens": 65536,
+          "engine_prompt_ms": 148465.0,
+          "engine_prefill_tok_s": 441.4,
+          "engine_generated_tokens": 400,
+          "engine_decode_ms": 10945.0,
+          "engine_decode_tok_s": 36.5,
+          "estimated_prompt_tokens": 65536
+        }
+      ],
+      "median": {
+        "prompt_tokens": 65536,
+        "generated_tokens": 400,
+        "usage": {
+          "prompt_tokens": 65536,
+          "completion_tokens": 400,
+          "total_tokens": 65936
+        },
+        "ttft_s": 148.727,
+        "prefill_tok_s": 440.64,
+        "decode_tok_s": 36.6,
+        "elapsed_s": 159.63,
+        "answer_first_200": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words technical summary. Need likely summarize benchmark files, chat.py, docs, C",
+        "answer": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words technical summary. Need likely summarize benchmark files, chat.py, docs, C++ headers. Need ensure around 600 words? User says detailed, 600-word technical summary. We should aim close to 600 words. Need maybe count? We can craft ~600 words. Need include key points: benchmark estimates, matrix, vision, chat.py, DETAILS.md, C++ headers architecture, quantization, expert cache, session graphs, verify, weights, kernels. Need maybe mention nonce? Not necessary. Need final only summary. Need maybe exactly 600 words? Let's draft and count roughly. Need detailed technical summary. Let's produce around 600 words. Need maybe no headings? Could use paragraphs. Need count. Let's draft with 600 words maybe 600-650. Need ensure technical. Let's compose and count manually.\n\nDraft:\n\n\"The provided files describe a local inference stack for a large MoE model, Qwen3.8-Flash-Next, quantized to Q2_0, IQ2_XS, and IQ3_XXS, with benchmark estimates, a terminal chat client, documentation, and C++ engine headers. The benchmark tables estimate prompt-processing and output throughput across RTX 5070 12GB, RTX 5060 Ti 16GB, and RTX 3090 24GB for context lengths from 1K to 262K. Q2_0 is fastest, IQ2_XS close behind, IQ3_XXS slower but higher quality. Prompt speed peaks around 32K–64K, then declines with longer contexts; output speed falls more sharply. The 3090’s larger",
+        "peaks": {
+          "gpus": {
+            "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+              "memory_mib": 15198,
+              "utilization_pct": 100
+            },
+            "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+              "memory_mib": 1191,
+              "utilization_pct": 0
+            }
+          },
+          "ram_mib": 78242
+        },
+        "mtp_acceptance": 0.793,
+        "engine_prompt_tokens": 65536,
+        "engine_prompt_ms": 148465.0,
+        "engine_prefill_tok_s": 441.4,
+        "engine_generated_tokens": 400,
+        "engine_decode_ms": 10945.0,
+        "engine_decode_tok_s": 36.5,
+        "estimated_prompt_tokens": 65536
+      }
+    },
+    {
+      "target": 131072,
+      "runs": [
+        {
+          "prompt_tokens": 131072,
+          "generated_tokens": 400,
+          "usage": {
+            "prompt_tokens": 131072,
+            "completion_tokens": 400,
+            "total_tokens": 131472
+          },
+          "ttft_s": 304.923,
+          "prefill_tok_s": 429.85,
+          "decode_tok_s": 33.23,
+          "elapsed_s": 316.931,
+          "answer_first_200": "We need answer user's request: \"Benchmark nonce: bench-131072-0\nFiles: ... Now write a detailed, 600-word technical summary of the files above.\"\n\nNeed produce final answer likely 600 words technical s",
+          "answer": "We need answer user's request: \"Benchmark nonce: bench-131072-0\nFiles: ... Now write a detailed, 600-word technical summary of the files above.\"\n\nNeed produce final answer likely 600 words technical summary. Need include benchmark nonce? Probably maybe mention? Need summarize files above: benchmark estimates, matrix, vision, chat.py, docs/DETAILS.md, many C++ headers for Strata engine. Need detailed technical summary ~600 words. Need likely exactly 600? User says 600-word technical summary. We should aim around 600 words. Need maybe include nonce? Could include \"Benchmark nonce: bench-131072-0\" maybe not necessary but likely benchmark expects nonce? The prompt begins Benchmark nonce: bench-131072-0. Might need include it in answer? Usually benchmark nonce used to identify; maybe final should include nonce? Could include at top or end. Need ensure 600 words. Let's draft around 600 words. Need count words. Let's compose carefully.\n\nNeed summarize: performance tables for RTX 5070 measured, estimates for 5060 Ti/3090, vision impact, chat.py client, docs details, architecture: GGUF reader, dequantizers, device arena, expert cache, expert source, graph registry, hit hook, layer composition, layout, MTP, native dense/head, pinned arena, session, verify, weights, bf16/f16 bits, CPU expert kernels, pool, dequant, elementwise, fused GDN/GR, GDN, GR, IQ kernels, KV Q8, mrope, native flash attn, native GDN preprocess, native GR norm/postops, native MMVQ, native MoE, native PLE postops, native QSA/indexer/score/",
+          "peaks": {
+            "gpus": {
+              "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+                "memory_mib": 15230,
+                "utilization_pct": 100
+              },
+              "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+                "memory_mib": 1191,
+                "utilization_pct": 0
+              }
+            },
+            "ram_mib": 78708
+          },
+          "mtp_acceptance": 0.67,
+          "engine_prompt_tokens": 131072,
+          "engine_prompt_ms": 304434.0,
+          "engine_prefill_tok_s": 430.5,
+          "engine_generated_tokens": 400,
+          "engine_decode_ms": 12053.0,
+          "engine_decode_tok_s": 33.2,
+          "estimated_prompt_tokens": 131072
+        }
+      ],
+      "median": {
+        "prompt_tokens": 131072,
+        "generated_tokens": 400,
+        "usage": {
+          "prompt_tokens": 131072,
+          "completion_tokens": 400,
+          "total_tokens": 131472
+        },
+        "ttft_s": 304.923,
+        "prefill_tok_s": 429.85,
+        "decode_tok_s": 33.23,
+        "elapsed_s": 316.931,
+        "answer_first_200": "We need answer user's request: \"Benchmark nonce: bench-131072-0\nFiles: ... Now write a detailed, 600-word technical summary of the files above.\"\n\nNeed produce final answer likely 600 words technical s",
+        "answer": "We need answer user's request: \"Benchmark nonce: bench-131072-0\nFiles: ... Now write a detailed, 600-word technical summary of the files above.\"\n\nNeed produce final answer likely 600 words technical summary. Need include benchmark nonce? Probably maybe mention? Need summarize files above: benchmark estimates, matrix, vision, chat.py, docs/DETAILS.md, many C++ headers for Strata engine. Need detailed technical summary ~600 words. Need likely exactly 600? User says 600-word technical summary. We should aim around 600 words. Need maybe include nonce? Could include \"Benchmark nonce: bench-131072-0\" maybe not necessary but likely benchmark expects nonce? The prompt begins Benchmark nonce: bench-131072-0. Might need include it in answer? Usually benchmark nonce used to identify; maybe final should include nonce? Could include at top or end. Need ensure 600 words. Let's draft around 600 words. Need count words. Let's compose carefully.\n\nNeed summarize: performance tables for RTX 5070 measured, estimates for 5060 Ti/3090, vision impact, chat.py client, docs details, architecture: GGUF reader, dequantizers, device arena, expert cache, expert source, graph registry, hit hook, layer composition, layout, MTP, native dense/head, pinned arena, session, verify, weights, bf16/f16 bits, CPU expert kernels, pool, dequant, elementwise, fused GDN/GR, GDN, GR, IQ kernels, KV Q8, mrope, native flash attn, native GDN preprocess, native GR norm/postops, native MMVQ, native MoE, native PLE postops, native QSA/indexer/score/",
+        "peaks": {
+          "gpus": {
+            "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+              "memory_mib": 15230,
+              "utilization_pct": 100
+            },
+            "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+              "memory_mib": 1191,
+              "utilization_pct": 0
+            }
+          },
+          "ram_mib": 78708
+        },
+        "mtp_acceptance": 0.67,
+        "engine_prompt_tokens": 131072,
+        "engine_prompt_ms": 304434.0,
+        "engine_prefill_tok_s": 430.5,
+        "engine_generated_tokens": 400,
+        "engine_decode_ms": 12053.0,
+        "engine_decode_tok_s": 33.2,
+        "estimated_prompt_tokens": 131072
+      }
+    },
+    {
+      "target": 204800,
+      "runs": [
+        {
+          "prompt_tokens": 204800,
+          "generated_tokens": 400,
+          "usage": {
+            "prompt_tokens": 204800,
+            "completion_tokens": 400,
+            "total_tokens": 205200
+          },
+          "ttft_s": 493.636,
+          "prefill_tok_s": 414.88,
+          "decode_tok_s": 33.98,
+          "elapsed_s": 505.378,
+          "answer_first_200": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words technical summary. Need likely summarize provided files: benchmark results",
+          "answer": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words technical summary. Need likely summarize provided files: benchmark results, docs, chat.py, headers, source, setup, serve, etc. Need be detailed, technical, around 600 words. Need ensure final only summary. Need maybe count words? Aim 600 words. Need include key architecture: Strata engine for Qwen3.8-Flash-Next on consumer PC, hybrid GPU/CPU/SSD, MoE experts, quantization, CUDA graphs, speculative decoding, prefill, vision, API, setup. Need mention benchmark numbers maybe. Need 600 words exactly? \"600-word\" likely approximate. Need produce detailed technical summary. Let's draft around 600 words. Need maybe count manually. Let's compose ~600 words. Need ensure no analysis. Could include sections? Summary. Need maybe 600 words. Let's draft and count roughly.\n\nDraft:\n\nThe supplied files describe Strata, a local inference stack for Qwen3.8-Flash-Next, a 125B MoE model, on consumer NVIDIA PCs. The benchmark tables quantify RTX 5070 12GB, RTX 5060 Ti 16GB, RTX 3090 24GB performance for Q2_0, IQ2_XS, IQ3_XXS quantizations across 1K–262K contexts. On RTX 5070, Q2_0 reaches ~95 output tok/s at 4K and ~65 at 128K, with prompt processing ~540–570 tok/s; IQ3_XXS is slower but higher quality. Vision tests show image encoding costs 2–8% throughput",
+          "peaks": {
+            "gpus": {
+              "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+                "memory_mib": 15199,
+                "utilization_pct": 100
+              },
+              "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+                "memory_mib": 1191,
+                "utilization_pct": 0
+              }
+            },
+            "ram_mib": 78488
+          },
+          "mtp_acceptance": 0.716,
+          "engine_prompt_tokens": 204800,
+          "engine_prompt_ms": 492893.0,
+          "engine_prefill_tok_s": 415.5,
+          "engine_generated_tokens": 400,
+          "engine_decode_ms": 11789.0,
+          "engine_decode_tok_s": 33.9,
+          "estimated_prompt_tokens": 204800
+        }
+      ],
+      "median": {
+        "prompt_tokens": 204800,
+        "generated_tokens": 400,
+        "usage": {
+          "prompt_tokens": 204800,
+          "completion_tokens": 400,
+          "total_tokens": 205200
+        },
+        "ttft_s": 493.636,
+        "prefill_tok_s": 414.88,
+        "decode_tok_s": 33.98,
+        "elapsed_s": 505.378,
+        "answer_first_200": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words technical summary. Need likely summarize provided files: benchmark results",
+        "answer": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words technical summary. Need likely summarize provided files: benchmark results, docs, chat.py, headers, source, setup, serve, etc. Need be detailed, technical, around 600 words. Need ensure final only summary. Need maybe count words? Aim 600 words. Need include key architecture: Strata engine for Qwen3.8-Flash-Next on consumer PC, hybrid GPU/CPU/SSD, MoE experts, quantization, CUDA graphs, speculative decoding, prefill, vision, API, setup. Need mention benchmark numbers maybe. Need 600 words exactly? \"600-word\" likely approximate. Need produce detailed technical summary. Let's draft around 600 words. Need maybe count manually. Let's compose ~600 words. Need ensure no analysis. Could include sections? Summary. Need maybe 600 words. Let's draft and count roughly.\n\nDraft:\n\nThe supplied files describe Strata, a local inference stack for Qwen3.8-Flash-Next, a 125B MoE model, on consumer NVIDIA PCs. The benchmark tables quantify RTX 5070 12GB, RTX 5060 Ti 16GB, RTX 3090 24GB performance for Q2_0, IQ2_XS, IQ3_XXS quantizations across 1K–262K contexts. On RTX 5070, Q2_0 reaches ~95 output tok/s at 4K and ~65 at 128K, with prompt processing ~540–570 tok/s; IQ3_XXS is slower but higher quality. Vision tests show image encoding costs 2–8% throughput",
+        "peaks": {
+          "gpus": {
+            "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+              "memory_mib": 15199,
+              "utilization_pct": 100
+            },
+            "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+              "memory_mib": 1191,
+              "utilization_pct": 0
+            }
+          },
+          "ram_mib": 78488
+        },
+        "mtp_acceptance": 0.716,
+        "engine_prompt_tokens": 204800,
+        "engine_prompt_ms": 492893.0,
+        "engine_prefill_tok_s": 415.5,
+        "engine_generated_tokens": 400,
+        "engine_decode_ms": 11789.0,
+        "engine_decode_tok_s": 33.9,
+        "estimated_prompt_tokens": 204800
+      }
+    },
+    {
+      "target": 261232,
+      "runs": [
+        {
+          "prompt_tokens": 261232,
+          "generated_tokens": 400,
+          "usage": {
+            "prompt_tokens": 261232,
+            "completion_tokens": 400,
+            "total_tokens": 261632
+          },
+          "ttft_s": 655.139,
+          "prefill_tok_s": 398.74,
+          "decode_tok_s": 32.02,
+          "elapsed_s": 667.601,
+          "answer_first_200": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words technical summary. Need likely summarize provided files: benchmark results",
+          "answer": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words technical summary. Need likely summarize provided files: benchmark results, docs, headers, source, setup, serve, etc. Need ensure around 600 words? User says detailed, 600-word technical summary. We should aim close to 600 words. Need maybe count? We can produce about 600 words. Need no analysis in final. Need include key components: Strata engine for Qwen3.8-Flash-Next on consumer PC, hybrid GPU/CPU/SSD, MoE experts, VRAM cache, CUDA graphs, session loop, verify/speculative MTP, prefill, PLE n-gram, quantization, API server, setup. Need technical details: Q2_0/IQ2_XS/IQ3_XXS, RTX 5070 measured, memory tiers, expert cache, doorbell, graph capture, activation contracts, dequantizers, GGUF reader, plan, pinned arena, verify window, MTP drafter, suffix drafter, controller, serve frontend, setup. Need maybe mention benchmark nonce? Not necessary. Need 600 words. Let's draft around 600. Need maybe exact 600? \"600-word\" approximate. Let's count roughly. Need detailed technical summary. Could produce 6 paragraphs. Let's draft and count manually maybe. Need ensure not too short. Let's create ~600 words.\n\nDraft:\n\n\"The files describe Strata, a local inference stack for Qwen3.8-Flash-Next...\" Count? Let's write and count approximate.\n\nParagraph 1: overview and benchmarks. ~100 words.\nParagraph 2: engine architecture memory tiers. ~120.\nParagraph 3: kernels",
+          "peaks": {
+            "gpus": {
+              "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+                "memory_mib": 15198,
+                "utilization_pct": 100
+              },
+              "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+                "memory_mib": 1191,
+                "utilization_pct": 0
+              }
+            },
+            "ram_mib": 78624
+          },
+          "mtp_acceptance": 0.667,
+          "engine_prompt_tokens": 261232,
+          "engine_prompt_ms": 654160.0,
+          "engine_prefill_tok_s": 399.3,
+          "engine_generated_tokens": 400,
+          "engine_decode_ms": 12522.0,
+          "engine_decode_tok_s": 31.9,
+          "estimated_prompt_tokens": 261232
+        }
+      ],
+      "clamped_from": 262144,
+      "median": {
+        "prompt_tokens": 261232,
+        "generated_tokens": 400,
+        "usage": {
+          "prompt_tokens": 261232,
+          "completion_tokens": 400,
+          "total_tokens": 261632
+        },
+        "ttft_s": 655.139,
+        "prefill_tok_s": 398.74,
+        "decode_tok_s": 32.02,
+        "elapsed_s": 667.601,
+        "answer_first_200": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words technical summary. Need likely summarize provided files: benchmark results",
+        "answer": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words technical summary. Need likely summarize provided files: benchmark results, docs, headers, source, setup, serve, etc. Need ensure around 600 words? User says detailed, 600-word technical summary. We should aim close to 600 words. Need maybe count? We can produce about 600 words. Need no analysis in final. Need include key components: Strata engine for Qwen3.8-Flash-Next on consumer PC, hybrid GPU/CPU/SSD, MoE experts, VRAM cache, CUDA graphs, session loop, verify/speculative MTP, prefill, PLE n-gram, quantization, API server, setup. Need technical details: Q2_0/IQ2_XS/IQ3_XXS, RTX 5070 measured, memory tiers, expert cache, doorbell, graph capture, activation contracts, dequantizers, GGUF reader, plan, pinned arena, verify window, MTP drafter, suffix drafter, controller, serve frontend, setup. Need maybe mention benchmark nonce? Not necessary. Need 600 words. Let's draft around 600. Need maybe exact 600? \"600-word\" approximate. Let's count roughly. Need detailed technical summary. Could produce 6 paragraphs. Let's draft and count manually maybe. Need ensure not too short. Let's create ~600 words.\n\nDraft:\n\n\"The files describe Strata, a local inference stack for Qwen3.8-Flash-Next...\" Count? Let's write and count approximate.\n\nParagraph 1: overview and benchmarks. ~100 words.\nParagraph 2: engine architecture memory tiers. ~120.\nParagraph 3: kernels",
+        "peaks": {
+          "gpus": {
+            "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+              "memory_mib": 15198,
+              "utilization_pct": 100
+            },
+            "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+              "memory_mib": 1191,
+              "utilization_pct": 0
+            }
+          },
+          "ram_mib": 78624
+        },
+        "mtp_acceptance": 0.667,
+        "engine_prompt_tokens": 261232,
+        "engine_prompt_ms": 654160.0,
+        "engine_prefill_tok_s": 399.3,
+        "engine_generated_tokens": 400,
+        "engine_decode_ms": 12522.0,
+        "engine_decode_tok_s": 31.9,
+        "estimated_prompt_tokens": 261232
+      }
+    }
+  ],
+  "vision": {
+    "prompt_tokens": 535,
+    "generated_tokens": 400,
+    "usage": {
+      "prompt_tokens": 535,
+      "completion_tokens": 400,
+      "total_tokens": 935
+    },
+    "ttft_s": 4.705,
+    "prefill_tok_s": 113.7,
+    "decode_tok_s": 37.88,
+    "elapsed_s": 15.24,
+    "answer_first_200": "The user wants a detailed description of the image. Let me carefully examine every element.\n\nThe image has a white background. There's a thin black horizontal line at the very top edge and another at ",
+    "answer": "The user wants a detailed description of the image. Let me carefully examine every element.\n\nThe image has a white background. There's a thin black horizontal line at the very top edge and another at the very bottom edge, framing the content.\n\nLet me catalog the shapes:\n\n1. Top left: a red circle. It's a solid red fill, no outline visible (or maybe a thin outline). It's positioned in the upper-left quadrant.\n\n2. Top right: a blue square. Solid blue fill. Positioned in the upper-right area.\n\n3. Bottom center-left: a green triangle. Solid green fill, pointing upward (apex at top, base at bottom). It's roughly centered horizontally but slightly left, in the lower portion.\n\n4. Bottom right: text \"STRATA 42\" in black, sans-serif font. The text appears cut off on the right edge—the \"2\" is partially visible, maybe there's more after it. Actually it reads \"STRATA 42\" with the 2 partially cut. Let me look: \"STRATA 4\" then a \"2\" that's cut off at the right edge. So the text is \"STRATA 42\" but the 2 is clipped.\n\nLet me look at positions more precisely. The red circle center is around (170, 185) roughly. The blue square spans roughly x from 400 to 680, y from 85 to 330. The green triangle apex around (310, 375), base from (185, 555) to (435, 555). The text \"STRATA 42\" baseline around y=480, starting x around 430.\n\nColors: red is pure red (#FF0000-ish), blue pure blue (#0000FF",
+    "peaks": {
+      "gpus": {
+        "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+          "memory_mib": 15198,
+          "utilization_pct": 100
+        },
+        "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+          "memory_mib": 1191,
+          "utilization_pct": 93
+        }
+      },
+      "ram_mib": 78025
+    },
+    "mtp_acceptance": 0.729,
+    "engine_prompt_tokens": 535,
+    "engine_prompt_ms": 4169.0,
+    "engine_prefill_tok_s": 128.3,
+    "engine_generated_tokens": 400,
+    "engine_decode_ms": 10572.0,
+    "engine_decode_tok_s": 37.8
+  },
+  "health": {
+    "status": "ok",
+    "max_context": 262144,
+    "model": "qwen3.8-flash-next-iq3_xxs",
+    "images": true,
+    "api_key": false
+  }
+}

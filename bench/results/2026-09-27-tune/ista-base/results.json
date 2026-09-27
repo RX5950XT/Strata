@@ -1,0 +1,260 @@
+{
+  "label": "ista-base",
+  "config": "strata-iq3_xxs.json",
+  "engine_args": [
+    "--pack",
+    "D:\\Workspace\\Personal_Project\\Strata\\packs\\iq3_xxs",
+    "--native",
+    "D:\\Workspace\\Personal_Project\\Strata\\models\\IQ3_XXS\\Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00001-of-00002.gguf",
+    "--ple-gguf",
+    "D:\\Workspace\\Personal_Project\\Strata\\models\\IQ3_XXS\\Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00002-of-00002.gguf",
+    "--expert-profile",
+    "D:\\Workspace\\Personal_Project\\Strata\\data\\expert-profile.bin",
+    "--expert-cache",
+    "auto",
+    "--prefill",
+    "2048",
+    "--spec",
+    "4",
+    "--spec-min-p",
+    "0.5",
+    "--mtp",
+    "D:\\Workspace\\Personal_Project\\Strata\\mtp\\rt",
+    "--max-context",
+    "262144",
+    "--kv",
+    "int8"
+  ],
+  "token_count_method": "tokenizer",
+  "max_tokens": 400,
+  "contexts": [
+    {
+      "target": 1024,
+      "runs": [
+        {
+          "prompt_tokens": 1024,
+          "generated_tokens": 400,
+          "usage": {
+            "prompt_tokens": 1024,
+            "completion_tokens": 400,
+            "total_tokens": 1424
+          },
+          "ttft_s": 5.146,
+          "prefill_tok_s": 198.97,
+          "decode_tok_s": 34.92,
+          "elapsed_s": 16.573,
+          "answer_first_200": "We need answer user's request: \"Benchmark nonce: bench-1024-0\nFiles: ... Now write a detailed, 600-word technical summary of the files above.\"\n\nNeed produce final likely around 600 words. Need analyze",
+          "peaks": {
+            "gpus": {
+              "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+                "memory_mib": 15128,
+                "utilization_pct": 100
+              },
+              "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+                "memory_mib": 0,
+                "utilization_pct": 0
+              }
+            },
+            "ram_mib": 77895
+          },
+          "mtp_acceptance": 0.788,
+          "engine_prompt_tokens": 1024,
+          "engine_prompt_ms": 5062.0,
+          "engine_prefill_tok_s": 202.3,
+          "engine_generated_tokens": 400,
+          "engine_decode_ms": 11493.0,
+          "engine_decode_tok_s": 34.8,
+          "estimated_prompt_tokens": 1024
+        },
+        {
+          "prompt_tokens": 1024,
+          "generated_tokens": 400,
+          "usage": {
+            "prompt_tokens": 1024,
+            "completion_tokens": 400,
+            "total_tokens": 1424
+          },
+          "ttft_s": 4.543,
+          "prefill_tok_s": 225.4,
+          "decode_tok_s": 32.12,
+          "elapsed_s": 16.965,
+          "answer_first_200": "We need answer user's request: \"Benchmark nonce: bench-1024-1\nFiles: ... Now write a detailed, 600-word technical summary of the files above.\"\n\nNeed produce final answer likely around 600 words. Need ",
+          "peaks": {
+            "gpus": {
+              "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+                "memory_mib": 15134,
+                "utilization_pct": 100
+              },
+              "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+                "memory_mib": 0,
+                "utilization_pct": 0
+              }
+            },
+            "ram_mib": 77806
+          },
+          "mtp_acceptance": 0.708,
+          "engine_prompt_tokens": 1024,
+          "engine_prompt_ms": 4480.0,
+          "engine_prefill_tok_s": 228.6,
+          "engine_generated_tokens": 400,
+          "engine_decode_ms": 12463.0,
+          "engine_decode_tok_s": 32.1,
+          "estimated_prompt_tokens": 1024
+        }
+      ],
+      "median": {
+        "prompt_tokens": 1024.0,
+        "generated_tokens": 400.0,
+        "usage": {
+          "prompt_tokens": 1024,
+          "completion_tokens": 400,
+          "total_tokens": 1424
+        },
+        "ttft_s": 4.8445,
+        "prefill_tok_s": 212.185,
+        "decode_tok_s": 33.519999999999996,
+        "elapsed_s": 16.769,
+        "answer_first_200": "We need answer user's request: \"Benchmark nonce: bench-1024-0\nFiles: ... Now write a detailed, 600-word technical summary of the files above.\"\n\nNeed produce final likely around 600 words. Need analyze",
+        "peaks": {
+          "gpus": {
+            "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+              "memory_mib": 15134,
+              "utilization_pct": 100
+            },
+            "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+              "memory_mib": 0,
+              "utilization_pct": 0
+            }
+          },
+          "ram_mib": 77895
+        },
+        "mtp_acceptance": 0.748,
+        "engine_prompt_tokens": 1024,
+        "engine_prompt_ms": 4771.0,
+        "engine_prefill_tok_s": 215.45,
+        "engine_generated_tokens": 400,
+        "engine_decode_ms": 11978.0,
+        "engine_decode_tok_s": 33.45,
+        "estimated_prompt_tokens": 1024
+      }
+    },
+    {
+      "target": 8192,
+      "runs": [
+        {
+          "prompt_tokens": 8192,
+          "generated_tokens": 400,
+          "usage": {
+            "prompt_tokens": 8192,
+            "completion_tokens": 400,
+            "total_tokens": 8592
+          },
+          "ttft_s": 26.391,
+          "prefill_tok_s": 310.41,
+          "decode_tok_s": 34.56,
+          "elapsed_s": 37.937,
+          "answer_first_200": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce final around 600 words. Need summarize files: estimates.md, matrix.md, vision.md, cha",
+          "peaks": {
+            "gpus": {
+              "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+                "memory_mib": 15175,
+                "utilization_pct": 100
+              },
+              "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+                "memory_mib": 0,
+                "utilization_pct": 0
+              }
+            },
+            "ram_mib": 77939
+          },
+          "mtp_acceptance": 0.733,
+          "engine_prompt_tokens": 8192,
+          "engine_prompt_ms": 26287.0,
+          "engine_prefill_tok_s": 311.6,
+          "engine_generated_tokens": 400,
+          "engine_decode_ms": 11598.0,
+          "engine_decode_tok_s": 34.5,
+          "estimated_prompt_tokens": 8192
+        },
+        {
+          "prompt_tokens": 8192,
+          "generated_tokens": 400,
+          "usage": {
+            "prompt_tokens": 8192,
+            "completion_tokens": 400,
+            "total_tokens": 8592
+          },
+          "ttft_s": 23.84,
+          "prefill_tok_s": 343.63,
+          "decode_tok_s": 38.06,
+          "elapsed_s": 34.325,
+          "answer_first_200": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce final ~600 words. Need summarize files: estimates.md, matrix.md, vision.md, chat.py, ",
+          "peaks": {
+            "gpus": {
+              "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+                "memory_mib": 15159,
+                "utilization_pct": 100
+              },
+              "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+                "memory_mib": 0,
+                "utilization_pct": 0
+              }
+            },
+            "ram_mib": 77785
+          },
+          "mtp_acceptance": 0.761,
+          "engine_prompt_tokens": 8192,
+          "engine_prompt_ms": 23753.0,
+          "engine_prefill_tok_s": 344.9,
+          "engine_generated_tokens": 400,
+          "engine_decode_ms": 10523.0,
+          "engine_decode_tok_s": 38.0,
+          "estimated_prompt_tokens": 8192
+        }
+      ],
+      "median": {
+        "prompt_tokens": 8192.0,
+        "generated_tokens": 400.0,
+        "usage": {
+          "prompt_tokens": 8192,
+          "completion_tokens": 400,
+          "total_tokens": 8592
+        },
+        "ttft_s": 25.115499999999997,
+        "prefill_tok_s": 327.02,
+        "decode_tok_s": 36.31,
+        "elapsed_s": 36.131,
+        "answer_first_200": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce final around 600 words. Need summarize files: estimates.md, matrix.md, vision.md, cha",
+        "peaks": {
+          "gpus": {
+            "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+              "memory_mib": 15175,
+              "utilization_pct": 100
+            },
+            "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+              "memory_mib": 0,
+              "utilization_pct": 0
+            }
+          },
+          "ram_mib": 77939
+        },
+        "mtp_acceptance": 0.747,
+        "engine_prompt_tokens": 8192,
+        "engine_prompt_ms": 25020.0,
+        "engine_prefill_tok_s": 328.25,
+        "engine_generated_tokens": 400,
+        "engine_decode_ms": 11060.5,
+        "engine_decode_tok_s": 36.25,
+        "estimated_prompt_tokens": 8192
+      }
+    }
+  ],
+  "vision": null,
+  "health": {
+    "status": "ok",
+    "max_context": 262144,
+    "model": "qwen3.8-flash-next-iq3_xxs",
+    "images": false,
+    "api_key": false
+  }
+}

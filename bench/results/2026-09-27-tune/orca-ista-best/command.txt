@@ -1,0 +1,3 @@
+﻿config: strata-orca-iq3_xxs-local.json
+python: D:\Workspace\Personal_Project\Strata\.venv\Scripts\python.exe
+-u bench\ctx_bench.py --config strata-orca-iq3_xxs-local.json --contexts 1024,8192 --repeat 2 --max-tokens 400 --nonce bench --label orca-ista-best --out D:\Workspace\Personal_Project\Strata\bench\results\2026-09-27-tune\orca-ista-best --no-vision --arg --max-context=204800 --arg --prefill=8192 --arg --mtp-window=65536

@@ -1,0 +1,120 @@
+{
+  "label": "ista-200k-probe",
+  "config": "strata-iq3_xxs.json",
+  "engine_args": [
+    "--pack",
+    "D:\\Workspace\\Personal_Project\\Strata\\packs\\iq3_xxs",
+    "--native",
+    "D:\\Workspace\\Personal_Project\\Strata\\models\\IQ3_XXS\\Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00001-of-00002.gguf",
+    "--ple-gguf",
+    "D:\\Workspace\\Personal_Project\\Strata\\models\\IQ3_XXS\\Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00002-of-00002.gguf",
+    "--expert-profile",
+    "D:\\Workspace\\Personal_Project\\Strata\\data\\expert-profile.bin",
+    "--expert-cache",
+    "auto",
+    "--spec",
+    "4",
+    "--spec-min-p",
+    "0.5",
+    "--mtp",
+    "D:\\Workspace\\Personal_Project\\Strata\\mtp\\rt",
+    "--kv",
+    "int8",
+    "--vision",
+    "--vram-reserve-mib",
+    "700",
+    "--max-context",
+    "204800",
+    "--prefill",
+    "4096",
+    "--mtp-window",
+    "65536"
+  ],
+  "token_count_method": "tokenizer",
+  "max_tokens": 400,
+  "contexts": [
+    {
+      "target": 203776,
+      "runs": [
+        {
+          "prompt_tokens": 203777,
+          "generated_tokens": 400,
+          "usage": {
+            "prompt_tokens": 203777,
+            "completion_tokens": 400,
+            "total_tokens": 204177
+          },
+          "ttft_s": 496.715,
+          "prefill_tok_s": 410.25,
+          "decode_tok_s": 34.03,
+          "elapsed_s": 508.441,
+          "answer_first_200": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words technical summary. Need likely summarize benchmark files, docs, code heade",
+          "peaks": {
+            "gpus": {
+              "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+                "memory_mib": 15191,
+                "utilization_pct": 100
+              },
+              "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+                "memory_mib": 1191,
+                "utilization_pct": 0
+              }
+            },
+            "ram_mib": 79473
+          },
+          "mtp_acceptance": 0.669,
+          "engine_prompt_tokens": 203777,
+          "engine_prompt_ms": 495862.0,
+          "engine_prefill_tok_s": 411.0,
+          "engine_generated_tokens": 400,
+          "engine_decode_ms": 11795.0,
+          "engine_decode_tok_s": 33.9,
+          "estimated_prompt_tokens": 203777
+        }
+      ],
+      "median": {
+        "prompt_tokens": 203777,
+        "generated_tokens": 400,
+        "usage": {
+          "prompt_tokens": 203777,
+          "completion_tokens": 400,
+          "total_tokens": 204177
+        },
+        "ttft_s": 496.715,
+        "prefill_tok_s": 410.25,
+        "decode_tok_s": 34.03,
+        "elapsed_s": 508.441,
+        "answer_first_200": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words technical summary. Need likely summarize benchmark files, docs, code heade",
+        "peaks": {
+          "gpus": {
+            "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+              "memory_mib": 15191,
+              "utilization_pct": 100
+            },
+            "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+              "memory_mib": 1191,
+              "utilization_pct": 0
+            }
+          },
+          "ram_mib": 79473
+        },
+        "mtp_acceptance": 0.669,
+        "engine_prompt_tokens": 203777,
+        "engine_prompt_ms": 495862.0,
+        "engine_prefill_tok_s": 411.0,
+        "engine_generated_tokens": 400,
+        "engine_decode_ms": 11795.0,
+        "engine_decode_tok_s": 33.9,
+        "estimated_prompt_tokens": 203777
+      }
+    }
+  ],
+  "vision": null,
+  "health": {
+    "status": "ok",
+    "max_context": 204800,
+    "model": "qwen3.8-flash-next-iq3_xxs",
+    "images": true,
+    "api_key": false
+  }
+}
