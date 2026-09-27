@@ -167,8 +167,8 @@ Windows, `build-essential` + CUDA on Ubuntu) and compiles the engine for your GP
 4. **Images?** yes / no (see [Images](#images-vision)).
 
 Then it downloads and prepares everything (the model is 66-76 GB, so the first start takes a while; an interrupted
-download continues where it stopped) and **starts the model**: your browser opens `http://127.0.0.1:8080`, the Strata
-app. It has three tabs:
+download continues where it stopped) and **starts the model** in the [control panel](#control-panel) (`http://127.0.0.1:8091`, Windows),
+where you turn models on and off and copy the API address and key. The Strata app is at `http://127.0.0.1:8080`. It has three tabs:
 - **Chat:** streaming answers, the model's thinking (folded away once it answers), code with a copy button, pictures when
   images are on, and sampling and thinking-level settings. Chats stay in your browser.
 - **Monitor:** what the model is doing (reading the prompt, with progress, or writing, at how many tokens/s); GPU load,
@@ -178,8 +178,8 @@ app. It has three tabs:
 `http://127.0.0.1:8080/?q=your question` opens it with a new chat already asking. The API is at
 `http://127.0.0.1:8080/v1` for your apps.
 
-**Every time after that**, `START-HERE.bat` just starts the model (30-90 s to load 34-43 GB into RAM). Nothing is
-downloaded again. Closing the window stops the model.
+**Every time after that**, `START-HERE.bat` (or `PANEL.bat`) just starts the model in the panel (30-90 s to load 34-43 GB
+into RAM). Nothing is downloaded again. Turn it off in the panel.
 
 ```
 START-HERE.bat --setup                          install another model, or change context / images
@@ -188,7 +188,16 @@ START-HERE.bat --gguf-dir D:\models\IQ2_XS       use GGUF files you already have
 START-HERE.bat --port 8081                      another port
 ```
 
-With more than one model installed, it asks which one to start. `run-<model>.bat` starts a model directly.
+With more than one model installed, it asks which one to start; the panel switches between them later.
+
+### Control panel
+
+Double-click **`PANEL.bat`**: a page at `http://127.0.0.1:8091` turns the installed models on and off (one at a time;
+turning one on stops the other), shows the API address, key and model id to copy, what the model is doing, GPU and
+RAM use, the speed of the last and average requests, and the logs. It runs without a window; "結束面板" on the page
+closes it and the model. Models started from the panel require its API key (saved in `.panel/`, or `STRATA_API_KEY`).
+A model started another way (an old `run-<model>.bat`, `serve/server.py` by hand) is taken over: the panel shows it and
+can stop or switch it.
 
 ### Chat in the terminal (optional)
 
@@ -275,7 +284,7 @@ print(r.choices[0].message.content)
   in an admin PowerShell, and make sure the network is set to Private.
 - **From the internet.** Put a tunnel in front of it, for example [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/):
   `cloudflared tunnel --url http://127.0.0.1:8080`. **Set a key first**, or anyone with the link can use your PC:
-  add `"api_key": "some-long-secret"` to `strata-<model>.json` (or set the `STRATA_API_KEY` environment variable);
+  add `"api_key": "some-long-secret"` to `configs/strata-<model>.json` (or set the `STRATA_API_KEY` environment variable);
   clients then send it as their API key.
 
 **Conversation cache.** A request that continues a chat reads only the part after what the engine already holds: the
@@ -429,7 +438,7 @@ the document, +0.4% on the chat. Details: `bench/results/2026-09-27-esp/`.
 | A request never finishes: "reading the prompt", GPU "100%" at low power | The GPU ran out of VRAM (engines before 0.1.9 could end with ~30 MiB free at large contexts). Run `START-HERE.bat` once to get engine 0.1.9 or newer; the log then says `... MiB of VRAM free with everything loaded` (a few hundred) and names the `--vram-reserve-mib` to add if it is low. |
 | Generation stops mid-answer, GPU "100%", one CPU core busy | Fixed in engine 0.1.12 (issue #29, a race in the CPU expert pool on big-VRAM cards). Since then a request that stops moving ends with an error instead of hanging (after 2 minutes; 1 minute from 0.1.13): the log says `no progress for ... s ... (issue #29)` with where it stopped, and the next request starts the engine again. If you see that line, please open an issue with it. Engine 0.1.13 adds a stall report under it (what every expert-pool thread and the GPU handshake were doing, memory and page faults) and, on Windows, a `strata-stall-<pid>.dmp` file with every thread's stack: attach both. (`STRATA_WATCHDOG_S` sets the time in seconds; 0 turns it off.) Engine 0.1.14 fixes the stall those reports found (issue #31: with the IQ packs the host could wait forever inside the NVIDIA driver while copying experts in a verify window; the experts are now copied by a GPU kernel, `--pcie-mode dma` restores the old way). |
 | `out of memory: cudaFuncSetAttribute` in the log (IQ3_XXS, long prompt) | Fixed in engine 0.1.15: CUDA loaded a kernel's code when it was first needed, and mid-prompt there was no VRAM left for it. Run `START-HERE.bat` (Windows) or `./setup.sh` (Linux) once to update. |
-| Anything else | The engine log is `strata-<model>.log` in this folder. |
+| Anything else | The engine log is `configs/strata-<model>.log`. |
 
 ---
 

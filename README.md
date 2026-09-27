@@ -82,10 +82,11 @@ App). Everything else - Python, the engine, the model - is set up for you.
    - **Experimental speed projection?** Off unless you say yes - [read what it does](docs/DETAILS.md#experimental-speed-projection-experimental-off-by-default) first
 
 Then it downloads everything (the model is ~70 GB, so the first time takes a while - you can stop and it picks up
-where it left off) and **starts the model**. Your browser opens the Strata app at `http://127.0.0.1:8080`.
+where it left off) and **starts the model**. Your browser opens the **control panel** at `http://127.0.0.1:8091`: turn
+models on and off, switch between them, and copy the API address and key. The Strata app is at `http://127.0.0.1:8080`.
 
-**Next time**, just double-click `START-HERE.bat` again: it starts right away, nothing is downloaded twice. Close its
-window to stop the model.
+**Next time**, double-click `START-HERE.bat` or `PANEL.bat`: it starts right away, nothing is downloaded twice. Turn the
+model off in the panel.
 
 **Linux:** run `./setup.sh` - same questions, same result.
 
@@ -96,9 +97,11 @@ window to stop the model.
 
 - **In the browser:** `http://127.0.0.1:8080` - the Strata app (it opens by itself when the model starts): **Chat**, a
   live **Monitor** of the model and your GPU/CPU/RAM, and **About** with the settings and addresses.
+- **Control panel (Windows):** `PANEL.bat`, `http://127.0.0.1:8091` - models on/off, switch between them, the API
+  key, GPU and RAM use.
 - **Chat in the terminal:** `.venv\Scripts\python chat.py`
 - **Your apps and coding agents:** add it as an "OpenAI-compatible" provider with base URL
-  **`http://127.0.0.1:8080/v1`**, any API key and any model name. Apps that use Anthropic's API: `http://127.0.0.1:8080/v1/messages`.
+  **`http://127.0.0.1:8080/v1`**, the API key from the control panel (Linux: any key) and any model name. Apps that use Anthropic's API: `http://127.0.0.1:8080/v1/messages`.
 - **Thinking:** the model thinks before it answers. Choose **off, low, medium or high** - in the chat page menu, with
   `/think low` in `chat.py`, or with your app's "reasoning effort" setting. Off is fastest; high is best for hard questions.
 - **Pictures:** in the chat page click **Picture**; in `chat.py` type `/image <path>`; in apps just attach them.
@@ -126,7 +129,7 @@ Update it (NVIDIA App or [nvidia.com/drivers](https://www.nvidia.com/drivers)), 
 `START-HERE.bat` again.
 
 **It says port 8080 is already in use.**
-Strata is already running. Look for its window.
+Strata is already running: open `PANEL.bat`, it takes the running model over.
 
 **It's very slow and the disk light keeps blinking.**
 Your PC is out of free RAM. Close other programs, or pick a smaller size (Q2_0 or IQ2_XS).
@@ -140,7 +143,7 @@ The conversation is longer than the context you chose. Start a new chat, or run 
 context.
 
 **Still stuck?** Look in the [full troubleshooting table](docs/DETAILS.md#troubleshooting), or open an issue and
-attach `strata-<model>.log` from the Strata folder.
+attach `configs/strata-<model>.log`.
 
 ## How does it work?
 

@@ -1,0 +1,864 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Strata 控制面板</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: oklch(0.975 0 0);
+  --surface: oklch(1 0 0);
+  --sunken: oklch(0.955 0.002 49);
+  --line: oklch(0.89 0.004 49);
+  --ink: oklch(0.23 0.012 49);
+  --muted: oklch(0.47 0.012 49);
+  --ember: oklch(0.56 0.17 45);
+  --ember-soft: oklch(0.95 0.035 49);
+  --ember-ink: oklch(1 0 0);
+  --warn: oklch(0.52 0.13 70);
+  --danger: oklch(0.52 0.19 25);
+  --danger-soft: oklch(0.95 0.03 25);
+  --bar: oklch(0.42 0.01 49);
+  --focus: oklch(0.56 0.17 45);
+  --mono: ui-monospace, "Cascadia Code", "Cascadia Mono", Consolas, "Microsoft JhengHei UI", monospace;
+  --sans: system-ui, "Segoe UI", "Microsoft JhengHei UI", "PingFang TC", sans-serif;
+  --radius: 8px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --text-caption: 0.75rem;
+  --text-meta: 0.8125rem;
+  --text-body: 1rem;
+  --text-title: 1.125rem;
+  --weight-medium: 550;
+  --weight-semibold: 650;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: oklch(0.165 0.006 49);
+    --surface: oklch(0.205 0.007 49);
+    --sunken: oklch(0.18 0.006 49);
+    --line: oklch(0.3 0.008 49);
+    --ink: oklch(0.94 0.005 49);
+    --muted: oklch(0.73 0.012 49);
+    --ember: oklch(0.73 0.17 49);
+    --ember-soft: oklch(0.29 0.06 49);
+    --ember-ink: oklch(0.18 0.02 49);
+    --warn: oklch(0.8 0.13 75);
+    --danger: oklch(0.72 0.16 25);
+    --danger-soft: oklch(0.28 0.06 25);
+    --bar: oklch(0.78 0.01 49);
+    --focus: oklch(0.73 0.17 49);
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: var(--text-body)/1.5 var(--sans);
+  font-kerning: normal;
+}
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.shell { max-width: 1240px; margin: 0 auto; padding: var(--space-5) var(--space-5) var(--space-6); }
+header.top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--line);
+}
+header.top h1 {
+  font-size: var(--text-title);
+  margin: 0;
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+  line-height: 1.2;
+}
+.sub { color: var(--muted); font-size: var(--text-meta); margin-top: var(--space-1); }
+.spacer { flex: 1; }
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: var(--text-meta);
+  background: var(--surface);
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+[data-status="ready"] .dot { background: var(--ember); box-shadow: 0 0 0 3px var(--ember-soft); }
+[data-status="starting"] .dot, [data-status="stopping"] .dot, [data-status="downloading"] .dot { background: var(--warn); animation: pulse 1.2s var(--ease) infinite; }
+[data-status="error"] .dot { background: var(--danger); }
+@keyframes pulse { 50% { opacity: 0.35; } }
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr);
+  gap: var(--space-6);
+  margin-top: var(--space-6);
+}
+.grid > * { min-width: 0; }
+@media (max-width: 960px) { .grid { grid-template-columns: 1fr; } }
+section + section { margin-top: var(--space-6); }
+.section-head { display: flex; flex-direction: column; gap: var(--space-1); margin: 0 0 var(--space-3); }
+h2 {
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  margin: 0;
+  line-height: 1.3;
+  text-wrap: balance;
+}
+.hint { color: var(--muted); font-size: var(--text-meta); margin: 0; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.banner {
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius);
+  background: var(--danger-soft);
+  color: var(--danger);
+  border: 1px solid color-mix(in oklch, var(--danger) 35%, transparent);
+}
+.banner[hidden] { display: none; }
+
+/* models */
+.model {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "head switch"
+    "body switch"
+    "foot foot"
+    "state state";
+  column-gap: var(--space-4);
+  padding: var(--space-4);
+  align-items: start;
+  container-type: inline-size;
+  transition: background-color 200ms var(--ease);
+}
+.model + .model { border-top: 1px solid var(--line); }
+.model[data-live="true"] { background: var(--ember-soft); }
+.model-head { grid-area: head; min-width: 0; }
+.model-body { grid-area: body; min-width: 0; margin-top: var(--space-3); }
+.model-foot {
+  grid-area: foot;
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+.model h3 {
+  margin: 0;
+  font-size: var(--text-title);
+  font-weight: 600;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+.identity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  align-items: baseline;
+  margin: var(--space-1) 0 0;
+  color: var(--muted);
+  font-size: var(--text-meta);
+}
+.identity code {
+  font-family: var(--mono);
+  font-size: var(--text-meta);
+  color: var(--ink);
+  background: none;
+  padding: 0;
+  overflow-wrap: anywhere;
+}
+.identity .warn { color: var(--danger); }
+.facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-5);
+  margin: 0;
+}
+.facts > div {
+  display: grid;
+  grid-template-columns: 4.75rem minmax(0, 1fr);
+  column-gap: var(--space-3);
+  align-items: baseline;
+}
+.facts dt {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-meta);
+  line-height: 1.4;
+}
+.facts dd {
+  margin: 0;
+  font-size: var(--text-meta);
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+@container (max-width: 520px) {
+  .facts { grid-template-columns: 1fr; }
+}
+.files {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--sunken);
+  border-radius: 6px;
+  display: grid;
+  gap: var(--space-1);
+  font-family: var(--mono);
+  font-size: var(--text-caption);
+  line-height: 1.45;
+}
+.files li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--space-3);
+  align-items: baseline;
+}
+.file-name { overflow-wrap: anywhere; }
+.file-size { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.files li[data-missing="true"] .file-name,
+.files li[data-missing="true"] .file-size { color: var(--danger); }
+.notes { margin: var(--space-3) 0 0; font-size: var(--text-meta); color: var(--muted); }
+.notes summary { cursor: pointer; color: var(--ink); font-weight: var(--weight-medium); }
+.notes .blurb {
+  margin: var(--space-2) 0 0;
+  max-width: 65ch;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+.model .state {
+  grid-area: state;
+  font-size: var(--text-meta);
+  color: var(--muted);
+  margin-top: var(--space-2);
+  line-height: 1.4;
+}
+.model .state:empty { display: none; margin: 0; }
+.model[data-status="error"] .state { color: var(--danger); }
+.switch {
+  grid-area: switch;
+  position: relative;
+  width: 52px;
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--sunken);
+  cursor: pointer;
+  padding: 0;
+  margin-top: 2px;
+  transition: background-color 200ms var(--ease), border-color 200ms var(--ease), transform 160ms var(--ease);
+}
+.switch::before { content: ""; position: absolute; inset: -8px; }
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform 220ms var(--ease), background-color 200ms var(--ease);
+}
+.switch[aria-checked="true"] { background: var(--ember); border-color: var(--ember); }
+.switch[aria-checked="true"]::after { transform: translateX(20px); background: var(--ember-ink); }
+.switch:disabled { cursor: not-allowed; opacity: 0.55; }
+.switch[data-busy="true"]::after { animation: pulse 1.2s var(--ease) infinite; }
+.switch:active:not(:disabled) { transform: scale(0.97); }
+.think { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 32px; font-size: var(--text-meta); cursor: pointer; }
+.think input { width: 18px; height: 18px; margin: 0; accent-color: var(--ember); cursor: inherit; }
+.think small { color: var(--muted); font-weight: 400; }
+.think:has(input:disabled) { cursor: not-allowed; opacity: 0.55; }
+
+/* connection */
+.rows { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr) auto; }
+.rows > * { padding: var(--space-3) var(--space-4); border-top: 1px solid var(--line); display: flex; align-items: center; min-width: 0; }
+.rows > :nth-child(-n+3) { border-top: 0; }
+.rows dt { color: var(--muted); font-size: var(--text-meta); }
+.rows dd { margin: 0; font-family: var(--mono); font-size: var(--text-meta); overflow-wrap: anywhere; line-height: 1.45; }
+.rows .acts { gap: var(--space-2); justify-content: flex-end; flex-wrap: wrap; }
+@media (max-width: 560px) {
+  .shell { padding: var(--space-4) var(--space-4) var(--space-5); }
+  .rows { grid-template-columns: minmax(0, 1fr) auto; }
+  .rows dt { grid-column: 1 / -1; padding-bottom: 0; }
+  .rows > dd, .rows > .acts { border-top: 0; }
+  .rows > :nth-child(-n+3) { border-top: 0; }
+  .rows > dt:not(:first-child) { border-top: 1px solid var(--line); }
+}
+.btn {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: var(--text-meta);
+  cursor: pointer;
+  white-space: nowrap;
+  min-height: 32px;
+  transition: background-color 150ms var(--ease), border-color 150ms var(--ease), transform 160ms var(--ease);
+}
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover { background: var(--sunken); }
+}
+.btn:active:not(:disabled) { transform: scale(0.97); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn.primary { background: var(--ember); border-color: var(--ember); color: var(--ember-ink); }
+.btn.danger[data-armed="true"] { background: var(--danger); border-color: var(--danger); color: oklch(1 0 0); }
+.btn[data-done="true"] { border-color: var(--ember); color: var(--ember); }
+.tabs { display: flex; gap: 2px; padding: var(--space-2) var(--space-2) 0; border-bottom: 1px solid var(--line); overflow-x: auto; overflow-y: hidden; }
+.tab {
+  white-space: nowrap;
+  border: 0;
+  background: none;
+  padding: 8px 12px;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: var(--text-meta);
+  border-bottom: 2px solid transparent;
+}
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ember); font-weight: 600; }
+.code { position: relative; }
+.code pre {
+  margin: 0;
+  padding: var(--space-4);
+  font: var(--text-meta)/1.6 var(--mono);
+  overflow-x: auto;
+  white-space: pre;
+  background: var(--sunken);
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+.code .btn { position: absolute; top: var(--space-2); right: var(--space-2); }
+.note { color: var(--muted); font-size: var(--text-meta); margin: var(--space-2) var(--space-1) 0; max-width: 75ch; }
+
+/* gpu */
+.gpu { padding: var(--space-4); }
+.gpu + .gpu { border-top: 1px solid var(--line); }
+.gpu-head { display: flex; justify-content: space-between; gap: var(--space-3); font-size: var(--text-meta); }
+.gpu-head b { font-weight: 600; }
+.meter { height: 8px; border-radius: 999px; background: var(--sunken); border: 1px solid var(--line); margin: var(--space-2) 0; overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: var(--bar); transition: width 400ms var(--ease); }
+.meter i[data-hot="true"] { background: var(--ember); }
+.gpu-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-3);
+  color: var(--muted);
+  font-size: var(--text-meta);
+  font-variant-numeric: tabular-nums;
+}
+.gpu-meta span { min-width: 0; }
+.kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); font-size: var(--text-meta); }
+.kv > * { padding: var(--space-2) var(--space-4); border-top: 1px solid var(--line); }
+.kv > :nth-child(-n+2) { border-top: 0; }
+.kv dt { color: var(--muted); padding-right: var(--space-4); }
+.kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.kv dt.group, .kv dd.group { margin-top: var(--space-2); padding-top: var(--space-3); }
+.empty { padding: var(--space-4); color: var(--muted); font-size: var(--text-meta); }
+.empty + .empty, .kv + .empty { padding-top: 0; }
+.kv + .empty { padding-top: var(--space-3); border-top: 1px solid var(--line); }
+details.log summary { cursor: pointer; font-weight: var(--weight-semibold); font-size: var(--text-body); padding: 2px 0 var(--space-3); }
+details.log pre {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: var(--space-3) var(--space-4);
+  font: var(--text-caption)/1.55 var(--mono);
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.skeleton { color: transparent; background: var(--sunken); border-radius: 4px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.closed { max-width: 520px; margin: 18vh auto; text-align: center; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+<style>
+[data-status="external"] .dot { background: var(--ember); }
+.live { padding: var(--space-4); font-size: var(--text-meta); }
+.live b { font-weight: 600; }
+.live .meter i { background: var(--ember); }
+details.log + details.log { margin-top: var(--space-4); }
+a.btn { text-decoration: none; display: inline-flex; align-items: center; }
+a.btn[hidden] { display: none; }
+</style>
+</head>
+<body>
+<div class="shell" id="app">
+  <header class="top">
+    <div>
+      <h1>Strata 控制面板</h1>
+      <div class="sub" id="profile">讀取中…</div>
+    </div>
+    <span class="pill" id="overall" data-status="off"><span class="dot"></span><span id="overall-text">讀取中</span></span>
+    <div class="spacer"></div>
+    <a class="btn" id="chat" href="#" target="_blank" rel="noopener" hidden>開聊天頁</a>
+    <button class="btn danger" id="quit" type="button">結束面板</button>
+  </header>
+  <div class="banner" id="banner" role="alert" hidden></div>
+  <p class="sr" aria-live="polite" id="live-region"></p>
+
+  <div class="grid">
+    <main>
+      <section aria-labelledby="h-models">
+        <div class="section-head">
+          <h2 id="h-models">模型</h2>
+          <p class="hint">同時只跑一個；開另一個會自動先關掉目前的。載入約 1～3 分鐘</p>
+        </div>
+        <div class="panel" id="models"><div class="empty">讀取模型清單中…</div></div>
+      </section>
+
+      <section aria-labelledby="h-conn">
+        <div class="section-head">
+          <h2 id="h-conn">連線資訊</h2>
+          <p class="hint" id="conn-hint"></p>
+        </div>
+        <dl class="panel rows" id="conn">
+          <dt>OpenAI</dt><dd id="c-openai">—</dd><div class="acts"><button class="btn" data-copy="openai" type="button">複製</button></div>
+          <dt>Anthropic</dt><dd id="c-anthropic">—</dd><div class="acts"><button class="btn" data-copy="anthropic" type="button">複製</button></div>
+          <dt>API Key</dt><dd id="c-key">—</dd><div class="acts"><button class="btn" id="reveal" type="button" aria-pressed="false">顯示</button><button class="btn" data-copy="key" type="button">複製</button><button class="btn danger" id="rotate" type="button">重產</button></div>
+          <dt>Model ID</dt><dd id="c-model">—</dd><div class="acts"><button class="btn" data-copy="model" type="button">複製</button></div>
+        </dl>
+        <p class="note">OpenAI 協議打 <code>/v1/chat/completions</code>（Bearer key）；Anthropic 協議打 <code>/v1/messages</code>（<code>x-api-key</code>）。只綁本機 127.0.0.1。聊天頁的 API key 欄也要填這把 key。</p>
+      </section>
+
+      <section aria-labelledby="h-snip">
+        <div class="section-head">
+          <h2 id="h-snip">呼叫範例</h2>
+        </div>
+        <div class="panel">
+          <div class="tabs" role="tablist" aria-labelledby="h-snip">
+            <button class="tab" role="tab" type="button" aria-selected="true" data-tab="openai">OpenAI curl</button>
+            <button class="tab" role="tab" type="button" aria-selected="false" data-tab="anthropic">Anthropic curl</button>
+            <button class="tab" role="tab" type="button" aria-selected="false" data-tab="env">PowerShell 環境變數</button>
+          </div>
+          <div class="code" role="tabpanel"><pre id="snippet"></pre><button class="btn" id="copy-snippet" type="button">複製</button></div>
+        </div>
+      </section>
+
+      <section>
+        <details class="log" id="engine-box">
+          <summary>引擎 log</summary>
+          <pre id="engine-log" tabindex="0">還沒有 log。</pre>
+        </details>
+        <details class="log" id="server-box">
+          <summary>server.py log</summary>
+          <pre id="server-log" tabindex="0">還沒有 log。</pre>
+        </details>
+      </section>
+    </main>
+
+    <aside>
+      <section aria-labelledby="h-now">
+        <div class="section-head">
+          <h2 id="h-now">現在</h2>
+        </div>
+        <div class="panel" id="now"><div class="empty">—</div></div>
+      </section>
+      <section aria-labelledby="h-gpu">
+        <div class="section-head">
+          <h2 id="h-gpu">GPU 與 RAM</h2>
+        </div>
+        <div class="panel" id="gpus"><div class="gpu"><span class="skeleton">RTX 5060 Ti · 0 / 16311 MiB</span></div></div>
+      </section>
+      <section aria-labelledby="h-apps">
+        <div class="section-head">
+          <h2 id="h-apps">模型程序</h2>
+          <p class="hint">關掉後這裡應該是空的</p>
+        </div>
+        <div class="panel" id="apps"><div class="empty">—</div></div>
+      </section>
+      <section aria-labelledby="h-usage">
+        <div class="section-head">
+          <h2 id="h-usage">這次開機的用量</h2>
+        </div>
+        <dl class="panel kv" id="usage"></dl>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<script>
+"use strict";
+const TOKEN = "__PANEL_TOKEN__";
+const $ = (id) => document.getElementById(id);
+const STATUS_TEXT = { off: "已關閉", starting: "載入中", ready: "上線中", stopping: "關閉中", error: "錯誤", external: "上線中（唯讀）" };
+const BUSY = ["starting", "stopping"];
+const PHASE = { "reading the prompt": "讀提示中", "thinking": "思考中", "answering": "回答中", "tool call complete": "工具呼叫完成" };
+const phaseText = (p) => PHASE[p] || (String(p || "").startsWith("writing a tool call") ? `寫工具呼叫：${String(p).split(": ")[1] || ""}` : p || "處理中");
+let last = null;
+let revealed = false;
+let tab = "openai";
+let pending = null; // 送出操作後、下一次輪詢前的樂觀狀態
+
+async function post(path, body) {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Panel-Token": TOKEN },
+    body: JSON.stringify(body || {}),
+  });
+  const json = await res.json().catch(() => ({ success: false, error: `HTTP ${res.status}` }));
+  if (!json.success) throw new Error(json.error || `HTTP ${res.status}`);
+  return json.data;
+}
+
+function showError(message) {
+  const box = $("banner");
+  box.textContent = message || "";
+  box.hidden = !message;
+}
+
+function fmtDuration(seconds) {
+  if (seconds == null || seconds < 0) return "—";
+  const s = Math.floor(seconds);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+  return h ? `${h} 小時 ${m} 分` : m ? `${m} 分 ${r} 秒` : `${r} 秒`;
+}
+const fmtInt = (n) => (n == null ? "—" : Math.round(n).toLocaleString("zh-TW"));
+const fmtTps = (n) => (n == null ? "—" : `${n.toFixed(1)} tok/s`);
+const masked = (key) => (key ? `${key.slice(0, 10)}${"•".repeat(12)}${key.slice(-4)}` : "—");
+
+function el(tag, attrs, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "text") node.textContent = v;
+    else if (v !== false && v != null) node.setAttribute(k, v);
+  }
+  node.append(...children.filter((c) => c != null));
+  return node;
+}
+
+function facts(rows) {
+  return el("dl", { class: "facts" }, ...rows.filter((row) => row[1]).map(([label, value]) =>
+    el("div", {}, el("dt", { text: label }), el("dd", { text: value }))));
+}
+
+function meter(pct, label) {
+  return el("div", { class: "meter", role: "meter", "aria-label": label, "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": pct.toFixed(0) },
+    el("i", { style: `width:${Math.min(100, pct).toFixed(1)}%`, "data-hot": String(pct > 60) }));
+}
+
+function renderModels(data) {
+  const server = data.server;
+  const status = pending ? pending.status : server.status;
+  const activeId = pending ? pending.model : server.model;
+  const box = $("models");
+  const focused = document.activeElement?.dataset?.model;
+  if (!data.models.length) {
+    box.replaceChildren(el("div", { class: "empty", text: "沒有找到 configs/strata-*.json。先執行 START-HERE.bat 安裝模型。" }));
+    return;
+  }
+  box.replaceChildren(...data.models.map((m) => {
+    const mine = m.id === activeId && status !== "off";
+    const myStatus = mine ? status : "off";
+    const on = mine && ["starting", "ready", "external"].includes(myStatus);
+    let stateText = "";
+    if (!m.ready) stateText = "引擎或模型檔不存在，先跑 START-HERE.bat --setup";
+    else if (mine && myStatus === "starting") stateText = `載入中… ${fmtDuration(data.now - (server.started_at || data.now))}`;
+    else if (mine && myStatus === "ready") stateText = `已上線 ${fmtDuration(data.now - (server.ready_at || data.now))} · PID ${server.pid ?? "—"}`;
+    else if (mine && myStatus === "external") stateText = "在面板外開的，面板找不到它的程序，只能看；要關請關掉它的視窗";
+    else if (mine && myStatus === "stopping") stateText = "正在釋放 GPU 與 RAM…";
+    else if (mine && myStatus === "error") stateText = server.error || "啟動失敗";
+    const locked = myStatus === "stopping" || server.status === "external" || (!m.ready && !on);
+    const sw = el("button", {
+      class: "switch", type: "button", role: "switch", "aria-checked": String(on),
+      "aria-label": m.label, "data-busy": String(mine && BUSY.includes(myStatus)), "data-model": m.id,
+      disabled: locked ? "" : false,
+    });
+    sw.addEventListener("click", () => toggle(m, on));
+    return el("div", { class: "model", "data-live": String(on && ["ready", "external"].includes(myStatus)), "data-status": myStatus },
+      el("div", { class: "model-head" },
+        el("h3", { text: m.label }),
+        el("p", { class: "identity" }, el("code", { text: m.model_id }), el("span", { text: m.config }))),
+      sw,
+      el("div", { class: "model-body" },
+        facts([
+          ["Context", m.n_ctx ? `${m.ctx_label}（${fmtInt(m.n_ctx)} tokens）` : null],
+          ["KV", m.kv],
+          ["MTP", m.mtp],
+          ["看圖", m.vision],
+          ["讀提示", m.prefill ? `每段 ${m.prefill} 字` : null],
+          ["PCIe", m.pcie_frac ? `pcie-frac ${m.pcie_frac}` : null],
+          ["引擎", m.engine],
+          ["Port", String(m.port)],
+        ])),
+      el("div", { class: "state", text: stateText }));
+  }));
+  if (focused) box.querySelector(`[data-model="${focused}"]`)?.focus();
+}
+
+async function run(state, action) {
+  showError("");
+  pending = state;
+  render(last);
+  try {
+    await action();
+  } catch (err) {
+    showError(err.message);
+  } finally {
+    pending = null;
+    refresh();
+  }
+}
+
+function toggle(model, on) {
+  if (!on) return run({ status: "starting", model: model.id }, () => post("/api/start", { model: model.id }));
+  return run({ status: "stopping", model: model.id }, () => post("/api/stop"));
+}
+
+function currentModel(data) {
+  return data.models.find((m) => m.id === data.server.model) || data.models[0] || { model_id: "strata", label: "—" };
+}
+
+function snippetText(data, key) {
+  const api = data.api, model = currentModel(data).model_id;
+  if (tab === "openai") {
+    return `curl ${api.openai_base_url}/chat/completions \\\n  -H "Authorization: Bearer ${key}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"model":"${model}","messages":[{"role":"user","content":"你好"}],"reasoning_effort":"low"}'`;
+  }
+  if (tab === "anthropic") {
+    return `curl ${api.anthropic_base_url}/v1/messages \\\n  -H "x-api-key: ${key}" \\\n  -H "anthropic-version: 2023-06-01" \\\n  -H "content-type: application/json" \\\n  -d '{"model":"${model}","max_tokens":1024,"messages":[{"role":"user","content":"你好"}]}'`;
+  }
+  return `$env:OPENAI_BASE_URL = "${api.openai_base_url}"\n$env:OPENAI_API_KEY = "${key}"\n$env:ANTHROPIC_BASE_URL = "${api.anthropic_base_url}"\n$env:ANTHROPIC_API_KEY = "${key}"\n$env:ANTHROPIC_MODEL = "${model}"`;
+}
+
+function renderConnection(data) {
+  const api = data.api, model = currentModel(data), status = data.server.status;
+  $("c-openai").textContent = api.openai_base_url;
+  $("c-anthropic").textContent = api.anthropic_base_url;
+  $("c-key").textContent = revealed ? api.api_key : masked(api.api_key);
+  $("c-model").textContent = model.model_id;
+  $("conn-hint").textContent = status === "external" ? "面板外開的模型不一定用這把 key"
+    : status === "ready" && api.key_required === false ? `目前服務：${model.label}（在面板外開的，沒設 key：任何 key 都能用；從這裡重開就會改用下面這把）`
+    : status === "ready" ? `目前服務：${model.label}` : "模型未上線時端點不會回應";
+  $("rotate").disabled = api.key_from_env;
+  $("rotate").title = api.key_from_env ? "key 由環境變數 STRATA_API_KEY 指定" : "";
+  $("snippet").textContent = snippetText(data, revealed ? api.api_key : masked(api.api_key));
+  $("chat").hidden = !["ready", "external"].includes(status);
+  $("chat").href = api.chat_url;
+}
+
+function renderNow(data) {
+  const box = $("now"), live = data.live;
+  if (!live) {
+    box.replaceChildren(el("div", { class: "empty", text: data.server.status === "starting" ? "模型載入中…" : "模型沒有在跑。" }));
+    return;
+  }
+  if (!live.busy) {
+    box.replaceChildren(el("div", { class: "empty", text: live.queued ? `閒置，${live.queued} 個請求排隊中` : "閒置，等待請求。" }));
+    return;
+  }
+  const phase = phaseText(live.phase);
+  const pct = live.max_tokens ? (live.generated / live.max_tokens) * 100 : 0;
+  box.replaceChildren(el("div", { class: "live" },
+    el("div", { class: "gpu-head" }, el("b", { text: phase }), el("span", { text: fmtDuration(live.elapsed_s) })),
+    live.generated ? meter(pct, "產生進度") : null,
+    el("div", { class: "gpu-meta" },
+      el("span", { text: `提示 ${fmtInt(live.prompt_tokens)} 字` }),
+      el("span", { text: `已產生 ${fmtInt(live.generated)} 字` }),
+      el("span", { text: fmtTps(live.tokens_per_s) })),
+    live.queued ? el("p", { class: "hint", text: `另有 ${live.queued} 個請求排隊` }) : null));
+}
+
+function renderGpus(data) {
+  const rows = data.gpus.map((g) => {
+    const pct = g.memory_total_mib ? (g.memory_used_mib / g.memory_total_mib) * 100 : 0;
+    const name = g.name.replace("NVIDIA GeForce ", "") + (g.role ? ` · ${g.role}` : "");
+    return el("div", { class: "gpu" },
+      el("div", { class: "gpu-head" }, el("b", { text: name }),
+        el("span", { text: `${fmtInt(g.memory_used_mib)} / ${fmtInt(g.memory_total_mib)} MiB` })),
+      meter(pct, `${g.name} VRAM`),
+      el("div", { class: "gpu-meta" },
+        el("span", { text: `使用率 ${fmtInt(g.util_pct)}%` }),
+        el("span", { text: `${fmtInt(g.temp_c)}°C` }),
+        el("span", { text: `${g.power_w == null ? "—" : g.power_w.toFixed(0)} / ${fmtInt(g.power_limit_w)} W` })));
+  });
+  if (data.ram) {
+    const pct = (data.ram.used_gib / data.ram.total_gib) * 100;
+    rows.push(el("div", { class: "gpu" },
+      el("div", { class: "gpu-head" }, el("b", { text: "RAM · 放專家" }),
+        el("span", { text: `${data.ram.used_gib.toFixed(1)} / ${data.ram.total_gib.toFixed(0)} GiB` })),
+      meter(pct, "RAM"),
+      el("div", { class: "gpu-meta" }, el("span", { text: pct > 92 ? "快滿了，速度會掉" : `${pct.toFixed(0)}%` }))));
+  }
+  $("gpus").replaceChildren(...(rows.length ? rows : [el("div", { class: "empty", text: "讀不到 nvidia-smi。" })]));
+}
+
+function renderApps(data) {
+  const box = $("apps"), apps = data.gpu_apps;
+  if (!apps.length) {
+    box.replaceChildren(el("div", { class: "empty", text: "沒有 Strata 程序，VRAM 已全部釋放。" }));
+    return;
+  }
+  box.replaceChildren(el("dl", { class: "kv" }, ...apps.flatMap((a) => [
+    el("dt", { text: `${a.name} · PID ${a.pid}` }),
+    el("dd", { text: a.memory_mib == null ? `在 ${a.gpus} 張卡上` : `${fmtInt(a.memory_mib)} MiB` }),
+  ])));
+}
+
+function renderUsage(data) {
+  const u = data.session || {}, s = data.server;
+  const groups = [
+    [
+      ["狀態", STATUS_TEXT[s.status] || s.status],
+      ["上線時間", s.status === "ready" ? fmtDuration(data.now - s.ready_at) : "—"],
+      ["請求數", fmtInt(u.requests)],
+    ],
+    [
+      ["上一題 讀提示", u.requests ? `${fmtTps(u.last_prefill_tps)}（${fmtInt(u.last_prompt)} 字，沿用 ${fmtInt(u.last_reused)}）` : "—"],
+      ["上一題 產生", u.requests ? `${fmtTps(u.last_decode_tps)}（${fmtInt(u.last_generated)} 字）` : "—"],
+      ["平均 讀提示", fmtTps(u.avg_prefill_tps)],
+      ["平均 產生", fmtTps(u.avg_decode_tps)],
+      ["MTP 猜中率", u.mtp_accept == null ? "—" : `${(u.mtp_accept * 100).toFixed(0)}%`],
+    ],
+    [
+      ["提示 tokens", fmtInt(u.prompt_tokens)],
+      ["實際讀取", fmtInt(u.read_tokens)],
+      ["產生 tokens", fmtInt(u.generated_tokens)],
+    ],
+  ];
+  const nodes = [];
+  groups.forEach((rows, i) => rows.forEach(([k, v], j) => {
+    const grouped = i > 0 && j === 0 ? "group" : false;
+    nodes.push(el("dt", { class: grouped, text: k }), el("dd", { class: grouped, text: v }));
+  }));
+  $("usage").replaceChildren(...nodes);
+}
+
+function renderLog(id, text) {
+  const pre = $(id);
+  const value = text || "還沒有 log。";
+  if (pre.textContent === value) return;
+  const atBottom = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 24;
+  pre.textContent = value;
+  if (atBottom) pre.scrollTop = pre.scrollHeight;
+}
+
+function renderHeader(data) {
+  const status = data.server.status;
+  const model = data.models.find((m) => m.id === data.server.model);
+  $("overall").dataset.status = status;
+  const text = model && status !== "off" ? `${STATUS_TEXT[status]} · ${model.label}` : STATUS_TEXT[status];
+  if ($("overall-text").textContent !== text) $("live-region").textContent = text;
+  $("overall-text").textContent = text;
+  $("profile").textContent = `${data.models.length} 個已安裝的模型設定 · 只綁本機 127.0.0.1`;
+  document.title = ["ready", "external"].includes(status) ? "● Strata 控制面板" : "Strata 控制面板";
+}
+
+function render(data) {
+  if (!data) return;
+  renderHeader(data);
+  renderModels(data);
+  renderConnection(data);
+  renderNow(data);
+  renderGpus(data);
+  renderApps(data);
+  renderUsage(data);
+  renderLog("engine-log", data.engine_log);
+  renderLog("server-log", data.server_log);
+  if (data.server.status === "error") $("server-box").open = true;
+}
+
+let timer = null;
+async function refresh() {
+  clearTimeout(timer);
+  try {
+    const res = await fetch("/api/status", { cache: "no-store" });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error);
+    last = json.data;
+    render(last);
+  } catch (err) {
+    showError(`面板連不上：${err.message}`);
+  }
+  const fast = last && (BUSY.includes(last.server.status) || last.live?.busy);
+  timer = setTimeout(refresh, fast ? 1000 : 2500);
+}
+
+function flash(button, label) {
+  const original = button.dataset.label || button.textContent;
+  button.dataset.label = original;
+  button.textContent = label;
+  button.dataset.done = "true";
+  setTimeout(() => { button.textContent = original; button.dataset.done = "false"; }, 1200);
+}
+
+async function copy(text, button) {
+  try {
+    await navigator.clipboard.writeText(text);
+    flash(button, "已複製");
+  } catch {
+    showError("瀏覽器不允許寫入剪貼簿，請手動選取。");
+  }
+}
+
+// 危險操作：第一次按下變成「再按一次確認」，3 秒內沒按就恢復。
+function armed(button, confirmText, action) {
+  button.addEventListener("click", async () => {
+    if (button.dataset.armed !== "true") {
+      button.dataset.label = button.textContent;
+      button.dataset.armed = "true";
+      button.textContent = confirmText;
+      button._reset = setTimeout(() => { button.dataset.armed = "false"; button.textContent = button.dataset.label; }, 3000);
+      return;
+    }
+    clearTimeout(button._reset);
+    button.dataset.armed = "false";
+    button.textContent = button.dataset.label;
+    try { await action(); } catch (err) { showError(err.message); }
+  });
+}
+
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-copy]");
+  if (!button || !last) return;
+  const api = last.api;
+  const values = { openai: api.openai_base_url, anthropic: api.anthropic_base_url, key: api.api_key, model: currentModel(last).model_id };
+  copy(values[button.dataset.copy], button);
+});
+
+$("reveal").addEventListener("click", () => {
+  revealed = !revealed;
+  $("reveal").textContent = revealed ? "隱藏" : "顯示";
+  $("reveal").setAttribute("aria-pressed", String(revealed));
+  render(last);
+});
+
+$("copy-snippet").addEventListener("click", (event) => last && copy(snippetText(last, last.api.api_key), event.currentTarget));
+
+document.querySelectorAll(".tab").forEach((button) => button.addEventListener("click", () => {
+  tab = button.dataset.tab;
+  document.querySelectorAll(".tab").forEach((b) => b.setAttribute("aria-selected", String(b === button)));
+  render(last);
+}));
+
+armed($("rotate"), "確定？會重啟模型", async () => {
+  await post("/api/rotate-key");
+  refresh();
+});
+
+armed($("quit"), "確定？模型也會關閉", async () => {
+  await post("/api/quit");
+  clearTimeout(timer);
+  $("app").replaceChildren(el("div", { class: "closed" },
+    el("h1", { text: "面板已結束" }),
+    el("p", { text: "模型已關閉、GPU 與 RAM 已釋放。要再用就雙擊 PANEL.bat。" })));
+});
+
+refresh();
+</script>
+</body>
+</html>

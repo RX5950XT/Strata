@@ -17,7 +17,7 @@ What the first run does (each step is skipped when it is already done):
      it installs the build tools (asks first) and compiles the engine for your GPU
   5. downloads the model from Hugging Face (resumable), and the vision encoder if you want images
   6. prepares the model for Strata and fetches the MTP draft layer (~5 GB, from the original Qwen checkpoint)
-  7. writes run-<model>.bat / run-<model>.sh and starts the model
+  7. starts the model: on Windows in the control panel (PANEL.bat), on Linux with a run-<model>.sh it writes
 
 Options: --family qwen|swift|orca, --model Q2_0|IQ2_XS|IQ3_XXS|IQ3_S, --context 32768, --vision yes|no|gpu|cpu, --port 8080, --yes (recommended
 answers, no questions), --setup (install another model / change settings instead of starting), --no-start,
@@ -44,6 +44,7 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
+CONFIGS = ROOT / "configs"                   # strata-<model>.json (the installed models) and their engine logs
 WIN = os.name == "nt"
 HF = "https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/resolve/main/"
 LLAMA_CPP_COMMIT = "3cf03257f219afbe7334045ff7c6a06ac68c627d"
@@ -678,7 +679,7 @@ def build_engine(gpu, vision, yes, llama) -> Path:
 
 # ------------------------------------------------------------------------------------------------ start
 def installed_configs():
-    return sorted(ROOT.glob("strata-*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+    return sorted(CONFIGS.glob("strata-*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
 
 
 def source_version() -> str:
@@ -740,6 +741,15 @@ def start(cfg_path: Path, port: int | None, open_browser=True) -> int:
     if missing:
         fail(f"{cfg_path.name} refers to missing files: {missing[0]}", "run it again with --setup to repair")
     cfg_path.touch()                                     # the most recently used model
+    if WIN:                                              # through the control panel: no console window to keep open,
+        pyw = Path(sys.executable).with_name("pythonw.exe")  # and it switches models or turns them off
+        cmd = [str(pyw if pyw.exists() else sys.executable), str(ROOT / "serve" / "panel.py"),
+               "--start", cfg_path.stem.removeprefix("strata-")] + (["--open"] if open_browser else [])
+        subprocess.Popen(cmd, cwd=str(ROOT), creationflags=0x00000008 | 0x00000200)  # DETACHED_PROCESS, new group
+        say()
+        say(f"Starting {cfg.get('model_name', 'the model')} in the control panel, http://127.0.0.1:8091 (loads 34-43 GB")
+        say("into RAM: 30-90 s). Turn it off or switch models there; this window can be closed.")
+        return 0
     cmd = [sys.executable, str(ROOT / "serve" / "server.py"), "--engine", "strata", "--config", str(cfg_path),
            "--port", str(port or cfg.get("port", 8080))]
     if open_browser:
@@ -752,15 +762,11 @@ def start(cfg_path: Path, port: int | None, open_browser=True) -> int:
 def write_run_script(model, cfg_path, port):
     serve = [sys.executable, str(ROOT / "serve" / "server.py"), "--engine", "strata", "--config", str(cfg_path),
              "--port", str(port), "--open"]
-    if WIN:
-        script = ROOT / f"run-{model.lower()}.bat"
-        script.write_text("@echo off\r\ntitle Strata " + model + "\r\ncd /d \"" + str(ROOT) + "\"\r\n" +
-                          " ".join(f'"{x}"' for x in serve) + "\r\npause\r\n", encoding="utf-8")
-    else:
-        script = ROOT / f"run-{model.lower()}.sh"
-        script.write_text("#!/bin/sh\ncd \"" + str(ROOT) + "\"\nexec " + " ".join(f'"{x}"' for x in serve) + "\n",
-                          encoding="utf-8")
-        script.chmod(0o755)
+    """Linux only: on Windows the control panel (PANEL.bat) starts and switches the models."""
+    script = ROOT / f"run-{model.lower()}.sh"
+    script.write_text("#!/bin/sh\ncd \"" + str(ROOT) + "\"\nexec " + " ".join(f'"{x}"' for x in serve) + "\n",
+                      encoding="utf-8")
+    script.chmod(0o755)
     return script
 
 
@@ -1055,7 +1061,7 @@ def main() -> int:
         args += ["--control-vector-scaled", f"{esp}:1.0", "--control-vector-layer-range", "4", "44",
                  "--cvec-mode", "project", "--cvec-dir", "per-layer"]
     cfg = {"exe": str(eng / EXE), "args": args, "cwd": str(ROOT), "tokenizer": str(pack / "tokenizer"), "gpu": gpu["uuid"],
-           "model_name": f"{fam['name']}-{model.lower()}", "log": str(ROOT / f"strata-{tag.lower()}.log"),
+           "model_name": f"{fam['name']}-{model.lower()}", "log": str(CONFIGS / f"strata-{tag.lower()}.log"),
            "lib_dirs": lib_dirs, "port": port}
     if a.host:
         cfg["host"] = a.host
@@ -1068,19 +1074,25 @@ def main() -> int:
             cfg["vision"]["gpu_uuid"] = gpu["spare"]["uuid"]
         if vision == "cpu":
             cfg["vision"]["threads"] = max(1, (os.cpu_count() or 8) // 2)
-    cfg_path = ROOT / f"strata-{tag.lower()}.json"
+    CONFIGS.mkdir(exist_ok=True)
+    cfg_path = CONFIGS / f"strata-{tag.lower()}.json"
     cfg_path.write_text(json.dumps(cfg, indent=1), encoding="utf-8")
-    script = write_run_script(tag, cfg_path, port)
-    ok(f"start script: {script.name}")
+    if not WIN:
+        script = write_run_script(tag, cfg_path, port)
+        ok(f"start script: {script.name}")
 
     say()
     say("All set.")
-    say(f"  API (OpenAI):     http://127.0.0.1:{port}/v1   (any API key; model name: anything)")
+    say(f"  API (OpenAI):     http://127.0.0.1:{port}/v1   "
+        + ("(API key and model name: in the control panel)" if WIN else "(any API key; model name: anything)"))
     say(f"  API (Anthropic):  http://127.0.0.1:{port}/v1/messages")
     if a.host and a.host not in ("127.0.0.1", "localhost"):
         say(f"  Other devices:    the server window prints this PC's address (http://<IP>:{port}/)"
             + ("" if a.api_key else " - no API key set: anyone on your network can use it"))
-    say(f"  Next time:        just run {'START-HERE.bat' if WIN else './setup.sh'} (or {script.name}) - it starts right away")
+    if WIN:
+        say("  Control panel:    PANEL.bat (or START-HERE.bat) - turn models on and off, switch between them")
+    else:
+        say(f"  Next time:        just run ./setup.sh (or {script.name}) - it starts right away")
     if vision != "none":
         say("  Images:           send them in the chat page, in chat.py (/image <path>) or over the API")
     if a.no_start:

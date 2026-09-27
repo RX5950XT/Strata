@@ -32,8 +32,7 @@ td.log
 /mtp/
 /run-*.bat
 /run-*.sh
-/strata-*.json
-/strata-*.log
+/configs/
 /build-strata.bat
 
 # image encoder (setup.py --vision): build output and the generated build script
@@ -48,3 +47,5 @@ build-vision.bat
 *.done
 /third_party/*.zip
 
+# control panel (serve/panel.py): API key, running model, logs
+/.panel/

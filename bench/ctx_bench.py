@@ -42,7 +42,7 @@ def cli():
             argv[i] += "=" + argv[i + 1]
             argv[i + 1] = ""
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--config", type=Path, help="strata-*.json from setup.py")
+    ap.add_argument("--config", type=Path, help="configs/strata-*.json from setup.py")
     ap.add_argument("--arg", action="append", default=[], metavar="FLAG=VALUE")
     ap.add_argument("--drop", action="append", default=[], metavar="FLAG")
     ap.add_argument("--no-vision", action="store_true")
