@@ -1,5 +1,6 @@
 // src/core/expert_source.cpp - the adapter.  See the header for the three clauses of the contract.
 #include "strata/core/expert_source.hpp"
+#include "strata/core/expert_gpu.hpp"
 #include "strata/kernels/cpu/expert_layout.hpp"
 
 #include "strata/core/pinned.hpp"
@@ -198,6 +199,20 @@ void expert_pool_dispatch(void* user, const float* x_f, const int32_t* ids, cons
     const bool graph_hits = d.host_res != nullptr;
     const bool use_hits = graph_hits || (d.hits_ready() && d.decided);
     int64_t njobs = 0;
+    int32_t second_kind[128];
+    bool second = false;
+    if (d.expert_gpu && k <= 128) {
+        for (int64_t i = 0; i < k; ++i) {
+            const int32_t e = ids[i];
+            if (e < 0 || e >= d.n_expert) {
+                d.failed = true; d.fail = "a routed expert id is out of range"; return;
+            }
+            second_kind[i] = use_hits && (graph_hits
+                ? d.host_res[(size_t) d.layers * (size_t) d.n_expert + e] >= 0
+                : d.is_hit[(size_t) i] != 0) ? 0 : -1;
+        }
+        second = d.expert_gpu->launch(d.layers, x_f, ids, 1, (int) k, out, second_kind);
+    }
 
     for (int64_t i = 0; i < k; ++i) {
         const int64_t e = ids[i];
@@ -231,6 +246,7 @@ void expert_pool_dispatch(void* user, const float* x_f, const int32_t* ids, cons
         }
         if (graph_hits) ++d.cache_refused;   // token graph: a miss (nothing is admitted during a token)
 
+        if (second && second_kind[i] == -2) continue;
         // `njobs` indexes the JOB ARRAY and `i` indexes the OUTPUT - they are the same only when nothing is a
         // hit, and using one for the other is how a hit's row would get two experts summed into it.
         ExpertJob& j = d.jobs[(size_t) njobs++];
@@ -244,6 +260,7 @@ void expert_pool_dispatch(void* user, const float* x_f, const int32_t* ids, cons
     // Plan v0.3 P4: rows of every expert across all threads (bitwise the same as `run`).
     if (d.split_rows) d.pool->run_split(d.jobs.data(), (int) njobs);
     else d.pool->run(d.jobs.data(), (int) njobs);
+    if (second) d.expert_gpu->finish(d, x_f, ids, (int) k, out);
     ++d.layers;
     d.experts += k;
 }
@@ -278,7 +295,19 @@ void expert_pool_dispatch_multi(ExpertDispatch& d, const float* x_f, const int32
     // ---- plan v0.3 P6: the GPU's share, decided and published FIRST so the GPU starts while the CPU works.
     // Distinct experts in routing order; resident ones and the last pcie_num/256 of the missed ones go to the GPU.
     const int64_t n = n_tok * k;
-    int32_t kind[128];                     // per entry: -1 CPU, 0 VRAM, 1 PCIe
+    int32_t kind[128];                     // per entry: -2 GPU1, -1 CPU, 0 VRAM, 1 PCIe
+    bool second = false;
+    if (d.expert_gpu) {
+        if (n > 128) { d.failed = true; d.fail = "expert GPU routing list is too large"; return; }
+        for (int64_t i = 0; i < n; ++i) {
+            const int32_t e = ids[i];
+            if (e < 0 || e >= d.n_expert) {
+                d.failed = true; d.fail = "a routed expert id is out of range"; return;
+            }
+            kind[i] = d.host_res && d.host_res[(size_t) d.layers * (size_t) d.n_expert + e] >= 0 ? 0 : -1;
+        }
+        second = d.expert_gpu->launch(d.layers, x_f, ids, (int) n_tok, (int) k, out, kind);
+    }
     if (d.plan != nullptr && n <= 128 && n <= d.plan->cap) {
         int64_t distinct[128], first_of[128];
         int nd = 0, nmiss = 0;
@@ -289,7 +318,8 @@ void expert_pool_dispatch_multi(ExpertDispatch& d, const float* x_f, const int32
             if (first_of[i] == i) {
                 distinct[nd++] = i;
                 const int32_t e = ids[i];
-                if (e >= 0 && e < d.n_expert && d.host_res[(size_t) d.layers * (size_t) d.n_expert + (size_t) e] < 0) ++nmiss;
+                if (e >= 0 && e < d.n_expert && d.host_res[(size_t) d.layers * (size_t) d.n_expert + (size_t) e] < 0 &&
+                    !(second && kind[i] == -2)) ++nmiss;
             }
         }
         const bool pcie_ok = d.pcie_num > 0 && d.src->device_alias(d.layers, 0) != nullptr;
@@ -301,6 +331,7 @@ void expert_pool_dispatch_multi(ExpertDispatch& d, const float* x_f, const int32
         for (int q = 0; q < nd; ++q) {
             const int64_t i0 = distinct[q];
             const int32_t e = ids[i0];
+            if (second && kind[i0] == -2) continue;
             int kd = -1;
             unsigned long long ptr = 0;
             if (e >= 0 && e < d.n_expert) {
@@ -362,6 +393,7 @@ void expert_pool_dispatch_multi(ExpertDispatch& d, const float* x_f, const int32
     } else {
         for (int64_t i = 0; i < n; ++i) {
             const int32_t e = ids[i];
+            if (second && kind[i] == -2) continue;
             kind[i] = (e >= 0 && e < d.n_expert && d.host_res != nullptr &&
                        d.host_res[(size_t) d.layers * (size_t) d.n_expert + (size_t) e] >= 0) ? 0 : -1;
         }
@@ -394,6 +426,7 @@ void expert_pool_dispatch_multi(ExpertDispatch& d, const float* x_f, const int32
                 continue;
             }
             ++d.cache_refused;
+            if (second && kind[i] == -2) continue;
             int16_t& jo = d.job_of[(size_t) e];
             if (jo < 0) {
                 const uint8_t* b = d.src->blob(d.layers, e);
@@ -421,6 +454,7 @@ void expert_pool_dispatch_multi(ExpertDispatch& d, const float* x_f, const int32
     pt("run", njobs);
     if (native) d.pool->run_split_multi_native(lay.fmt[(size_t) d.layers], d.jobs_multi.data(), njobs);
     else d.pool->run_split_multi(d.jobs_multi.data(), njobs);
+    if (second) d.expert_gpu->finish(d, x_f, ids, (int) k, out);
     const auto c4 = std::chrono::steady_clock::now();
     pt("ran");
     auto ms = [](auto a, auto b) { return std::chrono::duration<double, std::milli>(b - a).count(); };
@@ -616,7 +650,7 @@ LoadStats load_experts_gguf(const std::string& gguf, uint8_t* dst, const strata:
 ArenaExpertSource::~ArenaExpertSource() { close(); }
 
 bool ArenaExpertSource::open(const std::string& pack_dir, int64_t n_layers, int64_t n_expert, int threads,
-                             std::string& err) {
+                             std::string& err, uint64_t pin_max) {
     close();
     const std::string path = pack_dir + "/experts.bin";
     // plan v0.3 P6: the layout (canonical, or a native pack's per-layer blobs) was loaded by the driver
@@ -657,7 +691,7 @@ bool ArenaExpertSource::open(const std::string& pack_dir, int64_t n_layers, int6
         lbytes.push_back(lay.blob_bytes(l) * (uint64_t) n_expert);
     }
     bounds.push_back(want);
-    PinnedArena* a = new PinnedArena(want + (uint64_t) blob, bounds);
+    PinnedArena* a = new PinnedArena(want + (uint64_t) blob, bounds, pin_max);
     if (!a->valid()) {
         delete a;
         err = "ArenaExpertSource: the arena could not be reserved (" + std::to_string(want) + " B)";

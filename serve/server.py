@@ -387,17 +387,38 @@ def alive(child) -> bool:
     return proc is None or proc.poll() is None
 
 
-def child_env(cfg: dict, gpu: str | None = None) -> dict:
+def engine_visible_devices(cfg: dict, gpu: str | None) -> str | None:
+    """CUDA_VISIBLE_DEVICES for the engine process. No expert_gpu: the main uuid alone, unchanged.
+    With it, the main card is ordinal 0 and the expert card is ordinal 1 (main uuid first)."""
+    if not isinstance(cfg, dict) or "expert_gpu" not in cfg or cfg.get("expert_gpu") is None:
+        return gpu
+    extra = cfg.get("expert_gpu")
+    if not isinstance(extra, str):
+        raise ValueError(f"config expert_gpu must be a GPU uuid string, got {type(extra).__name__}")
+    extra = extra.strip()
+    if not isinstance(gpu, str) or not gpu.strip():
+        raise ValueError("config expert_gpu is set but gpu (the main card uuid) is missing")
+    main = gpu.strip()
+    if not extra or extra == main or "," in extra or "," in main or any(c.isspace() for c in extra):
+        raise ValueError(f"config expert_gpu must be one GPU uuid, different from gpu, got {extra!r}")
+    return main + "," + extra
+
+
+def child_env(cfg: dict, gpu: str | None = None, *, expert: bool = False) -> dict:
     """The engine's environment: the CUDA libraries setup installed (pip's nvidia packages, or the toolkit that
     compiled it) first on the library search path, and only the GPU setup chose visible (its UUID: CUDA's own
-    device 0 is not always the card with the most VRAM when a PC has two)."""
+    device 0 is not always the card with the most VRAM when a PC has two).
+    expert=True is the engine process. A config with expert_gpu then sees both cards, main first, so ordinal 0
+    stays the card setup chose and ordinal 1 is the expert cache. The vision process leaves expert False and
+    keeps the single uuid it was given. Without expert_gpu the value is the main uuid alone, as before."""
     env = dict(os.environ)
     dirs = [d for d in cfg.get("lib_dirs") or [] if Path(d).is_dir()]
     if dirs:
         var = "PATH" if os.name == "nt" else "LD_LIBRARY_PATH"
         env[var] = os.pathsep.join(dirs + ([env[var]] if env.get(var) else []))
-    if gpu:
-        env["CUDA_VISIBLE_DEVICES"] = gpu
+    visible = engine_visible_devices(cfg, gpu) if expert else gpu
+    if visible:
+        env["CUDA_VISIBLE_DEVICES"] = visible
     return env
 
 
@@ -1304,7 +1325,10 @@ def main() -> int:
         if not cfg:
             ap.error("--engine strata needs --config")
         vision = None
-        env = child_env(cfg, cfg.get("gpu"))
+        try:                                            # expert_gpu, when set, must be a second uuid; a bad value stops here
+            env = child_env(cfg, cfg.get("gpu"), expert=True)
+        except ValueError as exc:
+            ap.error(str(exc))
         sampling_defaults = sampling_defaults_from_config(cfg)
         if sampling_defaults:
             pretty = ", ".join(f"{k}={v}" for k, v in sampling_defaults.items())

@@ -22,6 +22,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <stdexcept>
 #include <cstring>
 
 namespace strata::kernels {
@@ -299,8 +300,9 @@ __global__ void cpu_order_quantize_kernel(const float* x, uint8_t* blocks, float
 
 constexpr int THREADS = 256;
 
-void check(const char* who, void* stream) {
+void check(const char* who, void* stream, bool recoverable = false) {
     const cudaError_t e = cudaGetLastError();
+    if (e != cudaSuccess && recoverable) throw std::runtime_error(cudaGetErrorString(e));
     if (e != cudaSuccess) {
         std::fprintf(stderr, "%s launch: %s\n", who, cudaGetErrorString(e));
         std::exit(1);
@@ -703,7 +705,7 @@ void moe_group_resident(const int32_t* ids, int n, int k_per_tok, const uint8_t*
 
 void moe_grouped_s2(const unsigned long long* grp_ptr, const int32_t* grp_start, const int32_t* n_groups,
                     const int32_t* ent_dst, const int32_t* ent_tok, int64_t cap_groups, int64_t cap_entries,
-                    const uint8_t* x_q8_0, const float* x_scales, void* scratch, float* out, void* stream) {
+                    const uint8_t* x_q8_0, const float* x_scales, void* scratch, float* out, void* stream, bool recoverable) {
     if (cap_groups <= 0 || cap_entries <= 0) return;
     cudaStream_t cs = (cudaStream_t) stream;
     const uint64_t gu_bytes = ((uint64_t) cap_entries * (uint64_t) (2 * FF) * 4 + 15) & ~15ull;
@@ -714,19 +716,19 @@ void moe_grouped_s2(const unsigned long long* grp_ptr, const int32_t* grp_start,
     {
         gu_grouped_kernel<<<dim3((unsigned) (2 * FF / GU_ROWS), (unsigned) cap_groups), 256, 0, cs>>>(
             grp_ptr, grp_start, n_groups, ent_tok, x_q8_0, x_scales, gate_up, (int) cap_entries);
-        check("moe_grouped_s2/gu", stream);
+        check("moe_grouped_s2/gu", stream, recoverable);
     }
     {
         const long long pairs = cap_entries * (long long) FF;
         swiglu_kernel<<<(unsigned) ((pairs + THREADS - 1) / THREADS), THREADS, 0, cs>>>(gate_up, pairs);
-        check("moe_grouped_s2/swiglu", stream);
+        check("moe_grouped_s2/swiglu", stream, recoverable);
     }
-    if (x_scales != nullptr) quantize_q8_0_scaled(gate_up, h_q8_0, h_scales, cap_entries * (int64_t) FF, stream);
+    if (x_scales != nullptr) quantize_q8_0_scaled(gate_up, h_q8_0, h_scales, cap_entries * (int64_t) FF, stream, recoverable);
     else quantize_q8_0(gate_up, h_q8_0, cap_entries * (int64_t) FF, stream);
     {
         down_grouped_kernel<<<dim3((unsigned) (H / D_ROWS), (unsigned) cap_groups), 256, 0, cs>>>(
             grp_ptr, grp_start, n_groups, ent_dst, h_q8_0, x_scales != nullptr ? h_scales : nullptr, out);
-        check("moe_grouped_s2/down", stream);
+        check("moe_grouped_s2/down", stream, recoverable);
     }
 }
 

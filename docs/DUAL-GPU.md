@@ -12,6 +12,33 @@
 
 預估解碼速度（模型推估，還沒實測，誤差 ±20%）：Q2_0 4K 從 87 到約 100 tok/s（+15%），IQ3_XXS 4K 從 65 到約 77 tok/s（+18%）。長 context 的 miss 更多，增益百分比會更高。Prefill 大致不變。
 
+## 實作結果（2026-09-28）
+
+用法：`setup.py --expert-gpu yes`（或在設定檔加 `"expert_gpu": "<第二張卡 UUID>"`，引擎參數加 `--expert-gpu 1 --expert-gpu-reserve-mib 700`）。引擎要用這份原始碼自己編（`86;120`），現成引擎不認得這個參數。第二張卡不能用時，引擎印一行 `expert GPU ... disabled: <原因>`，照常用單卡跑。
+
+實測（Ryzen 7 5700X、96 GB RAM、IQ3_XXS、262K context 設定、經 `serve/server.py`、每次 400 token）：
+
+| | 輸出 tok/s |
+| --- | --- |
+| 原本的引擎 | 27.4、29.3 |
+| 新引擎，單卡 | 25.9、27.6；另一次 31.3、34.1 |
+| 新引擎，雙卡（3060 Ti 放 3,299 個 expert，和看圖共用） | 35.9、32.3；另一次 35.7、38.6 |
+| 6K token 的 prompt 之後：單卡 → 雙卡 | 18.5 → 31.0、24.3 → 37.9 |
+
+- 短 prompt 時雙卡快 13–38%（中位數約 +20%）；context 越長、CPU 要算的越多，差距越大。
+- 讀 prompt 的速度不變（6K token：單卡 264、雙卡 275 tok/s）。
+- 雙卡和單卡的 greedy 輸出 200/200 token 一樣。這台機器的單卡自己跑兩次，本來就會在第 90 個 token 左右分岔。
+- 同一份工作量，這台機器前後跑的速度會差到 ±20%，所以上面每一格都是同一段時間內跑的。
+- **orca（uncensored）沒有變快**（單卡 26.7、22.8；雙卡 22.3、25.2）。原因是它的 expert 區有 49 GiB，雙卡時只能釘住 35 GiB（見下面第 1 點），而它的 `--pcie-frac 0.40` 需要釘住的記憶體，沒釘住的那 14 層就退回給 CPU 算，抵掉了第二張卡的好處。
+
+實作時踩到的三件事（都量過）：
+
+1. **Windows 上，有兩個 GPU context 時，釘住（pin）超過約 38–39 GiB 的主機記憶體，兩張卡的 `cudaMalloc` 就一起壞掉**，事後放開也救不回來；跟 `Portable`／`Mapped` 旗標、context 建立順序都無關。單卡時 49 GiB 都沒問題。所以開雙卡時，expert 區最多只釘 36 GiB（`--expert-gpu-pin-gib`，預設 36），其餘照引擎原本的方式用 working-set lock 留在 RAM；讀 prompt 時這幾層改走一般複製，實測速度沒變。
+2. **3060 Ti 只拿到零碎的工作時，驅動讓它停在 P8（核心 210 MHz、記憶體 405 MHz）**，每層的 kernel 要 0.7 ms。解法是在低優先權的 stream 上反覆送 1 ms 的「保持運作」kernel（`src/kernels/cuda/keep_warm.cu`）。不能用長的：一個 200 ms 的會把正事卡在後面（p90 193 ms）。
+3. **kernel 直接透過 PCIe 讀主機記憶體裡的查表、逐個 float 寫回結果（zero-copy），每層會變成上萬個 PCIe 小交易**，比 CPU 還慢。改成一次 H2D 複製查表和輸入、一次 D2H 複製結果；所有 CUDA 呼叫都交給一條固定在第二張卡上的工作執行緒（`ExpertGpu::work`），主執行緒只填表，不再付每層約 0.2 ms 的 launch 成本。
+
+還沒做的：第二張卡的 expert 固定是啟動時從 profile 挑的，不會跟著對話調整；profile 只有 8,000 組排名，第二張卡最多就放主卡剩下的那些；讀 prompt 時第二張卡不幫忙。
+
 ## 為什麼接在 pool hook
 
 每一層的 CPU 交接流程本來就長這樣：GPU0 用 doorbell 把 `x` 和 miss 清單寫進 mapped pinned 記憶體，host 執行緒呼叫 `pool(...)` 算完 miss，把結果寫進 `y_miss`，最後設定 `flag`，GPU0 才接著往下跑（`src/core/session.cpp:915`、`:678`；`src/core/verify.cpp` 的 verify window 也是同一種形狀，走 `drive_pool_multi`）。
@@ -39,7 +66,7 @@ GPU0 的 graph、token graph、verify graph 完全不用改；GPU0 這邊感覺�
 | H2D + kernel + D2H，T=1 | 70.3 µs | 77.3 µs | 128 µs |
 | H2D + kernel + D2H，T=4 | 77.6 µs | 99.8 µs | 177 µs |
 
-對照組：Q2_0 4K 時，一個 verify window 裡 CPU 每層大約要花 190 µs（論文表 5：CPU 露出 9.2 ms ÷ 48 層）。GPU1 分走一半的 miss 以後，CPU 還剩約 95 µs；GPU1 自己「約 25 µs 來回 ＋ 幾個 expert 的 GEMV（1.38 MB ÷ 448 GB/s ≈ 3 µs/個）」可以完全塞在 CPU 那段時間裡面。**要用 zero-copy，不要用三次 memcpy。**
+對照組：Q2_0 4K 時，一個 verify window 裡 CPU 每層大約要花 190 µs（論文表 5：CPU 露出 9.2 ms ÷ 48 層）。GPU1 分走一半的 miss 以後，CPU 還剩約 95 µs；GPU1 自己「約 25 µs 來回 ＋ 幾個 expert 的 GEMV（1.38 MB ÷ 448 GB/s ≈ 3 µs/個）」可以完全塞在 CPU 那段時間裡面。（後來實作證明這個小測試太樂觀：真正的 expert kernel 用 zero-copy 讀查表時，每層會變成上萬個 PCIe 小交易，見上面「實作結果」第 3 點。最後改成一次複製進、一次複製出，並交給專用執行緒。）
 
 另外量到的：CUDA 的 device 0 是 3060 Ti（CUDA 把「較快」的排前面），跟 `setup.py:247` 的註解一致，所以一定要靠 UUID 指定卡的順序。
 

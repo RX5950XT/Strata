@@ -27,7 +27,7 @@ void quantize_q8_0(const float* x, uint8_t* blocks, int64_t n, void* stream);
 // **4.761e-04 relative on 80 of 80 chunks** (`bench/micro/act_quant_parity.cu`).  This variant exists so the
 // hit path can use the CPU's multiplier.  Writes `blocks[n/32 * 34]` and `scales[n/32]`; `scales` must not be
 // null.  `quantize_q8_0` is unchanged and still matches ggml's bytes, which is what `moe_hit_parity` checks.
-void quantize_q8_0_scaled(const float* x, uint8_t* blocks, float* scales, int64_t n, void* stream);
+void quantize_q8_0_scaled(const float* x, uint8_t* blocks, float* scales, int64_t n, void* stream, bool recoverable = false);
 
 // The inverse, for round-trip checks: each element becomes `q * d16`.
 void dequant_q8_0(const uint8_t* blocks, float* x, int64_t n, void* stream);

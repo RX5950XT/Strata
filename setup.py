@@ -4,7 +4,8 @@
     START-HERE.bat  (Windows)   /   ./setup.sh  (Linux)      - they install Python if needed and run this file
 
 The first time it asks four questions - which model (the original Qwen3.8-Flash-Next or the Swift 1.5 fine-tune),
-which size, how much context, and whether the model should also read images - then installs everything and starts the model on http://127.0.0.1:8080 (OpenAI- and Anthropic-compatible
+which size, how much context, and whether the model should also read images. A second GPU that can hold more
+experts adds one question (default yes). Then it installs everything and starts the model on http://127.0.0.1:8080 (OpenAI- and Anthropic-compatible
 API; a small page there shows that it runs). Every later start skips straight to running the model: nothing that
 is already downloaded, installed or prepared is done again.
 
@@ -19,7 +20,8 @@ What the first run does (each step is skipped when it is already done):
   6. prepares the model for Strata and fetches the MTP draft layer (~5 GB, from the original Qwen checkpoint)
   7. starts the model: on Windows in the control panel (PANEL.bat), on Linux with a run-<model>.sh it writes
 
-Options: --family qwen|swift|orca, --model Q2_0|IQ2_XS|IQ3_XXS|IQ3_S, --context 32768, --vision yes|no|gpu|cpu, --port 8080, --yes (recommended
+Options: --family qwen|swift|orca, --model Q2_0|IQ2_XS|IQ3_XXS|IQ3_S, --context 32768, --vision yes|no|gpu|cpu,
+--expert-gpu yes|no (second card holds more experts; yes compiles the engine here, once), --port 8080, --yes (recommended
 answers, no questions), --setup (install another model / change settings instead of starting), --no-start,
 --host 0.0.0.0 --api-key KEY (reach it from other devices on your network), --experimental-speed-projection on|off
 (EXPERIMENTAL, off by default),
@@ -107,6 +109,12 @@ ESP_VECTOR = ROOT / "data" / "experimental-speed-projection" / "Qwen3.8-Flash-Ne
 # sizes its expert slots around it and the default reserve (700 MiB) is enough; engines before 0.1.2 need more
 VISION = {"gpu": {"max_tokens": 1024, "reserve_mib": 700},
           "cpu": {"max_tokens": 300, "reserve_mib": 700}}
+# Second expert cache (docs/DUAL-GPU.md). The spare must be sm_80+ and at least 6 GB. The vision encoder (a separate
+# process) warms up before the engine, so the engine's free-VRAM reading already leaves it room: 700 MiB on a shared
+# card is the same margin the main card keeps next to it (VISION above), 512 otherwise.
+EXPERT_MIN_VRAM_GB = 6
+EXPERT_RESERVE_MIB = 512
+EXPERT_RESERVE_SHARED_MIB = 700
 EXE = "strata.exe" if WIN else "strata"
 VEXE = "strata-vision.exe" if WIN else "strata-vision"
 
@@ -243,10 +251,28 @@ def _cpuid_avx512_full() -> bool:
         return False
 
 
+def expert_candidate(spare: dict | None) -> dict | None:
+    """A second card that can hold more experts: compute capability 8.0+ (RTX 30 or newer) and at least 6 GB.
+    A smaller spare can still run the image encoder; it is not offered as an expert cache."""
+    if not spare:
+        return None
+    try:
+        arch, vram = int(spare["arch"]), float(spare["vram_gb"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if arch < 80 or vram < EXPERT_MIN_VRAM_GB:
+        return None
+    uid = spare.get("uuid")
+    if not isinstance(uid, str) or not uid.strip():
+        return None
+    return spare
+
+
 def gpu_info():
     """The GPU the engine runs on: the one with the most VRAM (then the newest), not nvidia-smi's or CUDA's first
     (CUDA orders "fastest first", which on an RTX 5060 Ti + 3060 Ti PC is the 3060 Ti).  "spare" is the best other
-    RTX 30+ card, if any: the image encoder goes there, so it takes no VRAM from the expert cache."""
+    RTX 30+ card, if any: the image encoder goes there, so it takes no VRAM from the expert cache.
+    "expert" is that spare when it also has at least 6 GB: it can hold a second expert cache."""
     s = out(["nvidia-smi", "--query-gpu=uuid,name,memory.total,compute_cap,driver_version", "--format=csv,noheader,nounits"])
     gpus = []
     for line in s.strip().splitlines():
@@ -258,7 +284,8 @@ def gpu_info():
         return None
     gpus.sort(key=lambda g: (g["vram_gb"], int(g["arch"])), reverse=True)
     spare = [g for g in gpus[1:] if int(g["arch"]) >= 80]
-    return {**gpus[0], "spare": spare[0] if spare else None}
+    best = spare[0] if spare else None
+    return {**gpus[0], "spare": best, "expert": expert_candidate(best)}
 
 
 def find_nvcc():
@@ -637,9 +664,89 @@ def source_hash(parts) -> str:
     return h.hexdigest()[:16]
 
 
-def build_engine(gpu, vision, yes, llama) -> Path:
+def stamp_archs(meta: dict) -> list[int] | None:
+    """Architectures recorded in a local BUILD.json. None means a stamp from before "archs" was written
+    (that binary was compiled for this PC's main card only). A value that is not an arch is an error."""
+    if "archs" not in meta or meta.get("archs") is None:
+        return None                                    # written before archs were recorded: main card only
+    have = meta.get("archs")
+    if not isinstance(have, list):
+        raise ValueError(f"BUILD.json archs has {have!r}")
+    out = []
+    for a in have:
+        if isinstance(a, bool) or not isinstance(a, (int, str)):
+            raise ValueError(f"BUILD.json archs has {a!r}")
+        try:
+            out.append(int(a))
+        except ValueError:
+            raise ValueError(f"BUILD.json archs has {a!r}") from None
+    return out
+
+
+def engine_cuda_archs(gpu: dict, expert: bool) -> list[int]:
+    """CUDA architectures one local engine binary must contain, ascending. With the second expert cache that is
+    both cards (sm_86 and sm_120 here -> 86;120). The same arch twice is listed once."""
+    try:
+        archs = [int(gpu["arch"])]
+    except (KeyError, TypeError, ValueError):
+        raise ValueError("the main GPU has no compute capability") from None
+    if expert:
+        cand = gpu.get("expert") if isinstance(gpu.get("expert"), dict) else None
+        if cand is None:
+            raise ValueError("expert GPU was requested, but no second card has compute capability 8.0+ and 6 GB")
+        try:
+            archs.append(int(cand["arch"]))
+        except (KeyError, TypeError, ValueError):
+            raise ValueError("the second GPU has no compute capability") from None
+    return sorted(set(archs))
+
+
+def local_engine_covers(meta: dict, need_archs: list[int], *, expert: bool) -> bool:
+    """Whether engine/ can be reused. A local build that does not list an arch this run needs is rebuilt
+    (older stamps recorded only the main card). Expert mode also requires the stamp's expert_gpu mark:
+    a binary compiled before --expert-gpu existed rejects that flag, even when the arch happens to match."""
+    if not isinstance(meta, dict):
+        return False
+    if expert and meta.get("expert_gpu") is not True:
+        return False
+    try:
+        have = stamp_archs(meta)
+    except ValueError:
+        return False                                   # a broken arch list does not cover this PC: compile again
+    if have is None:
+        return not expert and len(need_archs) == 1
+    return all(a in have for a in need_archs)
+
+
+def expert_setup(gpu: dict, enabled: bool, vision_gpu_uuid: str | None) -> tuple[dict, list]:
+    """Config fields and engine args for the second expert cache. enabled False writes nothing, so the config
+    and the argument list stay exactly as they are today. The flags are only meaningful on an engine compiled
+    from this source; the caller compiles before it writes them."""
+    if not enabled:
+        return {}, []
+    if not isinstance(gpu, dict):
+        raise ValueError("expert GPU was requested, but no GPU info is available")
+    cand = gpu.get("expert") if isinstance(gpu.get("expert"), dict) else None
+    if cand is None:
+        raise ValueError("expert GPU was requested, but no second card has compute capability 8.0+ and 6 GB")
+    uid = cand.get("uuid")
+    if not isinstance(uid, str) or not uid.strip() or "," in uid or any(c.isspace() for c in uid.strip()):
+        raise ValueError(f"expert GPU uuid is not usable: {uid!r}")
+    uid = uid.strip()
+    main = gpu.get("uuid")
+    if isinstance(main, str) and uid == main.strip():
+        raise ValueError("expert GPU must be a different card from the main GPU")
+    vis = vision_gpu_uuid.strip() if isinstance(vision_gpu_uuid, str) else None
+    # the vision encoder is another process on this same card: leave it ~1.4 GB, else a small reserve
+    reserve = EXPERT_RESERVE_SHARED_MIB if vis and vis == uid else EXPERT_RESERVE_MIB
+    return {"expert_gpu": uid}, ["--expert-gpu", "1", "--expert-gpu-reserve-mib", str(reserve)]
+
+
+def build_engine(gpu, vision, yes, llama, expert=False) -> Path:
     """Compile the engine (and, for images, the encoder) for this GPU; the results go to engine/.  A compiled
-    engine whose source files changed since (a `git pull`) is compiled again: only the changed files, a few minutes."""
+    engine whose source files changed since (a `git pull`) is compiled again: only the changed files, a few minutes.
+    expert=True puts both cards' architectures in the one binary (86;120) and marks the stamp: the ready-made
+    engine has no --expert-gpu flag, so only this build can hold the second expert cache."""
     eng = ROOT / "engine"
     eng.mkdir(exist_ok=True)
     stamp = eng / "BUILD.json"
@@ -647,17 +754,27 @@ def build_engine(gpu, vision, yes, llama) -> Path:
     want_vision = vision != "none"
     local = meta.get("source") == "local"
     src, vsrc = source_hash(ENGINE_SOURCES), source_hash(VISION_SOURCES)
-    engine_ok = local and (eng / EXE).exists() and meta.get("src") == src
+    need_archs = engine_cuda_archs(gpu, expert)
+    covers = local and (eng / EXE).exists() and local_engine_covers(meta, need_archs, expert=expert)
+    engine_ok = covers and meta.get("src") == src
     vision_ok = not want_vision or ((eng / VEXE).exists() and (not local or meta.get("vision_src") == vsrc))
     if engine_ok and vision_ok:
         ok("engine already built for this PC")
         return eng
-    nvcc, vcvars = install_build_tools(gpu, yes)
+    # sm_120 needs a newer toolkit than sm_86; ask for the newest arch this binary will contain
+    tool_gpu = gpu if int(gpu["arch"]) >= max(need_archs) else {**gpu, "arch": str(max(need_archs))}
+    nvcc, vcvars = install_build_tools(tool_gpu, yes)
     if not engine_ok:
-        say("  The engine's source changed: compiling it again (only what changed, a few minutes) ..."
-            if local and (eng / EXE).exists() else "  Compiling the Strata engine for your GPU (10-20 minutes, once) ...")
+        if covers:
+            say("  The engine's source changed: compiling it again (only what changed, a few minutes) ...")
+        elif expert and len(need_archs) > 1:
+            say("  Compiling the Strata engine for " + " and ".join(f"sm_{a}" for a in need_archs)
+                + " (10-20 minutes, once) ...")
+        else:
+            say("  Compiling the Strata engine for your GPU (10-20 minutes, once) ...")
         cmake_build(ROOT, ROOT / "build", "strata",
-                    ["-DSTRATA_ENABLE_CUDA=ON", "-DSTRATA_BUILD_TESTS=OFF", f"-DCMAKE_CUDA_ARCHITECTURES={gpu['arch']}",
+                    ["-DSTRATA_ENABLE_CUDA=ON", "-DSTRATA_BUILD_TESTS=OFF",
+                     f"-DCMAKE_CUDA_ARCHITECTURES={';'.join(str(a) for a in need_archs)}",
                      f"-DCMAKE_CUDA_COMPILER={nvcc}", f"-DSTRATA_GGML_DIR={llama}"], vcvars, "build-strata.bat")
         shutil.copy2(ROOT / "build" / EXE, eng / EXE)
     if not vision_ok:
@@ -670,9 +787,13 @@ def build_engine(gpu, vision, yes, llama) -> Path:
         shutil.copy2(ROOT / "build-vision" / "bin" / VEXE, eng / VEXE)
     bindir = Path(nvcc).parent                            # the toolkit's own libraries (bin, bin/x64, lib64)
     dirs = [str(d) for d in (bindir, bindir / "x64", bindir.parent / "lib64") if d.is_dir()]
-    stamp.write_text(json.dumps({"source": "local", "version": source_version(), "archs": [int(gpu["arch"])],
-                                 "vision": vision,
-                                 "cuda_dirs": dirs, "src": src, "vision_src": vsrc if want_vision else None}, indent=1))
+    # a vision-only rebuild must not forget archs the binary already has; a strata rebuild matches what nvcc got
+    recorded = sorted(set(need_archs) | set(stamp_archs(meta) or [])) if engine_ok else need_archs
+    body = {"source": "local", "version": source_version(), "archs": recorded, "vision": vision,
+            "cuda_dirs": dirs, "src": src, "vision_src": vsrc if want_vision else None}
+    if expert or (engine_ok and meta.get("expert_gpu") is True):
+        body["expert_gpu"] = True                         # this binary accepts --expert-gpu and contains the spare arch
+    stamp.write_text(json.dumps(body, indent=1))
     ok(f"engine compiled: {eng / EXE}")
     return eng
 
@@ -770,6 +891,27 @@ def write_run_script(model, cfg_path, port):
     return script
 
 
+def choose_expert_gpu(gpu, flag, yes) -> bool:
+    """The question next to "Images?". Asked only when a candidate exists; default yes, and --yes answers yes.
+    --expert-gpu no never asks. Yes means compile: the ready-made engine rejects --expert-gpu."""
+    cand = gpu.get("expert") if isinstance(gpu, dict) else None
+    if flag == "yes" and not cand:
+        fail("no second GPU can hold more experts",
+             "it needs an RTX 30 series or newer card with at least 6 GB beside the main GPU")
+    if flag == "no" or not cand:
+        if flag == "no" and cand:
+            ok("second GPU experts: off")
+        return False
+    say()
+    say(f"  The {cand['name']} holds more of the model's experts, so the CPU does less work. "
+        "The model needs a locally compiled engine, compiled once, 10-20 minutes.")
+    if flag == "yes" or ask("Use the second GPU to hold more experts?", ["y", "n"], "y", yes) == "y":
+        ok("second GPU experts: on")
+        return True
+    ok("second GPU experts: off")
+    return False
+
+
 # ------------------------------------------------------------------------------------------------ main
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -781,6 +923,9 @@ def main() -> int:
                          "precise)")
     ap.add_argument("--vision", choices=["yes", "no", "none", "gpu", "cpu"],
                     help="let the model read images (yes = the encoder on the GPU)")
+    ap.add_argument("--expert-gpu", choices=["yes", "no"],
+                    help="use a second GPU to hold more experts (yes compiles the engine on this PC, once; "
+                         "when asked, the default is yes)")
     ap.add_argument("--experimental-speed-projection", metavar="on|off|GGUF",
                     help="EXPERIMENTAL, off by default: the control vector in data/experimental-speed-projection "
                          "(or another GGUF) as a projection on layers 4-44; see docs/DETAILS.md")
@@ -922,6 +1067,7 @@ def main() -> int:
             say("  download and keeps ~1.4 GB of VRAM free for the image encoder, so text is a few % slower.")
         vision = "gpu" if ask("Do you want images?", ["y", "n"], "n", a.yes) == "y" else "none"
     ok("images: " + {"none": "off", "gpu": "on", "cpu": "on (encoder on the CPU)"}[vision])
+    use_expert = choose_expert_gpu(gpu, a.expert_gpu, a.yes)
     # EXPERIMENTAL: the experimental-speed-projection control vector (data/experimental-speed-projection), off unless
     # chosen here; with it loaded, the web app and the API switch it off per request
     esp = None
@@ -957,15 +1103,20 @@ def main() -> int:
     step(4, "the Strata engine")
     llama = get_llama_cpp()
     ok(f"llama.cpp {LLAMA_CPP_COMMIT[:7]} (gguf-py, ggml, mtmd)")
-    eng = None if a.build or fam.get("build") else get_prebuilt(a.prebuilt, gpu, vision)
+    # the ready-made engine (and any local build from before this flag) rejects --expert-gpu, so the second
+    # cache is compiled here, the same way a family with "build": True skips the download
+    eng = None if a.build or fam.get("build") or use_expert else get_prebuilt(a.prebuilt, gpu, vision)
     if eng is not None and json.loads((eng / "BUILD.json").read_text()).get("source") != "local":
         pip_install(CUDA_WHEELS, "NVIDIA CUDA libraries (cuBLAS, CUDA runtime; ~0.4 GB)")
         if vision != "none" and not (eng / VEXE).exists():
             warn("the ready-made engine has no image encoder: compiling it")
             eng = None
     if eng is None:
-        eng = build_engine(gpu, vision, a.yes, llama)
+        eng = build_engine(gpu, vision, a.yes, llama, expert=use_expert)
     meta = json.loads((eng / "BUILD.json").read_text())
+    if use_expert and not local_engine_covers(meta, engine_cuda_archs(gpu, True), expert=True):
+        fail("the engine on disk was not compiled for the second GPU's expert cache",
+             "delete engine/BUILD.json and run setup again so it compiles both cards")
     lib_dirs = meta.get("cuda_dirs") or cuda_lib_dirs()
     ok(f"engine: {eng / EXE}")
 
@@ -1074,6 +1225,12 @@ def main() -> int:
             cfg["vision"]["gpu_uuid"] = gpu["spare"]["uuid"]
         if vision == "cpu":
             cfg["vision"]["threads"] = max(1, (os.cpu_count() or 8) // 2)
+    try:
+        extra_cfg, extra_args = expert_setup(gpu, use_expert, (cfg.get("vision") or {}).get("gpu_uuid"))
+    except ValueError as exc:
+        fail(str(exc))
+    cfg.update(extra_cfg)                                # absent when the second cache is off: the file stays as before
+    args += extra_args                                   # cfg["args"] is this same list, so the flags are written with it
     CONFIGS.mkdir(exist_ok=True)
     cfg_path = CONFIGS / f"strata-{tag.lower()}.json"
     cfg_path.write_text(json.dumps(cfg, indent=1), encoding="utf-8")

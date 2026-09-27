@@ -30,6 +30,7 @@
 #include <vector>
 
 namespace strata::core {
+class ExpertGpu;
 
 /// Where one routed expert's bytes come from.
 ///
@@ -90,6 +91,7 @@ struct GpuPlanSink {
 
 /// The adapter's own state.  One per session, reused every layer so the token path allocates nothing (P2.T10).
 struct ExpertDispatch {
+    ExpertGpu* expert_gpu = nullptr;
     strata::kernels::cpu::ExpertPool* pool = nullptr;
     ExpertSource* src = nullptr;
     int64_t n_expert = strata::kernels::cpu::NE;
@@ -320,7 +322,9 @@ public:
 
     /// Allocates and loads `<pack_dir>/experts.bin`.  Prints nothing; the caller reports `note()` and the load
     /// rate, because those are the two numbers that say whether the arena is the one that was asked for.
-    bool open(const std::string& pack_dir, int64_t n_layers, int64_t n_expert, int threads, std::string& err);
+    /// `pin_max`: see PinnedArena's `max_pinned` (0 = pin as much as CUDA takes).
+    bool open(const std::string& pack_dir, int64_t n_layers, int64_t n_expert, int threads, std::string& err,
+              uint64_t pin_max = 0);
     /// Plan v0.3 P6: a native pack without experts.bin takes its experts from the model's shard 1.
     void set_gguf(const std::string& shard1) { gguf_ = shard1; }
     void close();

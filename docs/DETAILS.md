@@ -147,6 +147,8 @@ You need **only an NVIDIA driver** (version 580 or newer; update it with the NVI
 | Disk | ~70-80 GB free for the model, ~6 GB for the MTP layer (+1 GB with images). **Q2_0 on an AVX-512 CPU** also writes a one-time ~40 GB copy of its experts for the fast CPU kernel. An NVMe SSD is strongly recommended. |
 | OS | Windows 10/11, or Linux (Ubuntu 22.04/24.04 get everything installed automatically). |
 
+With two GPUs, `--expert-gpu yes` (the default when that question is asked, and what `--yes` picks) puts more of the model's experts on the second card, so the CPU does less of that work. The card has to be an RTX 30 series or newer with at least 6 GB; `--expert-gpu no` keeps today's single-GPU run. The ready-made engine does not accept the flag, so setup compiles the engine from this source once (10-20 minutes), for both cards. When the image encoder also runs on the second card, 700 MiB of it is left free next to it; otherwise 512 MiB. If that card cannot be used, the engine says so and runs on one GPU.
+
 What the first start installs, all inside this folder (`.venv/`, `engine/`, `third_party/`, `models/`, `packs/`, `mtp/`):
 Python 3.12 if you have none (for your user account, no admin), a private Python environment, NVIDIA's CUDA libraries
 (from pip, ~0.4 GB), the ready-made Strata engine for RTX 30/40/50, the model and the MTP draft layer. If no

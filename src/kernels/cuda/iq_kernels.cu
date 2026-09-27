@@ -15,12 +15,14 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <stdexcept>
 
 namespace strata::kernels {
 namespace {
 
-void check(const char* what) {
+void check(const char* what, bool recoverable = false) {
     const cudaError_t e = cudaGetLastError();
+    if (e != cudaSuccess && recoverable) throw std::runtime_error(cudaGetErrorString(e));
     if (e != cudaSuccess) { std::fprintf(stderr, "%s: %s\n", what, cudaGetErrorString(e)); std::exit(1); }
 }
 
@@ -622,11 +624,11 @@ size_t iq_row_bytes(int t, int64_t n) noexcept {
     }
 }
 
-void quantize_q8_1_rows(const float* x, int64_t n_rows, int64_t n_cols, void* y, void* stream) {
+void quantize_q8_1_rows(const float* x, int64_t n_rows, int64_t n_cols, void* y, void* stream, bool recoverable) {
     const long long n = (long long) n_rows * n_cols;
     if (n <= 0) return;
     quantize_q8_1_kernel<<<(unsigned) ((n + 255) / 256), 256, 0, (cudaStream_t) stream>>>(x, (block_q8_1*) y, n);
-    check("quantize_q8_1_rows");
+    check("quantize_q8_1_rows", recoverable);
 }
 
 void iq_mmvq(int t, const void* w, const void* x_q8_1, float* y, int n_in, int n_out, int ncols, void* stream) {
@@ -709,7 +711,7 @@ size_t native_expert_scratch_bytes(int64_t cap, int64_t n_ff) {
 
 void native_expert_grouped(const NativeExpertLayout& L, const unsigned long long* grp_ptr, const int32_t* grp_start,
                            const int32_t* n_groups, const int32_t* ent_dst, const int32_t* ent_tok, int64_t cap_groups,
-                           int64_t cap_entries, const void* x_q8_1, void* scratch, float* out, void* stream) {
+                           int64_t cap_entries, const void* x_q8_1, void* scratch, float* out, void* stream, bool recoverable) {
     if (cap_groups <= 0 || cap_entries <= 0) return;
     cudaStream_t s = (cudaStream_t) stream;
     const size_t f = (size_t) cap_entries * (size_t) L.n_ff * sizeof(float), fa = (f + 255) & ~(size_t) 255;
@@ -730,7 +732,7 @@ void native_expert_grouped(const NativeExpertLayout& L, const unsigned long long
         case 42: native_gu_kernel<42><<<ggu, 256, 0, s>>>(grp_ptr, grp_start, n_groups, ent_tok, X, L, gate, up); break;
         default: std::fprintf(stderr, "native_expert_grouped: gate/up type %d\n", L.gu_type); std::exit(1);
     }
-    check("native_expert_grouped/gu");
+    check("native_expert_grouped/gu", recoverable);
     const long long nh = (long long) cap_entries * L.n_ff;
     swiglu_entries_kernel<<<(unsigned) ((nh + 255) / 256), 256, 0, s>>>(gate, up, h, nh);
     quantize_q8_1_kernel<<<(unsigned) ((nh + 255) / 256), 256, 0, s>>>(h, hq, nh);
@@ -741,7 +743,7 @@ void native_expert_grouped(const NativeExpertLayout& L, const unsigned long long
         case 42: native_down_kernel<42><<<gd, 256, 0, s>>>(grp_ptr, grp_start, n_groups, ent_dst, hq, L, out); break;
         default: std::fprintf(stderr, "native_expert_grouped: down type %d\n", L.d_type); std::exit(1);
     }
-    check("native_expert_grouped/down");
+    check("native_expert_grouped/down", recoverable);
 }
 
 }  // namespace strata::kernels

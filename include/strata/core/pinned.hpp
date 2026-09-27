@@ -38,8 +38,10 @@ struct PinnedArena {
     /// `slice`: the piece size for the per-slice registration fallback (0 = none).
     explicit PinnedArena(uint64_t bytes, uint64_t slice = 0);
     /// Plan v0.3 P6: slices of different sizes (one per layer of a native pack), given as their start offsets
-    /// followed by the end of the last one.  `slice_starts` holds the registered ones.
-    PinnedArena(uint64_t bytes, const std::vector<uint64_t>& bounds);
+    /// followed by the end of the last one.  `slice_starts` holds the registered ones.  `max_pinned` (0 = no
+    /// limit) stops the registration before a slice would pass it: with a second GPU context, Windows breaks
+    /// BOTH devices' allocations once ~39 GiB of host memory is pinned (measured on a 96 GB PC, docs/DUAL-GPU.md).
+    PinnedArena(uint64_t bytes, const std::vector<uint64_t>& bounds, uint64_t max_pinned = 0);
     std::vector<uint64_t> slice_starts;
     ~PinnedArena();
     PinnedArena(const PinnedArena&) = delete;

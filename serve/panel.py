@@ -74,6 +74,59 @@ def ctx_label(ctx: int) -> str:
     return "262K" if ctx == 262144 else f"{ctx // 1024}K"      # 2^18 is called 262K everywhere else
 
 
+def expert_uuid_of(cfg: dict) -> str | None:
+    """The second card's uuid, or None when the config has no expert cache or the value cannot be one uuid.
+    The same card as the main GPU is rejected: ordinal 1 has to be a different device."""
+    if not isinstance(cfg, dict):
+        return None
+    raw = cfg.get("expert_gpu")
+    if not isinstance(raw, str):
+        return None
+    text = raw.strip()
+    main = cfg.get("gpu")
+    main_s = main.strip() if isinstance(main, str) else ""
+    if not text or text == main_s or "," in text or any(c.isspace() for c in text):
+        return None
+    return text
+
+
+def expert_fact(cfg: dict) -> str | None:
+    """Model-card text. None hides the row, so a config without expert_gpu looks as it does today.
+    A present but unusable value is shown, not dropped."""
+    if not isinstance(cfg, dict):
+        return None
+    if "expert_gpu" in cfg and cfg.get("expert_gpu") is not None and expert_uuid_of(cfg) is None:
+        return "設定無效"
+    uid = expert_uuid_of(cfg)
+    if uid is None:
+        return None
+    vision = cfg.get("vision")
+    if isinstance(vision, dict) and vision.get("gpu_uuid") == uid:
+        return "看圖＋專家"
+    return "第二張卡"
+
+
+# one card can read images and hold the expert cache; setdefault would keep the first label and hide the second
+_GPU_ROLES = ("跑模型", "看圖", "專家")
+
+
+def assign_gpu_roles(infos: list[dict[str, Any]]) -> dict[str, str]:
+    """Role per GPU uuid. The second expert cache is 專家, or 看圖＋專家 when the image encoder shares that card."""
+    tags: dict[str, set[str]] = {}
+
+    def add(uuid: Any, role: str) -> None:
+        if isinstance(uuid, str) and uuid:
+            tags.setdefault(uuid, set()).add(role)
+
+    for info in infos:
+        if not info:
+            continue
+        add(info.get("gpu_uuid"), "跑模型")
+        add(info.get("vision_uuid"), "看圖")
+        add(info.get("expert_uuid"), "專家")
+    return {uuid: "＋".join(role for role in _GPU_ROLES if role in got) for uuid, got in tags.items()}
+
+
 def model_info(model_id: str, path: Path, cfg: dict[str, Any]) -> dict[str, Any]:
     args = [str(a) for a in cfg["args"]]
     name = cfg.get("model_name", model_id)
@@ -98,6 +151,8 @@ def model_info(model_id: str, path: Path, cfg: dict[str, Any]) -> dict[str, Any]
         "port": int(cfg.get("port") or 8080),
         "gpu_uuid": cfg.get("gpu"),
         "vision_uuid": vision.get("gpu_uuid"),
+        "expert_uuid": expert_uuid_of(cfg),
+        "expert": expert_fact(cfg),
         "ready": exe.is_file() and Path(arg(args, "--pack") or exe).exists(),
         "engine_log": cfg.get("log"),
     }
@@ -435,12 +490,8 @@ def session_stats(log: Path | None, offset: int) -> dict[str, Any]:
 def query_gpus(infos: list[dict[str, Any]], active: dict[str, Any] | None) -> list[dict[str, Any]]:
     keys = ("uuid", "index", "name", "memory_used_mib", "memory_total_mib", "util_pct", "temp_c", "power_w",
             "power_limit_w")
-    roles: dict[str, str] = {}
-    for info in ([active] if active else infos):
-        if info.get("gpu_uuid"):
-            roles.setdefault(info["gpu_uuid"], "跑模型")
-        if info.get("vision_uuid"):
-            roles.setdefault(info["vision_uuid"], "看圖")
+    # the model that is on; with nothing running, every installed config, as before
+    roles = assign_gpu_roles([active] if active else infos)
     gpus = []
     for row in smi(["--query-gpu=uuid,index,name,memory.used,memory.total,utilization.gpu,temperature.gpu,"
                     "power.draw,power.limit", "--format=csv,noheader,nounits"]):
