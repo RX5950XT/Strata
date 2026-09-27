@@ -283,6 +283,10 @@ class Supervisor:
             if not alive:
                 s.status, s.error, s.proc, s.pid = "error", "server.py 意外結束，看下方 log", None, None
                 self._state_file().unlink(missing_ok=True)
+            elif s.status == "ready" and engine_stopped(s.port):   # server.py up, its engine gone
+                self._kill_locked()
+                s.status, s.error = "error", "引擎意外結束（看引擎 log）；再按一次開關就會重開"
+                self._state_file().unlink(missing_ok=True)
             elif s.status == "starting" and s.proc is None and health(s.port) is not None:
                 s.status = "ready"
         elif s.status in {"off", "external", "error"}:
@@ -320,13 +324,16 @@ class Supervisor:
                     "ready_at": s.ready_at, "error": s.error}
             port, offset = s.port or (infos[0]["port"] if infos else 8080), s.log_offset
         active = next((i for i in infos if i["id"] == snap["model"]), None)
+        h = health(port) if snap["status"] == "ready" else None
+        snap["warning"] = ("看圖程式已結束，傳圖片會失敗；關掉再開這個模型就會恢復"
+                           if h and active and active["vision"] != "關" and not h.get("images") else None)
         engine_log = Path(active["engine_log"]) if active and active["engine_log"] else None
         base = f"http://127.0.0.1:{port}"
         return {
             "server": snap,
             "api": {"base_url": base, "openai_base_url": f"{base}/v1", "anthropic_base_url": base,
                     "chat_url": f"{base}/", "api_key": self.api_key(),
-                    "key_required": bool((health(port) or {}).get("api_key")) if snap["status"] == "ready" else None,
+                    "key_required": bool(h.get("api_key")) if h else None,
                     "key_from_env": bool(os.environ.get("STRATA_API_KEY"))},
             "models": infos,
             "gpus": query_gpus(infos, active),
@@ -350,6 +357,17 @@ def health(port: int | None) -> dict[str, Any] | None:
             return data if isinstance(data, dict) and data.get("status") == "ok" else None
     except (urllib.error.URLError, OSError, ValueError):
         return None
+
+
+def engine_stopped(port: int | None) -> bool:
+    """server.py answers /health with 503 "engine stopped" once its engine process has ended."""
+    try:
+        urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=2).close()
+    except urllib.error.HTTPError as exc:
+        return exc.code == 503
+    except (urllib.error.URLError, OSError):
+        pass
+    return False
 
 
 def live_status(port: int) -> dict[str, Any] | None:

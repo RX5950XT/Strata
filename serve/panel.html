@@ -569,7 +569,7 @@ function renderModels(data) {
     let stateText = "";
     if (!m.ready) stateText = "引擎或模型檔不存在，先跑 START-HERE.bat --setup";
     else if (mine && myStatus === "starting") stateText = `載入中… ${fmtDuration(data.now - (server.started_at || data.now))}`;
-    else if (mine && myStatus === "ready") stateText = `已上線 ${fmtDuration(data.now - (server.ready_at || data.now))} · PID ${server.pid ?? "—"}`;
+    else if (mine && myStatus === "ready") stateText = `已上線 ${fmtDuration(data.now - (server.ready_at || data.now))} · PID ${server.pid ?? "—"}` + (server.warning ? ` · ⚠ ${server.warning}` : "");
     else if (mine && myStatus === "external") stateText = "在面板外開的，面板找不到它的程序，只能看；要關請關掉它的視窗";
     else if (mine && myStatus === "stopping") stateText = "正在釋放 GPU 與 RAM…";
     else if (mine && myStatus === "error") stateText = server.error || "啟動失敗";

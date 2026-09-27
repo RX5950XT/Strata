@@ -91,7 +91,8 @@ class StrataEngine:
         self.log_path = log
         self.log = open(log, "a", encoding="utf-8") if log else subprocess.DEVNULL
         self.proc = subprocess.Popen([exe, "--serve", *args], cwd=cwd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                     stderr=self.log, text=True, encoding="utf-8", bufsize=1, env=env)
+                                     stderr=self.log, text=True, encoding="utf-8", bufsize=1, env=env,
+                                     creationflags=NO_WINDOW)
         self.max_context = 0
         self.can_stop = False            # the engine honours a STOP line mid-request (READY <ctx> stop)
         self.last = {}
@@ -297,7 +298,7 @@ class Vision:
             args += ["--max-tokens", str(cfg["max_tokens"])]
         self.dir = Path(tempfile.mkdtemp(prefix="strata-vision-"))
         self.proc = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log or subprocess.DEVNULL,
-                                     text=True, encoding="utf-8", bufsize=1, env=env)
+                                     text=True, encoding="utf-8", bufsize=1, env=env, creationflags=NO_WINDOW)
         line = self.proc.stdout.readline()
         if not line.startswith("READY"):
             raise RuntimeError("the vision encoder did not start: " + line.strip())
@@ -374,6 +375,16 @@ class Vision:
             self.proc.wait(timeout=10)
         except Exception:
             self.proc.kill()
+
+
+# a console program started from a windowless process (pythonw: the control panel) would get a console window of its
+# own, and closing that window kills it
+NO_WINDOW = 0x08000000 if os.name == "nt" else 0       # CREATE_NO_WINDOW
+
+
+def alive(child) -> bool:
+    proc = getattr(child, "proc", None)
+    return proc is None or proc.poll() is None
 
 
 def child_env(cfg: dict, gpu: str | None = None) -> dict:
@@ -967,8 +978,11 @@ def make_handler(svc: Service):
                 self.end_headers()
                 self.wfile.write(body)
             elif path == "/health":
-                self._json(200, {"status": "ok", "max_context": svc.engine.max_context, "model": svc.model,
-                                 "images": svc.vision is not None, "api_key": bool(svc.api_key)})
+                engine_up = alive(svc.engine)           # server.py can outlive its engine: say so
+                self._json(200 if engine_up else 503,
+                           {"status": "ok" if engine_up else "engine stopped", "max_context": svc.engine.max_context,
+                            "model": svc.model, "images": svc.vision is not None and alive(svc.vision),
+                            "api_key": bool(svc.api_key)})
             elif path == "/status":
                 with svc.status_lock:
                     s = dict(svc.status)
