@@ -19,7 +19,7 @@ What the first run does (each step is skipped when it is already done):
   6. prepares the model for Strata and fetches the MTP draft layer (~5 GB, from the original Qwen checkpoint)
   7. writes run-<model>.bat / run-<model>.sh and starts the model
 
-Options: --family qwen|swift, --model Q2_0|IQ2_XS|IQ3_XXS|IQ3_S, --context 32768, --vision yes|no|gpu|cpu, --port 8080, --yes (recommended
+Options: --family qwen|swift|orca, --model Q2_0|IQ2_XS|IQ3_XXS|IQ3_S, --context 32768, --vision yes|no|gpu|cpu, --port 8080, --yes (recommended
 answers, no questions), --setup (install another model / change settings instead of starting), --no-start,
 --host 0.0.0.0 --api-key KEY (reach it from other devices on your network), --experimental-speed-projection on|off
 (EXPERIMENTAL, off by default),
@@ -87,6 +87,17 @@ FAMILIES = {
               "mmproj_hf": "https://huggingface.co/ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF/resolve/main/",
               "mmproj": "mmproj-Swift-Qwen3.8-Flash-Next-BF16.gguf", "name": "swift-1.5",
               "license": "Swift Open License 1.0: https://huggingface.co/ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF"},
+    "orca": {"title": "Uncensored", "by": "orcarouter's abliterated Qwen3.8-Flash-Next (imatrix quant, not GSQ-RCO)",
+             "about": "refusals removed; no safety filter, you are responsible for its use",
+             "hf": "https://huggingface.co/orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF/resolve/main/",
+             "file": "Qwen3.8-Flash-Next-Uncensored-{q}-0000{i}-of-00002.gguf", "tag": "orca-",
+             "mmproj_hf": "https://huggingface.co/orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF/resolve/main/",
+             "mmproj": "mmproj-Qwen3.8-Flash-Next-Uncensored-F16.gguf", "name": "qwen3.8-flash-next-uncensored",
+             "sizes": ["IQ3_XXS"], "download_gb": 85.2,
+             # its Q8_0 blk.1.ple_key needs the native_dense.cpp fix (Q2_0-only native key), which no ready-made
+             # engine has yet: compile the engine from this source
+             "build": True,
+             "license": "Apache 2.0: https://huggingface.co/orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF"},
 }
 MMPROJ = "mmproj-Qwen3.8-Flash-Next-BF16.gguf"
 # EXPERIMENTAL, off by default (setup asks): a control vector shipped with the repository, see its README
@@ -232,11 +243,21 @@ def _cpuid_avx512_full() -> bool:
 
 
 def gpu_info():
-    s = out(["nvidia-smi", "--query-gpu=name,memory.total,compute_cap,driver_version", "--format=csv,noheader,nounits"])
-    if not s.strip():
+    """The GPU the engine runs on: the one with the most VRAM (then the newest), not nvidia-smi's or CUDA's first
+    (CUDA orders "fastest first", which on an RTX 5060 Ti + 3060 Ti PC is the 3060 Ti).  "spare" is the best other
+    RTX 30+ card, if any: the image encoder goes there, so it takes no VRAM from the expert cache."""
+    s = out(["nvidia-smi", "--query-gpu=uuid,name,memory.total,compute_cap,driver_version", "--format=csv,noheader,nounits"])
+    gpus = []
+    for line in s.strip().splitlines():
+        f = [x.strip() for x in line.split(",")]
+        if len(f) == 5 and f[3].replace(".", "").isdigit():
+            gpus.append({"uuid": f[0], "name": f[1], "vram_gb": float(f[2]) / 1024.0, "arch": f[3].replace(".", ""),
+                         "driver": f[4]})
+    if not gpus:
         return None
-    name, mem, cc, drv = [x.strip() for x in s.strip().splitlines()[0].split(",")]
-    return {"name": name, "vram_gb": float(mem) / 1024.0, "arch": cc.replace(".", ""), "driver": drv}
+    gpus.sort(key=lambda g: (g["vram_gb"], int(g["arch"])), reverse=True)
+    spare = [g for g in gpus[1:] if int(g["arch"]) >= 80]
+    return {**gpus[0], "spare": spare[0] if spare else None}
 
 
 def find_nvcc():
@@ -642,7 +663,8 @@ def build_engine(gpu, vision, yes, llama) -> Path:
         say("  Compiling the image encoder" + (" with CUDA (10-20 minutes, once) ..." if vision == "gpu" else " ..."))
         defs = [f"-DLLAMA_DIR={llama}", f"-DSTRATA_VISION_CUDA={'ON' if vision == 'gpu' else 'OFF'}"]
         if vision == "gpu":
-            defs += [f"-DCMAKE_CUDA_ARCHITECTURES={gpu['arch']}", f"-DCMAKE_CUDA_COMPILER={nvcc}"]
+            archs = sorted({gpu["arch"], *([gpu["spare"]["arch"]] if gpu["spare"] else [])})
+            defs += [f"-DCMAKE_CUDA_ARCHITECTURES={';'.join(archs)}", f"-DCMAKE_CUDA_COMPILER={nvcc}"]
         cmake_build(ROOT / "tools" / "vision", ROOT / "build-vision", "strata-vision", defs, vcvars, "build-vision.bat")
         shutil.copy2(ROOT / "build-vision" / "bin" / VEXE, eng / VEXE)
     bindir = Path(nvcc).parent                            # the toolkit's own libraries (bin, bin/x64, lib64)
@@ -745,7 +767,7 @@ def write_run_script(model, cfg_path, port):
 # ------------------------------------------------------------------------------------------------ main
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--family", choices=list(FAMILIES), help="qwen = Qwen3.8-Flash-Next, swift = Swift 1.5")
+    ap.add_argument("--family", choices=list(FAMILIES), help="qwen = Qwen3.8-Flash-Next, swift = Swift 1.5, orca = uncensored")
     ap.add_argument("--model", choices=list(MODELS))
     ap.add_argument("--context", type=int)
     ap.add_argument("--kv", choices=["int8", "q4_0"],
@@ -798,6 +820,8 @@ def main() -> int:
              "install the NVIDIA driver from https://www.nvidia.com/drivers and restart the PC")
     ok(f"GPU: {gpu['name']}, {gpu['vram_gb']:.1f} GB VRAM, compute capability {gpu['arch'][:-1]}.{gpu['arch'][-1]}, "
        f"driver {gpu['driver']}")
+    if gpu["spare"]:
+        ok(f"second GPU: {gpu['spare']['name']}, {gpu['spare']['vram_gb']:.1f} GB (the image encoder runs there)")
     if int(gpu["arch"]) < 80:
         fail("this GPU is older than the RTX 30 series (compute capability 8.0 is required)")
     if driver_major(gpu) < MIN_DRIVER:
@@ -841,14 +865,14 @@ def main() -> int:
     if fam.get("license"):
         say(f"  Its license: {fam['license']}")
     say()
-    names = [m for m in MODELS if family in MODELS[m].get("families", FAMILIES)]
+    names = [m for m in fam.get("sizes", MODELS) if family in MODELS[m].get("families", FAMILIES)]
     if a.model and a.model not in names:
         fail(f"{fam['title']} has no {a.model} model file", "choose one of: " + ", ".join(names))
     for i, m in enumerate(names, 1):
         d = MODELS[m]
         fit = "" if ram >= d["ram_gb"] else f"   <- needs {d['ram_gb']} GB RAM, you have {ram:.0f}"
         say(f"  {i}) {m:8s} {d['about']}; download {d['download_gb']:.0f} GB, uses ~{d['arena_gb']:.0f} GB of RAM{fit}")
-    rec = str(names.index("IQ3_XXS") + 1) if ram >= 60 else "1"
+    rec = str(names.index("IQ3_XXS") + 1) if ram >= 60 and "IQ3_XXS" in names else "1"
     model = a.model or names[int(ask("Which size?", [str(i) for i in range(1, len(names) + 1)], rec, a.yes)) - 1]
     if ram < MODELS[model]["ram_gb"] - 4:
         fail(f"{model} needs about {MODELS[model]['ram_gb']} GB of RAM; this PC has {ram:.0f} GB",
@@ -886,7 +910,10 @@ def main() -> int:
     else:
         say()
         say("  Images: the model can also read pictures (screenshots, photos, scanned pages). This adds a 0.9 GB")
-        say("  download and keeps ~1.4 GB of VRAM free for the image encoder, so text is a few % slower.")
+        if gpu["spare"]:
+            say(f"  download; the image encoder runs on the {gpu['spare']['name']}, so text is not slowed down.")
+        else:
+            say("  download and keeps ~1.4 GB of VRAM free for the image encoder, so text is a few % slower.")
         vision = "gpu" if ask("Do you want images?", ["y", "n"], "n", a.yes) == "y" else "none"
     ok("images: " + {"none": "off", "gpu": "on", "cpu": "on (encoder on the CPU)"}[vision])
     # EXPERIMENTAL: the experimental-speed-projection control vector (data/experimental-speed-projection), off unless
@@ -911,7 +938,7 @@ def main() -> int:
     models_dir = Path(a.gguf_dir) if a.gguf_dir else Path(a.models_dir) / tag
     shards = [models_dir / fam["file"].format(q=model, i=i) for i in (1, 2)]
     have_model = all(s.exists() and (done(s) or a.gguf_dir) for s in shards)
-    need = (0 if a.gguf_dir or have_model else MODELS[model]["download_gb"]) + 8 + \
+    need = (0 if a.gguf_dir or have_model else fam.get("download_gb", MODELS[model]["download_gb"])) + 8 + \
         (40 if model == "Q2_0" and avx512 and family == "qwen" else 0) + (1 if vision != "none" else 0)
     if free_gb(models_dir) < need:
         fail(f"not enough free disk space in {models_dir}: need ~{need:.0f} GB", "use --models-dir on a bigger drive")
@@ -924,7 +951,7 @@ def main() -> int:
     step(4, "the Strata engine")
     llama = get_llama_cpp()
     ok(f"llama.cpp {LLAMA_CPP_COMMIT[:7]} (gguf-py, ggml, mtmd)")
-    eng = None if a.build else get_prebuilt(a.prebuilt, gpu, vision)
+    eng = None if a.build or fam.get("build") else get_prebuilt(a.prebuilt, gpu, vision)
     if eng is not None and json.loads((eng / "BUILD.json").read_text()).get("source") != "local":
         pip_install(CUDA_WHEELS, "NVIDIA CUDA libraries (cuBLAS, CUDA runtime; ~0.4 GB)")
         if vision != "none" and not (eng / VEXE).exists():
@@ -1027,7 +1054,7 @@ def main() -> int:
         # the package's profile, with llama.cpp's flags (the engine takes the same ones)
         args += ["--control-vector-scaled", f"{esp}:1.0", "--control-vector-layer-range", "4", "44",
                  "--cvec-mode", "project", "--cvec-dir", "per-layer"]
-    cfg = {"exe": str(eng / EXE), "args": args, "cwd": str(ROOT), "tokenizer": str(pack / "tokenizer"),
+    cfg = {"exe": str(eng / EXE), "args": args, "cwd": str(ROOT), "tokenizer": str(pack / "tokenizer"), "gpu": gpu["uuid"],
            "model_name": f"{fam['name']}-{model.lower()}", "log": str(ROOT / f"strata-{tag.lower()}.log"),
            "lib_dirs": lib_dirs, "port": port}
     if a.host:
@@ -1037,6 +1064,8 @@ def main() -> int:
     if vision != "none":
         cfg["vision"] = {"exe": str(eng / VEXE), "mmproj": str(mmproj), "model": str(shards[0]),
                          "gpu": vision == "gpu", "max_tokens": VISION[vision]["max_tokens"]}
+        if vision == "gpu" and gpu["spare"]:
+            cfg["vision"]["gpu_uuid"] = gpu["spare"]["uuid"]
         if vision == "cpu":
             cfg["vision"]["threads"] = max(1, (os.cpu_count() or 8) // 2)
     cfg_path = ROOT / f"strata-{tag.lower()}.json"

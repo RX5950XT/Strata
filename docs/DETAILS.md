@@ -121,6 +121,19 @@ thought about for 1,524 tokens. Not a benchmark, but consistent with the claim.
 START-HERE.bat --setup --family swift --model IQ2_XS
 ```
 
+### Or: Uncensored (orcarouter's abliterated build)
+
+**[orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF](https://huggingface.co/orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF)**
+is the original with its refusals removed (abliteration, Apache 2.0). It has no safety filter; you are responsible for
+how it is used. Only its **IQ3_XXS** fits Strata (85 GB download; its experts are 53.5 GB, 25% more than the GSQ-RCO
+IQ3_XXS, so it needs 96 GB of RAM for a long context and is ~10% slower). It is a plain imatrix quant: some small
+tensors are Q8_0 / Q6_K / IQ3_XXS, which the pack stores as BF16, and its Q8_0 PLE key needs an engine built from this
+source (setup compiles it). Its own abliterated MTP layer was measured and was not better than the original's.
+
+```
+START-HERE.bat --setup --family orca --model IQ3_XXS
+```
+
 ## Before you start
 
 You need **only an NVIDIA driver** (version 580 or newer; update it with the NVIDIA App or from
@@ -128,7 +141,7 @@ You need **only an NVIDIA driver** (version 580 or newer; update it with the NVI
 
 | | |
 | --- | --- |
-| GPU | NVIDIA **RTX 30, 40 or 50 series**, **12 GB VRAM or more** (8 GB runs, slowly). Measured on an RTX 5070; RTX 30/40 are untested. |
+| GPU | NVIDIA **RTX 30, 40 or 50 series**, **12 GB VRAM or more** (8 GB runs, slowly). Measured on an RTX 5070; RTX 30/40 are untested. With **two cards**, the model runs on the one with the most VRAM and the image encoder on the other (so images cost no VRAM); plug the monitor into the second card to give the model another 1-3 GB. |
 | RAM | **64 GB** recommended (see the table above). |
 | CPU | x86-64 with AVX2 (any Intel/AMD desktop CPU from the last ~8 years). AVX-512 (Ryzen 7000/9000) is a bit faster. |
 | Disk | ~70-80 GB free for the model, ~6 GB for the MTP layer (+1 GB with images). **Q2_0 on an AVX-512 CPU** also writes a one-time ~40 GB copy of its experts for the fast CPU kernel. An NVMe SSD is strongly recommended. |

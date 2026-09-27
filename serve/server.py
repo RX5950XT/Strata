@@ -376,14 +376,17 @@ class Vision:
             self.proc.kill()
 
 
-def child_env(cfg: dict) -> dict:
+def child_env(cfg: dict, gpu: str | None = None) -> dict:
     """The engine's environment: the CUDA libraries setup installed (pip's nvidia packages, or the toolkit that
-    compiled it) first on the library search path."""
+    compiled it) first on the library search path, and only the GPU setup chose visible (its UUID: CUDA's own
+    device 0 is not always the card with the most VRAM when a PC has two)."""
     env = dict(os.environ)
     dirs = [d for d in cfg.get("lib_dirs") or [] if Path(d).is_dir()]
     if dirs:
         var = "PATH" if os.name == "nt" else "LD_LIBRARY_PATH"
         env[var] = os.pathsep.join(dirs + ([env[var]] if env.get(var) else []))
+    if gpu:
+        env["CUDA_VISIBLE_DEVICES"] = gpu
     return env
 
 
@@ -1287,7 +1290,7 @@ def main() -> int:
         if not cfg:
             ap.error("--engine strata needs --config")
         vision = None
-        env = child_env(cfg)
+        env = child_env(cfg, cfg.get("gpu"))
         sampling_defaults = sampling_defaults_from_config(cfg)
         if sampling_defaults:
             pretty = ", ".join(f"{k}={v}" for k, v in sampling_defaults.items())
@@ -1295,7 +1298,7 @@ def main() -> int:
         if cfg.get("vision"):
             print("loading the vision encoder ...", flush=True)
             vision = Vision(cfg["vision"], log=open(cfg["log"], "a", encoding="utf-8") if cfg.get("log") else None,
-                            env=env)
+                            env=child_env(cfg, cfg["vision"].get("gpu_uuid") or cfg.get("gpu")))
         print("loading the model (the first start takes a minute or two) ...", flush=True)
         engine = StrataEngine(cfg["exe"], cfg["args"], cwd=cfg.get("cwd"), log=cfg.get("log"), env=env)
         warn_tight_ram(engine.info.get("arena_mib"))

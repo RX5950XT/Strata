@@ -41,6 +41,13 @@ import gguf_reader as G  # noqa: E402
 FLOAT = {"BF16", "F32", "F16"}
 ROUTERS = ("ffn_gate_inp.weight", "ffn_gate_inp_shexp.weight")
 NOT_IN_PACK = {"per_layer_token_embd.weight"}      # the 28.8 GB PLE table: read from its GGUF by the engine
+# what the engine serves natively from the GGUF (src/core/native_dense.cpp `eligible`, plus the head and embedding);
+# any other quantized tensor (e.g. the Q8_0 hyper-connection weights of llama.cpp's own quants) goes to dense.bin
+NATIVE_SUFFIXES = (".attn_qkv.weight", ".attn_gate.weight", ".ssm_out.weight", ".attn_q.weight", ".attn_k.weight",
+                   ".attn_v.weight", ".attn_output.weight", ".ffn_gate_shexp.weight", ".ffn_up_shexp.weight",
+                   ".ffn_down_shexp.weight")
+NATIVE_NAMES = {"token_embd.weight", "output.weight"}
+NATIVE_TYPES = {2, 6, 8, 11, 12, 13, 14, 16, 17, 18, 20, 21, 22, 23, 29, 42}      # native_mmvq_supported
 
 
 class Model:
@@ -91,6 +98,27 @@ def is_expert(name: str) -> bool:
     return name.startswith("blk.") and name.endswith(("_exps.weight",))
 
 
+def served_natively(t) -> bool:
+    if t.name in NATIVE_NAMES:
+        return True
+    if t.name == "blk.1.ple_key.weight":                 # the native PLE key kernel takes Q2_0 only
+        return t.type_id == 42
+    named = t.name.startswith("blk.") and t.name.endswith(NATIVE_SUFFIXES)
+    return named and t.type_id in NATIVE_TYPES
+
+
+def dequantized_bf16(mm, g, t) -> bytes:
+    """A quantized tensor the engine cannot serve natively, as BF16 (round to nearest even) - the form the
+    GSQ-RCO files store these tensors in."""
+    from _paths import add_gguf_py
+    add_gguf_py()
+    from gguf.quants import dequantize
+    from gguf.constants import GGMLQuantizationType
+    f = dequantize(np.asarray(tensor_bytes(mm, g, t)), GGMLQuantizationType(t.type_id)).astype(np.float32).ravel()
+    u = f.view(np.uint32)
+    return ((u + 0x7FFF + ((u >> 16) & 1)) >> 16).astype(np.uint16).tobytes()
+
+
 def index_standalone(src, out, model: Model) -> int:
     """Every non-expert tensor of the model: floats into dense.bin as stored (exact-BF16 F32 routers as BF16),
     quantized ones native-only."""
@@ -105,9 +133,12 @@ def index_standalone(src, out, model: Model) -> int:
                 return 1
             ne0 = int(t.shape[0])
             ne1 = int(t.shape[1]) if len(t.shape) > 1 else 0
-            if t.type_name in FLOAT:
-                raw = tensor_bytes(mm, g, t).tobytes()
-                kind = {"BF16": "4", "F16": "5", "F32": "2"}[t.type_name]
+            if t.type_name in FLOAT or not served_natively(t):
+                if t.type_name in FLOAT:
+                    raw = tensor_bytes(mm, g, t).tobytes()
+                    kind = {"BF16": "4", "F16": "5", "F32": "2"}[t.type_name]
+                else:
+                    raw, kind = dequantized_bf16(mm, g, t), "4"
                 if t.type_name == "F32" and t.name.endswith(ROUTERS):
                     u = np.frombuffer(raw, dtype=np.uint32)
                     if np.count_nonzero(u & 0xFFFF):
