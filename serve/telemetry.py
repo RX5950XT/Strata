@@ -47,8 +47,12 @@ class _Nvml:
                 self.lib = None
                 return
             h = ctypes.c_void_p()
-            get = getattr(self.lib, "nvmlDeviceGetHandleByIndex_v2", None) or self.lib.nvmlDeviceGetHandleByIndex
-            if get(ctypes.c_uint(index), ctypes.byref(h)) != 0:
+            if isinstance(index, str):                  # a config's GPU uuid
+                found = self.lib.nvmlDeviceGetHandleByUUID(index.encode(), ctypes.byref(h))
+            else:
+                get = getattr(self.lib, "nvmlDeviceGetHandleByIndex_v2", None) or self.lib.nvmlDeviceGetHandleByIndex
+                found = get(ctypes.c_uint(int(index)), ctypes.byref(h))
+            if found != 0:
                 self.lib = None
                 return
             self.dev = h
@@ -169,13 +173,14 @@ class _CpuRamFallback:
 
 # ------------------------------------------------------------------------------------------------ the sampler
 class Telemetry:
-    def __init__(self, extra=None):
-        """`extra()` -> dict of more series to record each second (the server's tok/s)."""
+    def __init__(self, extra=None, gpu_index=0):
+        """`extra()` -> dict of more series to record each second (the server's tok/s).  `gpu_index`: the card the
+        engine runs on, numbered as nvidia-smi and NVML number them (by PCI bus), or its uuid."""
         self.extra = extra
         self.lock = threading.Lock()
         self.now: dict = {}
         self.hist = collections.defaultdict(lambda: collections.deque(maxlen=HISTORY))
-        self.gpu = _Nvml()
+        self.gpu = _Nvml(gpu_index)
         try:
             import psutil  # noqa: F401
             self.ps = sys.modules["psutil"]
