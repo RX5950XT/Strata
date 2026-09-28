@@ -511,6 +511,16 @@ void drive_pool_multi(void* user, const float* x_f, const int32_t* ids, int64_t 
     strata::core::expert_pool_dispatch_multi(t->d, x_f, ids, n_tok, k, out);
     t->cpu_ms += std::chrono::duration<double, std::milli>(Clock::now() - a).count();
     ++t->calls;
+    // the routing trace, one record per token of the window (drive_pool's format; the weights are not here: 0)
+    if (t->routing != nullptr && layer >= 0 && layer < 48) {
+        const std::vector<float> zero((size_t) k, 0.f);
+        for (int64_t i = 0; i < n_tok; ++i) {
+            const int32_t rec[2] = {(int32_t) layer, (int32_t) k};
+            std::fwrite(rec, sizeof rec, 1, t->routing);
+            std::fwrite(ids + i * k, sizeof(int32_t), (size_t) k, t->routing);
+            std::fwrite(zero.data(), sizeof(float), (size_t) k, t->routing);
+        }
+    }
 }
 
 // ---- issue #31: what the watchdog prints before it stops a stalled engine
