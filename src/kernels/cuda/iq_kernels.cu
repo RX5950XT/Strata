@@ -347,6 +347,47 @@ __global__ void __launch_bounds__(128) mmvq_kernel(const uint8_t* __restrict__ w
     }
 }
 
+// The same rows for NC tokens with the tokens innermost: the row is read and its blocks decoded once for all of
+// them (the compiler shares the weight loads and lookups across the unrolled calls).  Each token's partial sums
+// run in the same k order and meet in the same warp_sum, so every output is bitwise `mmvq_kernel`'s.
+template<int TY, int NC>
+__global__ void __launch_bounds__(128) mmvq_nc_kernel(const uint8_t* __restrict__ w, size_t row_bytes,
+                                                      const block_q8_1* __restrict__ x, float* __restrict__ y, int n_in,
+                                                      int n_out) {
+    using F = Fmt<TY>;
+    const int row = blockIdx.x * 4 + threadIdx.y;
+    if (row >= n_out) return;
+    const int lane = threadIdx.x;
+    const int nb = n_in / F::qk;
+    const uint8_t* wr = w + (size_t) row * row_bytes;
+    float s[NC];
+#pragma unroll
+    for (int c = 0; c < NC; ++c) s[c] = 0.0f;
+    for (int k = lane; k < nb * F::ipb; k += 32) {
+        const int kbx = k / F::ipb, iqs = F::step * (k % F::ipb);
+#pragma unroll
+        for (int c = 0; c < NC; ++c) s[c] += F::dot(wr, x + (size_t) c * (n_in / 32) + kbx * (F::qk / 32), kbx, iqs);
+    }
+#pragma unroll
+    for (int c = 0; c < NC; ++c) {
+        const float v = warp_sum(s[c]);
+        if (lane == 0) y[(size_t) c * n_out + row] = v;
+    }
+}
+
+template<int TY>
+void mmvq_launch(dim3 grid, dim3 block, cudaStream_t s, const uint8_t* W, size_t rb, const block_q8_1* X, float* y,
+                 int n_in, int n_out, int ncols) {
+    switch (ncols) {
+        case 2: mmvq_nc_kernel<TY, 2><<<grid, block, 0, s>>>(W, rb, X, y, n_in, n_out); break;
+        case 3: mmvq_nc_kernel<TY, 3><<<grid, block, 0, s>>>(W, rb, X, y, n_in, n_out); break;
+        case 4: mmvq_nc_kernel<TY, 4><<<grid, block, 0, s>>>(W, rb, X, y, n_in, n_out); break;
+        case 5: mmvq_nc_kernel<TY, 5><<<grid, block, 0, s>>>(W, rb, X, y, n_in, n_out); break;
+        case 6: mmvq_nc_kernel<TY, 6><<<grid, block, 0, s>>>(W, rb, X, y, n_in, n_out); break;
+        default: mmvq_kernel<TY><<<grid, block, 0, s>>>(W, rb, X, y, n_in, n_out, ncols); break;
+    }
+}
+
 // ---------------------------------------------------------------- grouped native experts
 constexpr int GU_ROWS = 8;     // rows per block (one warp each)
 
@@ -651,15 +692,15 @@ void iq_mmvq(int t, const void* w, const void* x_q8_1, float* y, int n_in, int n
     const auto* W = (const uint8_t*) w;
     const auto* X = (const block_q8_1*) x_q8_1;
     switch (t) {
-        case 16: mmvq_kernel<16><<<grid, block, 0, s>>>(W, rb, X, y, n_in, n_out, ncols); break;
-        case 17: mmvq_kernel<17><<<grid, block, 0, s>>>(W, rb, X, y, n_in, n_out, ncols); break;
-        case 18: mmvq_kernel<18><<<grid, block, 0, s>>>(W, rb, X, y, n_in, n_out, ncols); break;
-        case 20: mmvq_kernel<20><<<grid, block, 0, s>>>(W, rb, X, y, n_in, n_out, ncols); break;
-        case 21: mmvq_kernel<21><<<grid, block, 0, s>>>(W, rb, X, y, n_in, n_out, ncols); break;
-        case 22: mmvq_kernel<22><<<grid, block, 0, s>>>(W, rb, X, y, n_in, n_out, ncols); break;
-        case 23: mmvq_kernel<23><<<grid, block, 0, s>>>(W, rb, X, y, n_in, n_out, ncols); break;
-        case 29: mmvq_kernel<29><<<grid, block, 0, s>>>(W, rb, X, y, n_in, n_out, ncols); break;
-        case 42: mmvq_kernel<42><<<grid, block, 0, s>>>(W, rb, X, y, n_in, n_out, ncols); break;
+        case 16: mmvq_launch<16>(grid, block, s, W, rb, X, y, n_in, n_out, ncols); break;
+        case 17: mmvq_launch<17>(grid, block, s, W, rb, X, y, n_in, n_out, ncols); break;
+        case 18: mmvq_launch<18>(grid, block, s, W, rb, X, y, n_in, n_out, ncols); break;
+        case 20: mmvq_launch<20>(grid, block, s, W, rb, X, y, n_in, n_out, ncols); break;
+        case 21: mmvq_launch<21>(grid, block, s, W, rb, X, y, n_in, n_out, ncols); break;
+        case 22: mmvq_launch<22>(grid, block, s, W, rb, X, y, n_in, n_out, ncols); break;
+        case 23: mmvq_launch<23>(grid, block, s, W, rb, X, y, n_in, n_out, ncols); break;
+        case 29: mmvq_launch<29>(grid, block, s, W, rb, X, y, n_in, n_out, ncols); break;
+        case 42: mmvq_launch<42>(grid, block, s, W, rb, X, y, n_in, n_out, ncols); break;
         default: std::fprintf(stderr, "iq_mmvq: type %d is not supported\n", t); std::exit(1);
     }
     check("iq_mmvq");

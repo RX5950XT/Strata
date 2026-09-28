@@ -90,6 +90,11 @@ void moe_hit_grouped_s2_dev(const uint8_t* blob_base, const int32_t* slot_index,
                             void* scratch, float* out, void* stream, const float* x_scales);
 void moe_hit_add(float* parts, const float* hit_out, const int32_t* dst, const int32_t* count, int64_t cap,
                  int64_t n_embd, void* stream);
+/// `copy_from_mapped` + `moe_hit_add` in one pass for `rows` entries: an entry listed in `dst[0..*count)` takes its
+/// row of `hit_out`, every other entry its row of the host's mapped buffer - so only the rows the host computed
+/// cross PCIe, and the host need not zero the GPU's rows.
+void moe_rows_from_mapped(float* parts, const float* mapped, const float* hit_out, const int32_t* dst,
+                          const int32_t* count, int64_t rows, int64_t n_embd, void* stream);
 /// Plan v0.3 P6 verify window: `moe_hit_select` over `n` <= 128 routed entries (T tokens x k, flattened), and the
 /// hit kernel with one activation PER TOKEN - entry `dst` reads token `dst / k_per_token`'s rows of `x_q8_0`
 /// ((n_embd/32)*34 bytes each) and `x_scales` (n_embd/32 floats each).  Per hit, bitwise `moe_hit_grouped_s2_dev`.

@@ -308,7 +308,9 @@ void expert_pool_dispatch_multi(ExpertDispatch& d, const float* x_f, const int32
         }
         second = d.expert_gpu->launch(d.layers, x_f, ids, (int) n_tok, (int) k, out, kind, /*pcie=*/true);
     }
-    if (d.plan != nullptr && n <= 128 && n <= d.plan->cap) {
+    // with a plan the GPU takes its own rows from its results (moe_rows_from_mapped): the host skips zeroing them
+    const bool planned = d.plan != nullptr && n <= 128 && n <= d.plan->cap;
+    if (planned) {
         int64_t distinct[128], first_of[128];
         int nd = 0, nmiss = 0;
         for (int64_t i = 0; i < n; ++i) {
@@ -422,7 +424,7 @@ void expert_pool_dispatch_multi(ExpertDispatch& d, const float* x_f, const int32
             }
             if (kind[i] >= 0) {             // the GPU computes this entry (a VRAM hit or a PCIe read)
                 if (kind[i] == 0) ++d.cache_hits;
-                std::memset(row, 0, (size_t) H * sizeof(float));
+                if (!planned) std::memset(row, 0, (size_t) H * sizeof(float));
                 continue;
             }
             ++d.cache_refused;
