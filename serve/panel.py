@@ -392,7 +392,7 @@ class Supervisor:
                     "key_from_env": bool(os.environ.get("STRATA_API_KEY"))},
             "models": infos,
             "gpus": query_gpus(infos, active),
-            "gpu_apps": query_gpu_apps(),
+            "gpu_apps": query_gpu_apps(gpu_roles(infos, active)),
             "ram": ram_usage(),
             "live": live_status(port) if snap["status"] in {"ready", "external"} else None,
             "session": session_stats(engine_log, offset if snap["status"] != "external" else 0),
@@ -490,8 +490,7 @@ def session_stats(log: Path | None, offset: int) -> dict[str, Any]:
 def query_gpus(infos: list[dict[str, Any]], active: dict[str, Any] | None) -> list[dict[str, Any]]:
     keys = ("uuid", "index", "name", "memory_used_mib", "memory_total_mib", "util_pct", "temp_c", "power_w",
             "power_limit_w")
-    # the model that is on; with nothing running, every installed config, as before
-    roles = assign_gpu_roles([active] if active else infos)
+    roles = gpu_roles(infos, active)
     gpus = []
     for row in smi(["--query-gpu=uuid,index,name,memory.used,memory.total,utilization.gpu,temperature.gpu,"
                     "power.draw,power.limit", "--format=csv,noheader,nounits"]):
@@ -505,14 +504,25 @@ def query_gpus(infos: list[dict[str, Any]], active: dict[str, Any] | None) -> li
     return gpus
 
 
-def query_gpu_apps() -> list[dict[str, Any]]:
-    """Strata's own processes on the GPUs (WDDM lists every desktop app, without per-app memory)."""
+def gpu_roles(infos: list[dict[str, Any]], active: dict[str, Any] | None) -> dict[str, str]:
+    # the model that is on; with nothing running, every installed config, as before
+    return assign_gpu_roles([active] if active else infos)
+
+
+def query_gpu_apps(roles: dict[str, str]) -> list[dict[str, Any]]:
+    """Strata's own processes on the GPUs (WDDM lists every desktop app, without per-app memory).
+    The engine runs the second expert card from a helper strata.exe that sees only that card (docs/DUAL-GPU.md)."""
     apps: dict[str, dict[str, Any]] = {}
     for row in smi(["--query-compute-apps=pid,process_name,used_memory,gpu_uuid", "--format=csv,noheader,nounits"]):
         if len(row) == 4 and "strata" in row[1].lower():
             entry = apps.setdefault(row[0], {"pid": row[0], "name": Path(row[1].replace("\\", "/")).name,
-                                             "memory_mib": number(row[2]), "gpus": 0})
+                                             "memory_mib": number(row[2]), "gpus": 0, "on": []})
             entry["gpus"] += 1
+            entry["on"].append(roles.get(row[3]) or "")
+    for a in apps.values():
+        on = a.pop("on")
+        a["role"] = ("第二張卡的專家助手" if a["name"].lower() == "strata.exe"
+                     and all("專家" in r and "跑模型" not in r for r in on) else None)
     return list(apps.values())
 
 

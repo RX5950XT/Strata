@@ -705,7 +705,7 @@ function renderApps(data) {
     return;
   }
   box.replaceChildren(el("dl", { class: "kv" }, ...apps.flatMap((a) => [
-    el("dt", { text: `${a.name} · PID ${a.pid}` }),
+    el("dt", { text: `${a.name}${a.role ? `（${a.role}）` : ""} · PID ${a.pid}` }),
     el("dd", { text: a.memory_mib == null ? `在 ${a.gpus} 張卡上` : `${fmtInt(a.memory_mib)} MiB` }),
   ])));
 }
