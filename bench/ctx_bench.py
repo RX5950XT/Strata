@@ -318,6 +318,9 @@ def write_results(out, data):
         if entry.get("skipped"):
             rows.append(f"| {entry['target']} | skipped: {entry['skipped']} | | | | | | |")
             continue
+        if "median" not in entry:            # the run failed: keep the rows that finished
+            rows.append(f"| {entry['target']} | failed | | | | | | |")
+            continue
         result = entry["median"]
         gpu = [str(x["memory_mib"]) for x in result["peaks"]["gpus"].values()]
         values = [entry["target"], result["prompt_tokens"], result["ttft_s"], result["prefill_tok_s"],
@@ -413,6 +416,10 @@ def measure_contexts(a, contexts, data, samples, errors, base, limit, key, sourc
         for rep in range(a.repeat if target <= 8192 else 1):
             nonce = f"{a.nonce}-{target}-{rep}" if a.nonce else None
             prompt, estimate = build_prompt(target, source, counter, ratio, nonce)
+            shrink = 0
+            while limit < estimate and shrink < 64:  # token boundaries can land a token or two past the target
+                shrink += estimate - limit
+                prompt, estimate = build_prompt(target - shrink, source, counter, ratio, nonce)
             if estimate > limit:
                 raise ValueError(f"prompt estimate {estimate} exceeds safe limit {limit}")
             result = request_one(base + "/v1/chat/completions", prompt, a.max_tokens, key, samples, log)
