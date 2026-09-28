@@ -1,0 +1,300 @@
+strata serve: prompt 76350 tokens = 76202 reused + 148 read in 3011 ms (49.2 tok/s), 826 generated in 38699 ms (21.3 tok/s), drafts accepted 560 of 677, 6 checkpoints
+strata serve: prompt 77259 tokens = 77178 reused + 81 read in 2384 ms (34.0 tok/s), 275 generated in 13578 ms (20.3 tok/s), drafts accepted 176 of 236, 6 checkpoints
+strata serve: prompt 77582 tokens = 77533 reused + 49 read in 1679 ms (29.2 tok/s), 1142 generated in 54425 ms (21.0 tok/s), drafts accepted 744 of 1008, 6 checkpoints
+strata serve: prompt 78744 tokens = 78725 reused + 19 read in 1281 ms (14.8 tok/s), 113 generated in 7880 ms (14.3 tok/s), drafts accepted 81 of 87, 6 checkpoints
+strata serve: prompt 78913 tokens = 78858 reused + 55 read in 3011 ms (18.3 tok/s), 781 generated in 42397 ms (18.4 tok/s), drafts accepted 507 of 697, 6 checkpoints
+strata serve: prompt 79849 tokens = 79693 reused + 156 read in 3174 ms (49.1 tok/s), 1190 generated in 60905 ms (19.5 tok/s), drafts accepted 773 of 1024, 6 checkpoints
+strata serve: prompt 81051 tokens = 81040 reused + 11 read in 443 ms (24.8 tok/s), 791 generated in 37194 ms (21.3 tok/s), drafts accepted 511 of 677, 6 checkpoints
+strata serve: prompt 81963 tokens = 81844 reused + 119 read in 2514 ms (47.3 tok/s), 694 generated in 31953 ms (21.7 tok/s), drafts accepted 442 of 601, 6 checkpoints
+strata serve: prompt 82744 tokens = 82656 reused + 88 read in 2419 ms (36.4 tok/s), 1079 generated in 48678 ms (22.2 tok/s), drafts accepted 725 of 881, 6 checkpoints
+strata serve: prompt 83926 tokens = 82739 reused + 1187 read in 6238 ms (190.3 tok/s), 2603 generated in 112099 ms (23.2 tok/s), drafts accepted 1817 of 2076, 6 checkpoints
+strata serve: prompt 44727 tokens = 0 reused + 44727 read in 114085 ms (392.1 tok/s), 1439 generated in 70041 ms (20.5 tok/s), drafts accepted 898 of 1226, 3 checkpoints
+strata serve: prompt 35556 tokens = 0 reused + 35556 read in 90943 ms (391.0 tok/s), 137 generated in 6717 ms (20.4 tok/s), drafts accepted 91 of 116, 3 checkpoints
+strata serve: prompt 36686 tokens = 35692 reused + 994 read in 5553 ms (179.0 tok/s), 179 generated in 8684 ms (20.6 tok/s), drafts accepted 115 of 171, 4 checkpoints
+strata serve: prompt 37286 tokens = 36867 reused + 419 read in 4154 ms (100.9 tok/s), 239 generated in 11266 ms (21.2 tok/s), drafts accepted 161 of 205, 5 checkpoints
+strata serve: prompt 45850 tokens = 37524 reused + 8326 read in 26514 ms (314.0 tok/s), 337 generated in 16024 ms (21.0 tok/s), drafts accepted 228 of 291, 6 checkpoints
+strata serve: prompt 46352 tokens = 46186 reused + 166 read in 2634 ms (63.0 tok/s), 246 generated in 10604 ms (23.2 tok/s), drafts accepted 163 of 206, 6 checkpoints
+strata serve: prompt 46714 tokens = 46597 reused + 117 read in 2163 ms (54.1 tok/s), 280 generated in 12969 ms (21.6 tok/s), drafts accepted 184 of 235, 6 checkpoints
+strata serve: prompt 47989 tokens = 46993 reused + 996 read in 5134 ms (194.0 tok/s), 359 generated in 16487 ms (21.8 tok/s), drafts accepted 239 of 296, 6 checkpoints
+strata serve: prompt 48497 tokens = 48347 reused + 150 read in 2535 ms (59.2 tok/s), 293 generated in 11211 ms (26.1 tok/s), drafts accepted 199 of 227, 6 checkpoints
+strata serve: prompt 49053 tokens = 48789 reused + 264 read in 3173 ms (83.2 tok/s), 314 generated in 15138 ms (20.7 tok/s), drafts accepted 213 of 280, 6 checkpoints
+strata serve: prompt 49385 tokens = 49366 reused + 19 read in 1309 ms (14.5 tok/s), 1169 generated in 42597 ms (27.4 tok/s), drafts accepted 847 of 919, 6 checkpoints
+strata serve: prompt 49397 tokens = 49380 reused + 17 read in 654 ms (26.0 tok/s), 2851 generated in 126146 ms (22.6 tok/s), drafts accepted 1990 of 2299, 6 checkpoints
+strata serve: prompt 52274 tokens = 52249 reused + 25 read in 1038 ms (24.1 tok/s), 1146 generated in 54766 ms (20.9 tok/s), drafts accepted 819 of 937, 6 checkpoints
+strata serve: prompt 53435 tokens = 53419 reused + 16 read in 700 ms (22.9 tok/s), 85 generated in 4114 ms (20.7 tok/s), drafts accepted 59 of 70, 6 checkpoints
+strata serve: prompt 54129 tokens = 53520 reused + 609 read in 4354 ms (139.9 tok/s), 628 generated in 25337 ms (24.8 tok/s), drafts accepted 444 of 505, 6 checkpoints
+strata serve: prompt 54140 tokens = 54124 reused + 16 read in 670 ms (23.9 tok/s), 1751 generated in 73281 ms (23.9 tok/s), drafts accepted 1233 of 1393, 6 checkpoints
+strata serve: prompt 55911 tokens = 55890 reused + 21 read in 910 ms (23.1 tok/s), 55 generated in 3139 ms (17.5 tok/s), drafts accepted 36 of 50, 6 checkpoints
+strata serve: prompt 55986 tokens = 55965 reused + 21 read in 769 ms (27.3 tok/s), 158 generated in 6963 ms (22.7 tok/s), drafts accepted 108 of 128, 6 checkpoints
+strata serve: prompt 56247 tokens = 56143 reused + 104 read in 2190 ms (47.5 tok/s), 40 generated in 1717 ms (23.3 tok/s), drafts accepted 22 of 33, 6 checkpoints
+strata serve: prompt 56300 tokens = 56286 reused + 14 read in 424 ms (33.0 tok/s), 45 generated in 1528 ms (29.5 tok/s), drafts accepted 29 of 34, 6 checkpoints
+strata serve: prompt 592 tokens = 0 reused + 592 read in 4671 ms (126.7 tok/s), 99 generated in 5016 ms (19.7 tok/s), drafts accepted 62 of 92, 1 checkpoints
+strata serve: prompt 19055 tokens = 0 reused + 19055 read in 49081 ms (388.2 tok/s), 186 generated in 9773 ms (19.0 tok/s), drafts accepted 118 of 163, 2 checkpoints
+strata serve: prompt 19665 tokens = 19240 reused + 425 read in 3580 ms (118.7 tok/s), 74 generated in 2971 ms (24.9 tok/s), drafts accepted 52 of 64, 3 checkpoints
+strata serve: prompt 20160 tokens = 19741 reused + 419 read in 3961 ms (105.8 tok/s), 194 generated in 9467 ms (20.5 tok/s), drafts accepted 130 of 170, 4 checkpoints
+strata serve: prompt 21072 tokens = 20353 reused + 719 read in 4257 ms (168.9 tok/s), 224 generated in 11062 ms (20.2 tok/s), drafts accepted 142 of 197, 5 checkpoints
+strata serve: prompt 40483 tokens = 21295 reused + 19188 read in 50876 ms (377.2 tok/s), 269 generated in 11726 ms (22.9 tok/s), drafts accepted 184 of 215, 6 checkpoints
+strata serve: prompt 47641 tokens = 40754 reused + 6887 read in 21184 ms (325.1 tok/s), 476 generated in 28106 ms (16.9 tok/s), drafts accepted 280 of 430, 6 checkpoints
+strata serve: prompt 48320 tokens = 48118 reused + 202 read in 3480 ms (58.0 tok/s), 169 generated in 10007 ms (16.9 tok/s), drafts accepted 100 of 148, 6 checkpoints
+strata serve: prompt 48541 tokens = 48489 reused + 52 read in 2415 ms (21.5 tok/s), 575 generated in 28372 ms (20.3 tok/s), drafts accepted 330 of 501, 6 checkpoints
+strata serve: prompt 50905 tokens = 49115 reused + 1790 read in 6396 ms (279.9 tok/s), 501 generated in 22915 ms (21.9 tok/s), drafts accepted 291 of 396, 6 checkpoints
+strata serve: prompt 52005 tokens = 51407 reused + 598 read in 4310 ms (138.8 tok/s), 465 generated in 22858 ms (20.3 tok/s), drafts accepted 273 of 394, 6 checkpoints
+strata serve: prompt 52543 tokens = 52471 reused + 72 read in 2362 ms (30.5 tok/s), 544 generated in 23789 ms (22.9 tok/s), drafts accepted 314 of 457, 6 checkpoints
+strata serve: prompt 53107 tokens = 53086 reused + 21 read in 719 ms (29.2 tok/s), 214 generated in 8818 ms (24.3 tok/s), drafts accepted 138 of 190, 6 checkpoints
+strata serve: prompt 53405 tokens = 53321 reused + 84 read in 2244 ms (37.4 tok/s), 72 generated in 3131 ms (23.0 tok/s), drafts accepted 50 of 58, 6 checkpoints
+strata serve: prompt 53933 tokens = 53477 reused + 456 read in 4101 ms (111.2 tok/s), 864 generated in 42493 ms (20.3 tok/s), drafts accepted 487 of 718, 6 checkpoints
+strata serve: prompt 55531 tokens = 54796 reused + 735 read in 4914 ms (149.6 tok/s), 732 generated in 32422 ms (22.6 tok/s), drafts accepted 427 of 603, 6 checkpoints
+strata serve: prompt 56516 tokens = 56264 reused + 252 read in 2912 ms (86.5 tok/s), 1329 generated in 59345 ms (22.4 tok/s), drafts accepted 765 of 1112, 6 checkpoints
+strata serve: prompt 58259 tokens = 57846 reused + 413 read in 4060 ms (101.7 tok/s), 1690 generated in 85368 ms (19.8 tok/s), drafts accepted 962 of 1476, 6 checkpoints
+strata serve: prompt 60452 tokens = 59951 reused + 501 read in 3863 ms (129.7 tok/s), 552 generated in 26152 ms (21.1 tok/s), drafts accepted 343 of 464, 6 checkpoints
+strata serve: prompt 61106 tokens = 61003 reused + 103 read in 2384 ms (43.2 tok/s), 1121 generated in 62889 ms (17.8 tok/s), drafts accepted 572 of 947, 6 checkpoints
+strata serve: prompt 62247 tokens = 62226 reused + 21 read in 967 ms (21.7 tok/s), 517 generated in 31620 ms (16.4 tok/s), drafts accepted 291 of 482, 6 checkpoints
+strata serve: prompt 63131 tokens = 62763 reused + 368 read in 3827 ms (96.2 tok/s), 851 generated in 39274 ms (21.7 tok/s), drafts accepted 562 of 734, 6 checkpoints
+strata serve: prompt 64002 tokens = 63984 reused + 18 read in 720 ms (25.0 tok/s), 196 generated in 10632 ms (18.4 tok/s), drafts accepted 111 of 153, 6 checkpoints
+load_hparams: Qwen-VL models require at minimum 1024 image tokens to function correctly on grounding tasks
+load_hparams: if you encounter problems with accuracy, try adding --image-min-tokens 1024
+load_hparams: more info: https://github.com/ggml-org/llama.cpp/issues/16842
+
+strata-vision: warmed up at 1024 image tokens
+strata generate: this CPU has no AVX-512: the expert kernels run on AVX2
+strata generate: native pack: D:\Workspace\Personal_Project\Strata\packs\orca-iq3_xxs experts (largest blob 2.18 MB), token embedding type 21 in mapped host memory (260 MiB)
+strata generate: 1466 MiB of weights loaded from D:\Workspace\Personal_Project\Strata\packs\orca-iq3_xxs (302 canonical tensors skipped: served natively)
+strata generate: 300 native projection matrices, 1225.20 MiB of weights
+strata generate: PLE on, table 320001536 rows of D:\Workspace\Personal_Project\Strata\models\orca-IQ3_XXS\Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf
+strata generate: expert arena: locked 2 MiB via working-set minimum + VirtualLock; cudaHostRegister of the whole arena FAILED (out of memory); 48 slices pinned (49 GiB); large pages refused (GetLargePageMinimum=2097152, VirtualAlloc error 87 - needs SeLockMemoryPrivilege); using 4 KB pages
+strata generate: loaded 49.80 GiB at 1.46 GiB/s
+strata mtp: draft layer loaded, 1044 MiB of VRAM (experts 675, dense 111)
+strata generate: profile D:\Workspace\Personal_Project\Strata\data\expert-profile.bin: 8000 ranked pairs, built for 8000 slots
+strata generate: expert cache auto: 8.14 GiB free, 700 MiB reserved -> 3677 slots
+strata generate: only 0 MiB free once the slots are written (reserve 700 MiB); shrinking the expert cache
+strata generate: expert cache 2757 slots, 5.59 GiB of VRAM; policy is
+strata generate: *** WARNING: --expert-cache is enabled and the GPU hit path is NOT
+                 CORRECT. The generated tokens diverge from a cache-off run (measured:
+                 first difference at token 40 at 2.97% hits, token 0 at 54.4%). Any
+                 timing from this run is real; any OUTPUT from it is not. ***
+                 PROFILE, ranked by routing frequency, no eviction.
+strata generate: pre-filled 2757 of 2757 slots from the profile; slot 0 verified
+strata generate: R4 hit path ON - resident experts are computed on the GPU
+strata generate: 7 expert-pool workers + the host thread
+strata generate: session is up; locating the head
+strata generate: experimental native Q5_K head, 437043200 bytes
+strata generate: token graph hit path: 2757 resident experts, decided on the device
+strata serve: prompt chunk 8192 -> 4096 tokens so its buffers fit in the expert cache
+strata serve: the prompt path borrows 1426 cache slots (2.89 GiB)
+strata verify: window up to 4 tokens, 56.2 MiB of device buffers
+strata mtp: draft head over 40525 tokens (68.0 MiB)
+strata serve: 1115 MiB of VRAM free with everything loaded
+strata serve: prompt 80499 tokens = 0 reused + 80499 read in 11062 ms (7276.8 tok/s), 0 generated in 0 ms (0.0 tok/s), drafts accepted 0 of 0, 0 checkpoints (cancelled)
+strata verify: captured the 4-token window (upload no error, sync no error)
+strata verify: captured the 1-token window (upload no error, sync no error)
+strata verify: captured the 2-token window (upload no error, sync no error)
+strata verify: captured the 3-token window (upload no error, sync no error)
+strata serve: prompt 80505 tokens = 0 reused + 80505 read in 218382 ms (368.6 tok/s), 1767 generated in 91743 ms (19.3 tok/s), drafts accepted 967 of 1472, 5 checkpoints
+strata serve: prompt 82468 tokens = 82271 reused + 197 read in 4025 ms (48.9 tok/s), 220 generated in 13217 ms (16.6 tok/s), drafts accepted 136 of 209, 6 checkpoints
+strata serve: prompt 83491 tokens = 82687 reused + 804 read in 6433 ms (125.0 tok/s), 335 generated in 18200 ms (18.4 tok/s), drafts accepted 208 of 286, 6 checkpoints
+strata serve: prompt 84776 tokens = 83825 reused + 951 read in 6451 ms (147.4 tok/s), 311 generated in 17341 ms (17.9 tok/s), drafts accepted 188 of 261, 6 checkpoints
+strata serve: prompt 86574 tokens = 85086 reused + 1488 read in 6365 ms (233.8 tok/s), 721 generated in 41799 ms (17.2 tok/s), drafts accepted 392 of 639, 6 checkpoints
+strata serve: prompt 87313 tokens = 87294 reused + 19 read in 808 ms (23.5 tok/s), 1080 generated in 57212 ms (18.9 tok/s), drafts accepted 609 of 920, 6 checkpoints
+strata serve: prompt 89202 tokens = 88392 reused + 810 read in 7139 ms (113.5 tok/s), 2671 generated in 122854 ms (21.7 tok/s), drafts accepted 1604 of 2254, 6 checkpoints
+strata serve: prompt 92116 tokens = 91875 reused + 241 read in 3092 ms (77.9 tok/s), 519 generated in 21208 ms (24.5 tok/s), drafts accepted 362 of 426, 6 checkpoints
+strata serve: prompt 92856 tokens = 92635 reused + 221 read in 4217 ms (52.4 tok/s), 822 generated in 45016 ms (18.3 tok/s), drafts accepted 444 of 702, 6 checkpoints
+strata serve: prompt 93706 tokens = 93677 reused + 29 read in 1154 ms (25.1 tok/s), 714 generated in 35416 ms (20.2 tok/s), drafts accepted 426 of 618, 6 checkpoints
+strata serve: prompt 94521 tokens = 0 reused + 94521 read in 236867 ms (399.0 tok/s), 180 generated in 7598 ms (23.7 tok/s), drafts accepted 120 of 152, 6 checkpoints
+strata serve: prompt 94838 tokens = 94700 reused + 138 read in 2765 ms (49.9 tok/s), 203 generated in 8422 ms (24.1 tok/s), drafts accepted 132 of 169, 6 checkpoints
+strata serve: prompt 95072 tokens = 95040 reused + 32 read in 1091 ms (29.3 tok/s), 1629 generated in 75347 ms (21.6 tok/s), drafts accepted 931 of 1367, 6 checkpoints
+strata serve: prompt 96908 tokens = 96700 reused + 208 read in 2768 ms (75.1 tok/s), 490 generated in 21287 ms (23.0 tok/s), drafts accepted 308 of 407, 6 checkpoints
+strata serve: prompt 97685 tokens = 97397 reused + 288 read in 3177 ms (90.6 tok/s), 898 generated in 40562 ms (22.1 tok/s), drafts accepted 547 of 771, 6 checkpoints
+strata serve: prompt 98634 tokens = 98582 reused + 52 read in 1847 ms (28.1 tok/s), 474 generated in 22198 ms (21.4 tok/s), drafts accepted 264 of 407, 6 checkpoints
+strata serve: prompt 101066 tokens = 99107 reused + 1959 read in 7429 ms (263.7 tok/s), 2270 generated in 101530 ms (22.4 tok/s), drafts accepted 1327 of 1946, 6 checkpoints
+strata serve: prompt 104433 tokens = 103335 reused + 1098 read in 5291 ms (207.5 tok/s), 1689 generated in 73267 ms (23.1 tok/s), drafts accepted 1007 of 1410, 6 checkpoints
+strata serve: prompt 106238 tokens = 106124 reused + 114 read in 2464 ms (46.3 tok/s), 1061 generated in 44941 ms (23.6 tok/s), drafts accepted 657 of 881, 6 checkpoints
+strata serve: prompt 107441 tokens = 107301 reused + 140 read in 2794 ms (50.1 tok/s), 541 generated in 24209 ms (22.3 tok/s), drafts accepted 327 of 474, 6 checkpoints
+strata serve: prompt 108036 tokens = 107981 reused + 55 read in 1985 ms (27.7 tok/s), 883 generated in 40687 ms (21.7 tok/s), drafts accepted 524 of 805, 6 checkpoints
+strata serve: prompt 109180 tokens = 108921 reused + 259 read in 3375 ms (76.7 tok/s), 1232 generated in 54146 ms (22.8 tok/s), drafts accepted 731 of 1050, 6 checkpoints
+strata serve: prompt 110487 tokens = 110414 reused + 73 read in 2074 ms (35.2 tok/s), 583 generated in 30788 ms (18.9 tok/s), drafts accepted 334 of 508, 6 checkpoints
+strata serve: prompt 111190 tokens = 111069 reused + 121 read in 2777 ms (43.6 tok/s), 447 generated in 23260 ms (19.2 tok/s), drafts accepted 272 of 366, 6 checkpoints
+strata serve: prompt 111679 tokens = 111636 reused + 43 read in 1672 ms (25.7 tok/s), 1068 generated in 56934 ms (18.8 tok/s), drafts accepted 655 of 878, 6 checkpoints
+strata serve: prompt 112964 tokens = 112746 reused + 218 read in 3169 ms (68.8 tok/s), 736 generated in 36125 ms (20.4 tok/s), drafts accepted 444 of 641, 6 checkpoints
+strata serve: prompt 113769 tokens = 113699 reused + 70 read in 2304 ms (30.4 tok/s), 1106 generated in 60539 ms (18.3 tok/s), drafts accepted 567 of 1022, 6 checkpoints
+strata serve: prompt 114890 tokens = 114876 reused + 14 read in 555 ms (25.2 tok/s), 1061 generated in 53267 ms (19.9 tok/s), drafts accepted 651 of 885, 6 checkpoints
+strata serve: prompt 116058 tokens = 115953 reused + 105 read in 3319 ms (31.6 tok/s), 451 generated in 27972 ms (16.1 tok/s), drafts accepted 276 of 380, 6 checkpoints
+strata serve: prompt 116624 tokens = 116508 reused + 116 read in 3784 ms (30.7 tok/s), 166 generated in 9500 ms (17.5 tok/s), drafts accepted 110 of 137, 6 checkpoints
+strata serve: prompt 116813 tokens = 116789 reused + 24 read in 1386 ms (17.3 tok/s), 112 generated in 7957 ms (14.1 tok/s), drafts accepted 76 of 96, 6 checkpoints
+strata serve: prompt 117562 tokens = 116927 reused + 635 read in 5982 ms (106.1 tok/s), 963 generated in 75201 ms (12.8 tok/s), drafts accepted 627 of 817, 6 checkpoints
+strata serve: prompt 118545 tokens = 118527 reused + 18 read in 3149 ms (5.7 tok/s), 88 generated in 7948 ms (11.1 tok/s), drafts accepted 63 of 70, 6 checkpoints
+strata serve: prompt 119493 tokens = 118632 reused + 861 read in 7734 ms (111.3 tok/s), 1086 generated in 78259 ms (13.9 tok/s), drafts accepted 634 of 992, 6 checkpoints
+strata serve: prompt 120772 tokens = 120581 reused + 191 read in 3577 ms (53.4 tok/s), 505 generated in 32042 ms (15.8 tok/s), drafts accepted 320 of 446, 6 checkpoints
+strata serve: prompt 121599 tokens = 121276 reused + 323 read in 5119 ms (63.1 tok/s), 721 generated in 52452 ms (13.7 tok/s), drafts accepted 402 of 634, 6 checkpoints
+strata serve: prompt 122399 tokens = 122319 reused + 80 read in 2571 ms (31.1 tok/s), 1191 generated in 70367 ms (16.9 tok/s), drafts accepted 632 of 1015, 6 checkpoints
+strata serve: prompt 123602 tokens = 123589 reused + 13 read in 604 ms (21.5 tok/s), 1040 generated in 39053 ms (26.6 tok/s), drafts accepted 706 of 886, 6 checkpoints
+strata serve: prompt 124662 tokens = 124641 reused + 21 read in 843 ms (24.9 tok/s), 89 generated in 4047 ms (22.0 tok/s), drafts accepted 62 of 75, 6 checkpoints
+strata serve: prompt 125410 tokens = 124750 reused + 660 read in 4641 ms (142.2 tok/s), 1540 generated in 88586 ms (17.4 tok/s), drafts accepted 924 of 1337, 6 checkpoints
+strata serve: prompt 127491 tokens = 126952 reused + 539 read in 4847 ms (111.2 tok/s), 1029 generated in 59881 ms (17.2 tok/s), drafts accepted 645 of 891, 6 checkpoints
+strata serve: prompt 128539 tokens = 127486 reused + 1053 read in 6926 ms (152.0 tok/s), 156 generated in 9235 ms (16.9 tok/s), drafts accepted 108 of 127, 6 checkpoints
+strata serve: prompt 128714 tokens = 128697 reused + 17 read in 738 ms (23.0 tok/s), 88 generated in 4707 ms (18.7 tok/s), drafts accepted 63 of 72, 6 checkpoints
+strata serve: prompt 130522 tokens = 128801 reused + 1721 read in 7409 ms (232.3 tok/s), 1184 generated in 77952 ms (15.2 tok/s), drafts accepted 676 of 1016, 6 checkpoints
+load_hparams: Qwen-VL models require at minimum 1024 image tokens to function correctly on grounding tasks
+load_hparams: if you encounter problems with accuracy, try adding --image-min-tokens 1024
+load_hparams: more info: https://github.com/ggml-org/llama.cpp/issues/16842
+
+strata-vision: warmed up at 1024 image tokens
+strata generate: this CPU has no AVX-512: the expert kernels run on AVX2
+strata generate: native pack: D:\Workspace\Personal_Project\Strata\packs\orca-iq3_xxs experts (largest blob 2.18 MB), token embedding type 21 in mapped host memory (260 MiB)
+strata generate: 1466 MiB of weights loaded from D:\Workspace\Personal_Project\Strata\packs\orca-iq3_xxs (302 canonical tensors skipped: served natively)
+strata generate: 300 native projection matrices, 1225.20 MiB of weights
+strata generate: PLE on, table 320001536 rows of D:\Workspace\Personal_Project\Strata\models\orca-IQ3_XXS\Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf
+strata generate: expert arena: locked 2 MiB via working-set minimum + VirtualLock; cudaHostRegister of the whole arena FAILED (out of memory); 48 slices pinned (49 GiB); shared section Local\strata-arena-48196, 4 KB pages
+strata generate: loaded 49.80 GiB at 1.52 GiB/s
+strata mtp: draft layer loaded, 1046 MiB of VRAM (experts 675, dense 111)
+strata generate: profile D:\Workspace\Personal_Project\Strata\data\expert-profile.bin: 8000 ranked pairs, built for 8000 slots
+strata generate: experimental native Q5_K head, 437043200 bytes
+strata generate: expert cache auto: 7.72 GiB free, 700 MiB reserved -> 3473 slots
+strata generate: only 0 MiB free once the slots are written (reserve 700 MiB); shrinking the expert cache
+strata generate: expert cache 2604 slots, 5.28 GiB of VRAM; policy is
+strata generate: the GPU computes the experts in the cache; it rounds differently from the CPU,
+                 so a reply can differ slightly from a run without the cache (same quality:
+                 bench/results/2026-09-27-cache-parity).
+                 PROFILE, ranked by routing frequency, no eviction.
+strata generate: pre-filled 2604 of 2604 slots from the profile; slot 0 verified
+strata generate: expert GPU: 2457 slots on NVIDIA GeForce RTX 3060 Ti (worker process), 4.98 GiB, 764 MiB free of 8191 MiB; it pinned 19.7 GiB of the arena for its own PCIe reads (share 77/256 of the misses)
+strata generate: R4 hit path ON - resident experts are computed on the GPU
+strata generate: 7 expert-pool workers + the host thread
+strata generate: session is up
+strata generate: token graph hit path: 2604 resident experts, decided on the device
+strata serve: prompt chunk 8192 -> 4096 tokens so its buffers fit in the expert cache
+strata serve: the prompt path borrows 1470 cache slots (2.98 GiB)
+strata verify: window up to 6 tokens, 67.7 MiB of device buffers
+strata mtp: draft head over 40525 tokens (68.0 MiB)
+strata serve: 1395 MiB of VRAM free with everything loaded
+load_hparams: Qwen-VL models require at minimum 1024 image tokens to function correctly on grounding tasks
+load_hparams: if you encounter problems with accuracy, try adding --image-min-tokens 1024
+load_hparams: more info: https://github.com/ggml-org/llama.cpp/issues/16842
+
+load_hparams: Qwen-VL models require at minimum 1024 image tokens to function correctly on grounding tasks
+load_hparams: if you encounter problems with accuracy, try adding --image-min-tokens 1024
+load_hparams: more info: https://github.com/ggml-org/llama.cpp/issues/16842
+
+strata-vision: warmed up at 1024 image tokens
+strata generate: this CPU has no AVX-512: the expert kernels run on AVX-2 (multi-token for the i-quant gate/up rows)
+strata generate: native pack: D:\Workspace\Personal_Project\Strata\packs\orca-iq3_xxs experts (largest blob 2.18 MB), token embedding type 21 in mapped host memory (260 MiB)
+strata generate: 1466 MiB of weights loaded from D:\Workspace\Personal_Project\Strata\packs\orca-iq3_xxs (302 canonical tensors skipped: served natively)
+strata generate: 300 native projection matrices, 1225.20 MiB of weights
+strata generate: PLE on, table 320001536 rows of D:\Workspace\Personal_Project\Strata\models\orca-IQ3_XXS\Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf
+strata generate: expert arena: locked 2 MiB via working-set minimum + VirtualLock; cudaHostRegister of the whole arena FAILED (out of memory); 48 slices pinned (49 GiB); shared section Local\strata-arena-41372, 4 KB pages
+strata generate: loaded 49.80 GiB at 1.49 GiB/s
+strata mtp: draft layer loaded, 1111 MiB of VRAM (experts 675, dense 111)
+strata generate: profile D:\Workspace\Personal_Project\Strata\data\expert-profile.bin: 24576 ranked pairs, built for 24576 slots
+strata generate: experimental native Q5_K head, 437043200 bytes
+strata generate: expert cache auto: 6.85 GiB free, 700 MiB reserved -> 3044 slots
+strata generate: only 0 MiB free once the slots are written (reserve 700 MiB); shrinking the expert cache
+strata generate: expert cache 2283 slots, 4.63 GiB of VRAM; policy is
+strata generate: the GPU computes the experts in the cache; it rounds differently from the CPU,
+                 so a reply can differ slightly from a run without the cache (same quality:
+                 bench/results/2026-09-27-cache-parity).
+                 PROFILE, ranked by routing frequency, no eviction.
+strata generate: pre-filled 2283 of 2283 slots from the profile; slot 0 verified
+strata generate: expert GPU: 2574 slots on NVIDIA GeForce RTX 3060 Ti (worker process), 5.22 GiB, 764 MiB free of 8191 MiB; it pinned 19.7 GiB of the arena for its own PCIe reads (share 77/256 of the misses)
+strata generate: R4 hit path ON - resident experts are computed on the GPU
+strata generate: 7 expert-pool workers + the host thread
+strata generate: session is up (engine 0.1.15)
+strata generate: token graph hit path: 2283 resident experts, decided on the device
+strata serve: the prompt path borrows 2097 cache slots (4.25 GiB)
+strata verify: window up to 6 tokens, 68.0 MiB of device buffers
+strata mtp: draft head over 40525 tokens (68.0 MiB)
+strata serve: 1025 MiB of VRAM free with everything loaded
+strata verify: captured the 4-token window (upload no error, sync no error)
+strata verify: captured the 1-token window (upload no error, sync no error)
+strata verify: captured the 2-token window (upload no error, sync no error)
+strata verify: captured the 6-token window (upload no error, sync no error)
+strata verify: captured the 3-token window (upload no error, sync no error)
+strata verify: captured the 5-token window (upload no error, sync no error)
+strata serve: expert GPU: 55351 experts (9066 read over its PCIe), 10142.158 ms (launch through completion, overlaps CPU), 5152 swapped in so far
+strata serve: prompt 1024 tokens = 0 reused + 1024 read in 4653 ms (220.1 tok/s), 400 generated in 18833 ms (21.2 tok/s), drafts accepted 179 of 272, 1 checkpoints
+strata serve: suffix drafts: 8 windows, 19 of 27 drafts accepted
+strata serve: expert GPU: 52305 experts (8051 read over its PCIe), 8296.620 ms (launch through completion, overlaps CPU), 10547 swapped in so far
+strata serve: prompt 8192 tokens = 0 reused + 8192 read in 13226 ms (619.4 tok/s), 400 generated in 17441 ms (22.9 tok/s), drafts accepted 160 of 256, 1 checkpoints
+strata serve: suffix drafts: 5 windows, 6 of 9 drafts accepted
+strata serve: expert GPU: 50794 experts (8083 read over its PCIe), 7024.392 ms (launch through completion, overlaps CPU), 15500 swapped in so far
+strata serve: prompt 32768 tokens = 0 reused + 32768 read in 50034 ms (654.9 tok/s), 400 generated in 14457 ms (27.7 tok/s), drafts accepted 189 of 262, 2 checkpoints
+strata serve: suffix drafts: 11 windows, 16 of 24 drafts accepted
+strata serve: expert GPU: 53884 experts (7746 read over its PCIe), 7992.545 ms (launch through completion, overlaps CPU), 20528 swapped in so far
+strata serve: prompt 65536 tokens = 0 reused + 65536 read in 101470 ms (645.9 tok/s), 400 generated in 17191 ms (23.3 tok/s), drafts accepted 185 of 278, 4 checkpoints
+strata serve: suffix drafts: 5 windows, 7 of 10 drafts accepted
+strata serve: expert GPU: 58399 experts (8672 read over its PCIe), 6760.321 ms (launch through completion, overlaps CPU), 24656 swapped in so far
+strata serve: prompt 131072 tokens = 0 reused + 131072 read in 208622 ms (628.3 tok/s), 400 generated in 13105 ms (30.5 tok/s), drafts accepted 232 of 347, 6 checkpoints
+strata serve: suffix drafts: 5 windows, 8 of 12 drafts accepted
+strata serve: expert GPU: 62120 experts (8808 read over its PCIe), 7774.483 ms (launch through completion, overlaps CPU), 28496 swapped in so far
+strata serve: prompt 204800 tokens = 0 reused + 204800 read in 318786 ms (642.4 tok/s), 400 generated in 15378 ms (26.0 tok/s), drafts accepted 241 of 366, 6 checkpoints
+strata serve: suffix drafts: 4 windows, 6 of 8 drafts accepted
+load_hparams: Qwen-VL models require at minimum 1024 image tokens to function correctly on grounding tasks
+load_hparams: if you encounter problems with accuracy, try adding --image-min-tokens 1024
+load_hparams: more info: https://github.com/ggml-org/llama.cpp/issues/16842
+
+strata-vision: warmed up at 1024 image tokens
+strata generate: this CPU has no AVX-512: the expert kernels run on AVX-2 (multi-token for the i-quant gate/up rows)
+strata generate: native pack: D:\Workspace\Personal_Project\Strata\packs\orca-iq3_xxs experts (largest blob 2.18 MB), token embedding type 21 in mapped host memory (260 MiB)
+strata generate: 1466 MiB of weights loaded from D:\Workspace\Personal_Project\Strata\packs\orca-iq3_xxs (302 canonical tensors skipped: served natively)
+strata generate: 300 native projection matrices, 1225.20 MiB of weights
+strata generate: PLE on, table 320001536 rows of D:\Workspace\Personal_Project\Strata\models\orca-IQ3_XXS\Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf
+strata generate: expert arena: locked 2 MiB via working-set minimum + VirtualLock; cudaHostRegister of the whole arena FAILED (out of memory); 48 slices pinned (49 GiB); shared section Local\strata-arena-44316, 4 KB pages
+strata generate: loaded 49.80 GiB at 1.54 GiB/s
+strata mtp: draft layer loaded, 1111 MiB of VRAM (experts 675, dense 111)
+strata generate: profile D:\Workspace\Personal_Project\Strata\data\expert-profile.bin: 24576 ranked pairs, built for 24576 slots
+strata generate: experimental native Q5_K head, 437043200 bytes
+strata generate: expert cache auto: 6.85 GiB free, 700 MiB reserved -> 3044 slots
+strata generate: only 0 MiB free once the slots are written (reserve 700 MiB); shrinking the expert cache
+strata generate: expert cache 2283 slots, 4.63 GiB of VRAM; policy is
+strata generate: the GPU computes the experts in the cache; it rounds differently from the CPU,
+                 so a reply can differ slightly from a run without the cache (same quality:
+                 bench/results/2026-09-27-cache-parity).
+                 PROFILE, ranked by routing frequency, no eviction.
+strata generate: pre-filled 2283 of 2283 slots from the profile; slot 0 verified
+strata generate: expert GPU: 2574 slots on NVIDIA GeForce RTX 3060 Ti (worker process), 5.22 GiB, 764 MiB free of 8191 MiB; it pinned 19.7 GiB of the arena for its own PCIe reads (share 77/256 of the misses)
+strata generate: R4 hit path ON - resident experts are computed on the GPU
+strata generate: 7 expert-pool workers + the host thread
+strata generate: session is up (engine 0.1.15)
+strata generate: token graph hit path: 2283 resident experts, decided on the device
+strata serve: the prompt path borrows 2097 cache slots (4.25 GiB)
+strata verify: window up to 6 tokens, 68.0 MiB of device buffers
+strata mtp: draft head over 40525 tokens (68.0 MiB)
+strata serve: 997 MiB of VRAM free with everything loaded
+load_hparams: Qwen-VL models require at minimum 1024 image tokens to function correctly on grounding tasks
+load_hparams: if you encounter problems with accuracy, try adding --image-min-tokens 1024
+load_hparams: more info: https://github.com/ggml-org/llama.cpp/issues/16842
+
+strata-vision: warmed up at 1024 image tokens
+strata generate: this CPU has no AVX-512: the expert kernels run on AVX-2 (multi-token for the i-quant gate/up rows)
+strata generate: native pack: D:\Workspace\Personal_Project\Strata\packs\orca-iq3_xxs experts (largest blob 2.18 MB), token embedding type 21 in mapped host memory (260 MiB)
+strata generate: 1466 MiB of weights loaded from D:\Workspace\Personal_Project\Strata\packs\orca-iq3_xxs (302 canonical tensors skipped: served natively)
+strata generate: 300 native projection matrices, 1225.20 MiB of weights
+strata generate: PLE on, table 320001536 rows of D:\Workspace\Personal_Project\Strata\models\orca-IQ3_XXS\Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf
+strata generate: expert arena: locked 2 MiB via working-set minimum + VirtualLock; cudaHostRegister of the whole arena FAILED (out of memory); 48 slices pinned (49 GiB); shared section Local\strata-arena-46416, 4 KB pages
+strata generate: loaded 49.80 GiB at 1.54 GiB/s
+strata mtp: draft layer loaded, 1111 MiB of VRAM (experts 675, dense 111)
+strata generate: profile D:\Workspace\Personal_Project\Strata\data\expert-profile.bin: 24576 ranked pairs, built for 24576 slots
+strata generate: experimental native Q5_K head, 437043200 bytes
+strata generate: expert cache auto: 6.85 GiB free, 700 MiB reserved -> 3044 slots
+strata generate: only 0 MiB free once the slots are written (reserve 700 MiB); shrinking the expert cache
+strata generate: expert cache 2283 slots, 4.63 GiB of VRAM; policy is
+strata generate: the GPU computes the experts in the cache; it rounds differently from the CPU,
+                 so a reply can differ slightly from a run without the cache (same quality:
+                 bench/results/2026-09-27-cache-parity).
+                 PROFILE, ranked by routing frequency, no eviction.
+strata generate: pre-filled 2283 of 2283 slots from the profile; slot 0 verified
+strata generate: expert GPU: 2574 slots on NVIDIA GeForce RTX 3060 Ti (worker process), 5.22 GiB, 764 MiB free of 8191 MiB; it pinned 19.7 GiB of the arena for its own PCIe reads (share 77/256 of the misses)
+strata generate: R4 hit path ON - resident experts are computed on the GPU
+strata generate: 7 expert-pool workers + the host thread
+strata generate: session is up (engine 0.1.15)
+strata generate: token graph hit path: 2283 resident experts, decided on the device
+strata serve: the prompt path borrows 2097 cache slots (4.25 GiB)
+strata verify: window up to 6 tokens, 68.0 MiB of device buffers
+strata mtp: draft head over 40525 tokens (68.0 MiB)
+strata serve: 902 MiB of VRAM free with everything loaded
+strata verify: captured the 4-token window (upload no error, sync no error)
+strata verify: captured the 1-token window (upload no error, sync no error)
+strata verify: captured the 2-token window (upload no error, sync no error)
+strata verify: captured the 6-token window (upload no error, sync no error)
+strata verify: captured the 3-token window (upload no error, sync no error)
+strata serve: expert GPU: 56236 experts (8696 read over its PCIe), 7281.275 ms (launch through completion, overlaps CPU), 4707 swapped in so far
+strata serve: prompt 261232 tokens = 0 reused + 261232 read in 466217 ms (560.3 tok/s), 400 generated in 16130 ms (24.8 tok/s), drafts accepted 197 of 310, 6 checkpoints
+strata serve: suffix drafts: 11 windows, 21 of 37 drafts accepted

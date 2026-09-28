@@ -1,0 +1,587 @@
+{
+  "label": "orca-single-0.1.15",
+  "config": "configs\\strata-orca-iq3_xxs-262k.json",
+  "engine_args": [
+    "--pack",
+    "D:\\Workspace\\Personal_Project\\Strata\\packs\\orca-iq3_xxs",
+    "--native",
+    "D:\\Workspace\\Personal_Project\\Strata\\models\\orca-IQ3_XXS\\Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+    "--ple-gguf",
+    "D:\\Workspace\\Personal_Project\\Strata\\models\\orca-IQ3_XXS\\Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+    "--expert-profile",
+    "D:\\Workspace\\Personal_Project\\Strata\\data\\expert-profile.bin",
+    "--expert-cache",
+    "auto",
+    "--spec",
+    "4",
+    "--spec-min-p",
+    "0.5",
+    "--mtp",
+    "D:\\Workspace\\Personal_Project\\Strata\\mtp\\rt",
+    "--kv",
+    "int8",
+    "--vision",
+    "--vram-reserve-mib",
+    "700",
+    "--prefill",
+    "8192",
+    "--mtp-window",
+    "65536",
+    "--pcie-frac",
+    "0.40",
+    "--max-context",
+    "262144"
+  ],
+  "token_count_method": "tokenizer",
+  "max_tokens": 400,
+  "contexts": [
+    {
+      "target": 1024,
+      "runs": [
+        {
+          "prompt_tokens": 1024,
+          "generated_tokens": 400,
+          "usage": {
+            "prompt_tokens": 1024,
+            "completion_tokens": 400,
+            "total_tokens": 1424
+          },
+          "ttft_s": 7.15,
+          "prefill_tok_s": 143.22,
+          "decode_tok_s": 23.16,
+          "elapsed_s": 24.38,
+          "answer_first_200": "We need answer user's request: \"Benchmark nonce: bench-1024-0\nFiles:\n\n### Section 1\n\n### bench\\ctx_bench.py\n... code snippet ...\nNow write a detailed, 600-word technical summary of the files above.\"\n\n",
+          "answer": "We need answer user's request: \"Benchmark nonce: bench-1024-0\nFiles:\n\n### Section 1\n\n### bench\\ctx_bench.py\n... code snippet ...\nNow write a detailed, 600-word technical summary of the files above.\"\n\nWe need produce a detailed technical summary ~600 words. Need analyze code. The file is truncated? It shows code up to partial function override_args. Need summarize what can be inferred. Need likely mention it's a benchmark harness for Strata serving chat latency across prompt lengths. It parses args, manages config args, regex patterns for engine lines, etc. Need produce around 600 words. Need ensure no unsupported claims? We can infer. Need mention file path bench/ctx_bench.py (but user wrote bench\\ctx_bench.py). Need maybe mention only one file shown. Need technical summary of file. Need likely discuss imports, constants, regexes, CLI, override_args. Need mention benchmark nonce bench-1024-0 maybe used as label? In code --nonce default random; nonce maybe fixed prompt nonce. The benchmark nonce bench-1024-0 likely identifies this run. Need produce 600 words. Let's plan.\n\nWe need produce final answer only summary. Need maybe count words around 600. We can aim 600-680? User says 600-word technical summary. We'll produce approx 600 words. Need detailed technical summary.\n\nLet's understand code:\n- Shebang, docstring: Measure Strata's streaming chat latency across prompt lengths.\n- imports many modules: argparse, base64, ctypes, json, mimetypes, os, re, secrets, signal, socket, statistics, subprocess, sys, tempfile, threading, time, urllib.error, urllib.request, pathlib Path.\n- ROOT = parent of parents of file?",
+          "peaks": {
+            "gpus": {
+              "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+                "memory_mib": 14625,
+                "utilization_pct": 100
+              },
+              "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+                "memory_mib": 1191,
+                "utilization_pct": 0
+              }
+            },
+            "ram_mib": 91539
+          },
+          "mtp_acceptance": 0.72,
+          "engine_prompt_tokens": 1024,
+          "engine_prompt_ms": 7058.0,
+          "engine_prefill_tok_s": 145.1,
+          "engine_generated_tokens": 400,
+          "engine_decode_ms": 17310.0,
+          "engine_decode_tok_s": 23.1,
+          "estimated_prompt_tokens": 1024
+        }
+      ],
+      "median": {
+        "prompt_tokens": 1024,
+        "generated_tokens": 400,
+        "usage": {
+          "prompt_tokens": 1024,
+          "completion_tokens": 400,
+          "total_tokens": 1424
+        },
+        "ttft_s": 7.15,
+        "prefill_tok_s": 143.22,
+        "decode_tok_s": 23.16,
+        "elapsed_s": 24.38,
+        "answer_first_200": "We need answer user's request: \"Benchmark nonce: bench-1024-0\nFiles:\n\n### Section 1\n\n### bench\\ctx_bench.py\n... code snippet ...\nNow write a detailed, 600-word technical summary of the files above.\"\n\n",
+        "answer": "We need answer user's request: \"Benchmark nonce: bench-1024-0\nFiles:\n\n### Section 1\n\n### bench\\ctx_bench.py\n... code snippet ...\nNow write a detailed, 600-word technical summary of the files above.\"\n\nWe need produce a detailed technical summary ~600 words. Need analyze code. The file is truncated? It shows code up to partial function override_args. Need summarize what can be inferred. Need likely mention it's a benchmark harness for Strata serving chat latency across prompt lengths. It parses args, manages config args, regex patterns for engine lines, etc. Need produce around 600 words. Need ensure no unsupported claims? We can infer. Need mention file path bench/ctx_bench.py (but user wrote bench\\ctx_bench.py). Need maybe mention only one file shown. Need technical summary of file. Need likely discuss imports, constants, regexes, CLI, override_args. Need mention benchmark nonce bench-1024-0 maybe used as label? In code --nonce default random; nonce maybe fixed prompt nonce. The benchmark nonce bench-1024-0 likely identifies this run. Need produce 600 words. Let's plan.\n\nWe need produce final answer only summary. Need maybe count words around 600. We can aim 600-680? User says 600-word technical summary. We'll produce approx 600 words. Need detailed technical summary.\n\nLet's understand code:\n- Shebang, docstring: Measure Strata's streaming chat latency across prompt lengths.\n- imports many modules: argparse, base64, ctypes, json, mimetypes, os, re, secrets, signal, socket, statistics, subprocess, sys, tempfile, threading, time, urllib.error, urllib.request, pathlib Path.\n- ROOT = parent of parents of file?",
+        "peaks": {
+          "gpus": {
+            "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+              "memory_mib": 14625,
+              "utilization_pct": 100
+            },
+            "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+              "memory_mib": 1191,
+              "utilization_pct": 0
+            }
+          },
+          "ram_mib": 91539
+        },
+        "mtp_acceptance": 0.72,
+        "engine_prompt_tokens": 1024,
+        "engine_prompt_ms": 7058.0,
+        "engine_prefill_tok_s": 145.1,
+        "engine_generated_tokens": 400,
+        "engine_decode_ms": 17310.0,
+        "engine_decode_tok_s": 23.1,
+        "estimated_prompt_tokens": 1024
+      }
+    },
+    {
+      "target": 8192,
+      "runs": [
+        {
+          "prompt_tokens": 8192,
+          "generated_tokens": 400,
+          "usage": {
+            "prompt_tokens": 8192,
+            "completion_tokens": 400,
+            "total_tokens": 8592
+          },
+          "ttft_s": 13.512,
+          "prefill_tok_s": 606.28,
+          "decode_tok_s": 25.44,
+          "elapsed_s": 29.194,
+          "answer_first_200": "We need answer to user. User provided benchmark nonce and files? It seems they pasted a prompt including a benchmark nonce and files sections. The final request likely: \"Now write a detailed, 600-word",
+          "answer": "We need answer to user. User provided benchmark nonce and files? It seems they pasted a prompt including a benchmark nonce and files sections. The final request likely: \"Now write a detailed, 600-word technical summary of the files above.\" But the user content is the prompt from benchmark? We need produce final answer. Need analyze.\n\nWe have user content:\n\"Benchmark nonce: bench-8192-0\nFiles:\n\n### Section 1\n\n### bench\\ctx_bench.py\n... code ...\n\n### bench\\expert_gpu_smoke.py\n... code ...\n\n### bench\\results\\2026-09-24-final\\estimates.md\n### Output (decode) tok/s - estimated\n\n| Card | Model | 1k | 4k | 32k | 64k | 128k | 262k |\n|---|---|---:|---:|---:|---:|---:|---:|\n| RTX 5070 12GB (measured) | Q2_0 | ~89 | ~95 | ~88 | ~76 | ~65 | ~56 |\n| RTX 5070 12GB (measured) | IQ2_XS | ~82 | ... etc\n...\nNow write a detailed, 600-word technical summary of the files above.\"\n\nWe need answer likely summary of the files above. Need 600 words detailed technical summary. Need perhaps mention benchmark nonce? The user wants summary of files above (the provided files). Need produce around 600 words. Need ensure detailed. Could summarize each file and overall system: ctx_bench.py benchmark harness, expert_gpu_smoke.py dual-GPU smoke tests, estimates.md performance table. Need mention technical details: Python scripts, benchmarking",
+          "peaks": {
+            "gpus": {
+              "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+                "memory_mib": 14636,
+                "utilization_pct": 100
+              },
+              "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+                "memory_mib": 1191,
+                "utilization_pct": 0
+              }
+            },
+            "ram_mib": 91514
+          },
+          "mtp_acceptance": 0.771,
+          "engine_prompt_tokens": 8192,
+          "engine_prompt_ms": 13375.0,
+          "engine_prefill_tok_s": 612.5,
+          "engine_generated_tokens": 400,
+          "engine_decode_ms": 15733.0,
+          "engine_decode_tok_s": 25.4,
+          "estimated_prompt_tokens": 8192
+        }
+      ],
+      "median": {
+        "prompt_tokens": 8192,
+        "generated_tokens": 400,
+        "usage": {
+          "prompt_tokens": 8192,
+          "completion_tokens": 400,
+          "total_tokens": 8592
+        },
+        "ttft_s": 13.512,
+        "prefill_tok_s": 606.28,
+        "decode_tok_s": 25.44,
+        "elapsed_s": 29.194,
+        "answer_first_200": "We need answer to user. User provided benchmark nonce and files? It seems they pasted a prompt including a benchmark nonce and files sections. The final request likely: \"Now write a detailed, 600-word",
+        "answer": "We need answer to user. User provided benchmark nonce and files? It seems they pasted a prompt including a benchmark nonce and files sections. The final request likely: \"Now write a detailed, 600-word technical summary of the files above.\" But the user content is the prompt from benchmark? We need produce final answer. Need analyze.\n\nWe have user content:\n\"Benchmark nonce: bench-8192-0\nFiles:\n\n### Section 1\n\n### bench\\ctx_bench.py\n... code ...\n\n### bench\\expert_gpu_smoke.py\n... code ...\n\n### bench\\results\\2026-09-24-final\\estimates.md\n### Output (decode) tok/s - estimated\n\n| Card | Model | 1k | 4k | 32k | 64k | 128k | 262k |\n|---|---|---:|---:|---:|---:|---:|---:|\n| RTX 5070 12GB (measured) | Q2_0 | ~89 | ~95 | ~88 | ~76 | ~65 | ~56 |\n| RTX 5070 12GB (measured) | IQ2_XS | ~82 | ... etc\n...\nNow write a detailed, 600-word technical summary of the files above.\"\n\nWe need answer likely summary of the files above. Need 600 words detailed technical summary. Need perhaps mention benchmark nonce? The user wants summary of files above (the provided files). Need produce around 600 words. Need ensure detailed. Could summarize each file and overall system: ctx_bench.py benchmark harness, expert_gpu_smoke.py dual-GPU smoke tests, estimates.md performance table. Need mention technical details: Python scripts, benchmarking",
+        "peaks": {
+          "gpus": {
+            "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+              "memory_mib": 14636,
+              "utilization_pct": 100
+            },
+            "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+              "memory_mib": 1191,
+              "utilization_pct": 0
+            }
+          },
+          "ram_mib": 91514
+        },
+        "mtp_acceptance": 0.771,
+        "engine_prompt_tokens": 8192,
+        "engine_prompt_ms": 13375.0,
+        "engine_prefill_tok_s": 612.5,
+        "engine_generated_tokens": 400,
+        "engine_decode_ms": 15733.0,
+        "engine_decode_tok_s": 25.4,
+        "estimated_prompt_tokens": 8192
+      }
+    },
+    {
+      "target": 32768,
+      "runs": [
+        {
+          "prompt_tokens": 32768,
+          "generated_tokens": 400,
+          "usage": {
+            "prompt_tokens": 32768,
+            "completion_tokens": 400,
+            "total_tokens": 33168
+          },
+          "ttft_s": 50.731,
+          "prefill_tok_s": 645.92,
+          "decode_tok_s": 25.28,
+          "elapsed_s": 66.517,
+          "answer_first_200": "We need answer user's request. User provided a lot of files (benchmark results etc.) and says \"Now write a detailed, 600-word technical summary of the files above.\" Need produce 600-word technical sum",
+          "answer": "We need answer user's request. User provided a lot of files (benchmark results etc.) and says \"Now write a detailed, 600-word technical summary of the files above.\" Need produce 600-word technical summary. Need likely in English? User request English. Need maybe summarize benchmark files: bench\\ctx_bench.py script, results etc. Need 600 words detailed technical summary. Need maybe mention benchmark nonce? The provided content includes many files: ctx_bench.py, expert_gpu_smoke.py, results markdown tables, etc. Need summarize technical content: Strata streaming chat latency benchmark, context lengths, metrics, scripts, results, tuning stages, findings. Need ensure around 600 words. Need final only. Need maybe not too long? 600-word technical summary. Let's plan summary ~600 words. Need cover files above: ctx_bench.py orchestration, config override, prompt construction, sampler, results writer; expert_gpu_smoke.py dual GPU smoke tests; results directories 2026-09-24-final estimates/matrix, vision, cache-parity, esp (experimental speed projection), kv-q4, tune results for ISTA/orca. Need technical summary: purpose, methodology, metrics, findings. Need mention engine versions, MTP acceptance, prefill/decode tok/s, VRAM/RAM, safe limits, cache, Q4 KV, vector. Need likely 600 words. Need be detailed. Let's draft ~600 words. Need maybe title? Fine.\n\nNeed ensure no unsupported claims. Let's extract key points:\n- ctx_bench.py: benchmark streaming chat latency across prompt lengths for Strata. It reads config JSON, builds prompts from tracked source files with target token counts, uses tokenizer or char estimate, starts server, samples GPU/RAM counters, parses engine logs for tokens/ms, writes results.json/md. Config args can",
+          "peaks": {
+            "gpus": {
+              "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+                "memory_mib": 14633,
+                "utilization_pct": 100
+              },
+              "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+                "memory_mib": 1191,
+                "utilization_pct": 0
+              }
+            },
+            "ram_mib": 91643
+          },
+          "mtp_acceptance": 0.698,
+          "engine_prompt_tokens": 32768,
+          "engine_prompt_ms": 50571.0,
+          "engine_prefill_tok_s": 648.0,
+          "engine_generated_tokens": 400,
+          "engine_decode_ms": 15839.0,
+          "engine_decode_tok_s": 25.3,
+          "estimated_prompt_tokens": 32768
+        }
+      ],
+      "median": {
+        "prompt_tokens": 32768,
+        "generated_tokens": 400,
+        "usage": {
+          "prompt_tokens": 32768,
+          "completion_tokens": 400,
+          "total_tokens": 33168
+        },
+        "ttft_s": 50.731,
+        "prefill_tok_s": 645.92,
+        "decode_tok_s": 25.28,
+        "elapsed_s": 66.517,
+        "answer_first_200": "We need answer user's request. User provided a lot of files (benchmark results etc.) and says \"Now write a detailed, 600-word technical summary of the files above.\" Need produce 600-word technical sum",
+        "answer": "We need answer user's request. User provided a lot of files (benchmark results etc.) and says \"Now write a detailed, 600-word technical summary of the files above.\" Need produce 600-word technical summary. Need likely in English? User request English. Need maybe summarize benchmark files: bench\\ctx_bench.py script, results etc. Need 600 words detailed technical summary. Need maybe mention benchmark nonce? The provided content includes many files: ctx_bench.py, expert_gpu_smoke.py, results markdown tables, etc. Need summarize technical content: Strata streaming chat latency benchmark, context lengths, metrics, scripts, results, tuning stages, findings. Need ensure around 600 words. Need final only. Need maybe not too long? 600-word technical summary. Let's plan summary ~600 words. Need cover files above: ctx_bench.py orchestration, config override, prompt construction, sampler, results writer; expert_gpu_smoke.py dual GPU smoke tests; results directories 2026-09-24-final estimates/matrix, vision, cache-parity, esp (experimental speed projection), kv-q4, tune results for ISTA/orca. Need technical summary: purpose, methodology, metrics, findings. Need mention engine versions, MTP acceptance, prefill/decode tok/s, VRAM/RAM, safe limits, cache, Q4 KV, vector. Need likely 600 words. Need be detailed. Let's draft ~600 words. Need maybe title? Fine.\n\nNeed ensure no unsupported claims. Let's extract key points:\n- ctx_bench.py: benchmark streaming chat latency across prompt lengths for Strata. It reads config JSON, builds prompts from tracked source files with target token counts, uses tokenizer or char estimate, starts server, samples GPU/RAM counters, parses engine logs for tokens/ms, writes results.json/md. Config args can",
+        "peaks": {
+          "gpus": {
+            "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+              "memory_mib": 14633,
+              "utilization_pct": 100
+            },
+            "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+              "memory_mib": 1191,
+              "utilization_pct": 0
+            }
+          },
+          "ram_mib": 91643
+        },
+        "mtp_acceptance": 0.698,
+        "engine_prompt_tokens": 32768,
+        "engine_prompt_ms": 50571.0,
+        "engine_prefill_tok_s": 648.0,
+        "engine_generated_tokens": 400,
+        "engine_decode_ms": 15839.0,
+        "engine_decode_tok_s": 25.3,
+        "estimated_prompt_tokens": 32768
+      }
+    },
+    {
+      "target": 65536,
+      "runs": [
+        {
+          "prompt_tokens": 65536,
+          "generated_tokens": 400,
+          "usage": {
+            "prompt_tokens": 65536,
+            "completion_tokens": 400,
+            "total_tokens": 65936
+          },
+          "ttft_s": 104.779,
+          "prefill_tok_s": 625.47,
+          "decode_tok_s": 24.2,
+          "elapsed_s": 121.267,
+          "answer_first_200": "We need answer user's request. User provided a benchmark prompt with many files and asks: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words technical summa",
+          "answer": "We need answer user's request. User provided a benchmark prompt with many files and asks: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words technical summary. Need likely summarize the provided files collectively: benchmark results, docs, code snippets. Need be detailed, technical, around 600 words. Need final answer only. Need ensure maybe exactly 600? \"600-word technical summary\" likely around 600 words. Need craft ~600 words. Let's analyze content to summarize accurately.\n\nFiles include:\n- bench\\ctx_bench.py: Python benchmark harness measuring Strata streaming chat latency across prompt lengths. It loads config JSON, builds prompts from tracked source files with section numbers and nonce, estimates token counts with tokenizer or char estimate, starts local server, samples GPU/RAM metrics via nvidia-smi and /proc/meminfo, measures TTFT, prefill tok/s, decode tok/s, MTP acceptance, peaks. Handles context targets, safe limit, skips over limit, writes results.md/json, engine log tail.\n- bench\\expert_gpu_smoke.py: dual-GPU regression smoke test for Strata engine with expert GPU support. Runs single/dual/missing modes, constructs command with config args, sets CUDA_VISIBLE_DEVICES with main then expert GPU, captures stdout/stderr, memory snapshots, asserts outputs, checks log for expert GPU enabled/disabled, verifies prefix matching for single vs dual.\n- benchmark results: estimates.md, matrix.md, vision.md, cache parity, ESP etc. Show performance numbers for models Q2_0, IQ2_XS, IQ3_XXS, IQ3_S on RTX 5070/3090 etc. Discuss prompt processing tok/s, output tok/s, MTP acceptance, VRAM experts. Also 2026-09-27 tuning stages",
+          "peaks": {
+            "gpus": {
+              "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+                "memory_mib": 14901,
+                "utilization_pct": 100
+              },
+              "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+                "memory_mib": 1191,
+                "utilization_pct": 0
+              }
+            },
+            "ram_mib": 91815
+          },
+          "mtp_acceptance": 0.693,
+          "engine_prompt_tokens": 65536,
+          "engine_prompt_ms": 104497.0,
+          "engine_prefill_tok_s": 627.2,
+          "engine_generated_tokens": 400,
+          "engine_decode_ms": 16547.0,
+          "engine_decode_tok_s": 24.2,
+          "estimated_prompt_tokens": 65536
+        }
+      ],
+      "median": {
+        "prompt_tokens": 65536,
+        "generated_tokens": 400,
+        "usage": {
+          "prompt_tokens": 65536,
+          "completion_tokens": 400,
+          "total_tokens": 65936
+        },
+        "ttft_s": 104.779,
+        "prefill_tok_s": 625.47,
+        "decode_tok_s": 24.2,
+        "elapsed_s": 121.267,
+        "answer_first_200": "We need answer user's request. User provided a benchmark prompt with many files and asks: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words technical summa",
+        "answer": "We need answer user's request. User provided a benchmark prompt with many files and asks: \"Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words technical summary. Need likely summarize the provided files collectively: benchmark results, docs, code snippets. Need be detailed, technical, around 600 words. Need final answer only. Need ensure maybe exactly 600? \"600-word technical summary\" likely around 600 words. Need craft ~600 words. Let's analyze content to summarize accurately.\n\nFiles include:\n- bench\\ctx_bench.py: Python benchmark harness measuring Strata streaming chat latency across prompt lengths. It loads config JSON, builds prompts from tracked source files with section numbers and nonce, estimates token counts with tokenizer or char estimate, starts local server, samples GPU/RAM metrics via nvidia-smi and /proc/meminfo, measures TTFT, prefill tok/s, decode tok/s, MTP acceptance, peaks. Handles context targets, safe limit, skips over limit, writes results.md/json, engine log tail.\n- bench\\expert_gpu_smoke.py: dual-GPU regression smoke test for Strata engine with expert GPU support. Runs single/dual/missing modes, constructs command with config args, sets CUDA_VISIBLE_DEVICES with main then expert GPU, captures stdout/stderr, memory snapshots, asserts outputs, checks log for expert GPU enabled/disabled, verifies prefix matching for single vs dual.\n- benchmark results: estimates.md, matrix.md, vision.md, cache parity, ESP etc. Show performance numbers for models Q2_0, IQ2_XS, IQ3_XXS, IQ3_S on RTX 5070/3090 etc. Discuss prompt processing tok/s, output tok/s, MTP acceptance, VRAM experts. Also 2026-09-27 tuning stages",
+        "peaks": {
+          "gpus": {
+            "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+              "memory_mib": 14901,
+              "utilization_pct": 100
+            },
+            "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+              "memory_mib": 1191,
+              "utilization_pct": 0
+            }
+          },
+          "ram_mib": 91815
+        },
+        "mtp_acceptance": 0.693,
+        "engine_prompt_tokens": 65536,
+        "engine_prompt_ms": 104497.0,
+        "engine_prefill_tok_s": 627.2,
+        "engine_generated_tokens": 400,
+        "engine_decode_ms": 16547.0,
+        "engine_decode_tok_s": 24.2,
+        "estimated_prompt_tokens": 65536
+      }
+    },
+    {
+      "target": 131072,
+      "runs": [
+        {
+          "prompt_tokens": 131072,
+          "generated_tokens": 400,
+          "usage": {
+            "prompt_tokens": 131072,
+            "completion_tokens": 400,
+            "total_tokens": 131472
+          },
+          "ttft_s": 216.011,
+          "prefill_tok_s": 606.78,
+          "decode_tok_s": 22.53,
+          "elapsed_s": 233.717,
+          "answer_first_200": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" They provided many files, likely want a technical summary around 600 words. Need produce final ans",
+          "answer": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" They provided many files, likely want a technical summary around 600 words. Need produce final answer. Need likely summarize the provided benchmark files, docs, headers, results. Need maybe mention benchmark nonce? The prompt says \"Benchmark nonce: bench-131072-0 Files: ... Now write a detailed, 600-word technical summary of the files above.\" So likely we need generate 600-word technical summary of the files. Need likely around 600 words, detailed. Need ensure not too long? They asked 600-word. We can produce approx 600 words. Need perhaps mention files: bench/ctx_bench.py, bench/expert_gpu_smoke.py, results, docs, headers. Need technical summary: what files are, purpose, relationships, measurements, architecture. Need maybe focus on Strata engine, Qwen3.8-Flash-Next, dual GPU, benchmarks, results. Need 600 words (not exact but close). Let's craft ~600 words. Need maybe include technical details: files include Python benchmark harness, results from 2026-09-24, 09-27, 09-28, docs/DETAILS.md, DUAL-GPU.md, headers for core modules (expert cache, graph, layers, weights, kernels). Explain roles. Need maybe mention measured speeds, limitations, safe limits, 262K. Need ensure \"technical\" and \"detailed\". Let's draft around 600 words. Count approximate? Let's draft and count roughly. Need maybe 600 words. Let's create 600-650 words. I can manually estimate. Use paragraphs.\n\nPotential structure:\n- Opening: collection of",
+          "peaks": {
+            "gpus": {
+              "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+                "memory_mib": 14734,
+                "utilization_pct": 100
+              },
+              "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+                "memory_mib": 1191,
+                "utilization_pct": 0
+              }
+            },
+            "ram_mib": 92114
+          },
+          "mtp_acceptance": 0.688,
+          "engine_prompt_tokens": 131072,
+          "engine_prompt_ms": 215472.0,
+          "engine_prefill_tok_s": 608.3,
+          "engine_generated_tokens": 400,
+          "engine_decode_ms": 17776.0,
+          "engine_decode_tok_s": 22.5,
+          "estimated_prompt_tokens": 131072
+        }
+      ],
+      "median": {
+        "prompt_tokens": 131072,
+        "generated_tokens": 400,
+        "usage": {
+          "prompt_tokens": 131072,
+          "completion_tokens": 400,
+          "total_tokens": 131472
+        },
+        "ttft_s": 216.011,
+        "prefill_tok_s": 606.78,
+        "decode_tok_s": 22.53,
+        "elapsed_s": 233.717,
+        "answer_first_200": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" They provided many files, likely want a technical summary around 600 words. Need produce final ans",
+        "answer": "We need answer user's request: \"Now write a detailed, 600-word technical summary of the files above.\" They provided many files, likely want a technical summary around 600 words. Need produce final answer. Need likely summarize the provided benchmark files, docs, headers, results. Need maybe mention benchmark nonce? The prompt says \"Benchmark nonce: bench-131072-0 Files: ... Now write a detailed, 600-word technical summary of the files above.\" So likely we need generate 600-word technical summary of the files. Need likely around 600 words, detailed. Need ensure not too long? They asked 600-word. We can produce approx 600 words. Need perhaps mention files: bench/ctx_bench.py, bench/expert_gpu_smoke.py, results, docs, headers. Need technical summary: what files are, purpose, relationships, measurements, architecture. Need maybe focus on Strata engine, Qwen3.8-Flash-Next, dual GPU, benchmarks, results. Need 600 words (not exact but close). Let's craft ~600 words. Need maybe include technical details: files include Python benchmark harness, results from 2026-09-24, 09-27, 09-28, docs/DETAILS.md, DUAL-GPU.md, headers for core modules (expert cache, graph, layers, weights, kernels). Explain roles. Need maybe mention measured speeds, limitations, safe limits, 262K. Need ensure \"technical\" and \"detailed\". Let's draft around 600 words. Count approximate? Let's draft and count roughly. Need maybe 600 words. Let's create 600-650 words. I can manually estimate. Use paragraphs.\n\nPotential structure:\n- Opening: collection of",
+        "peaks": {
+          "gpus": {
+            "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+              "memory_mib": 14734,
+              "utilization_pct": 100
+            },
+            "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+              "memory_mib": 1191,
+              "utilization_pct": 0
+            }
+          },
+          "ram_mib": 92114
+        },
+        "mtp_acceptance": 0.688,
+        "engine_prompt_tokens": 131072,
+        "engine_prompt_ms": 215472.0,
+        "engine_prefill_tok_s": 608.3,
+        "engine_generated_tokens": 400,
+        "engine_decode_ms": 17776.0,
+        "engine_decode_tok_s": 22.5,
+        "estimated_prompt_tokens": 131072
+      }
+    },
+    {
+      "target": 204800,
+      "runs": [
+        {
+          "prompt_tokens": 204800,
+          "generated_tokens": 400,
+          "usage": {
+            "prompt_tokens": 204800,
+            "completion_tokens": 400,
+            "total_tokens": 205200
+          },
+          "ttft_s": 354.915,
+          "prefill_tok_s": 577.04,
+          "decode_tok_s": 23.32,
+          "elapsed_s": 372.024,
+          "answer_first_200": "The user wants a 600-word technical summary of the provided files. The files are from the \"Strata\" project — an inference engine for running large MoE (Mixture of Experts) models (specifically Qwen3.8",
+          "answer": "The user wants a 600-word technical summary of the provided files. The files are from the \"Strata\" project — an inference engine for running large MoE (Mixture of Experts) models (specifically Qwen3.8-Flash-Next) on consumer hardware with limited VRAM but ample RAM. Let me analyze the files and produce a detailed technical summary.\n\nThe files include:\n1. `bench/ctx_bench.py` - A benchmarking harness for measuring streaming chat latency across prompt lengths\n2. `bench/expert_gpu_smoke.py` - Dual-GPU regression test\n3. `bench/results/` - Various benchmark results (markdown tables with tok/s numbers)\n4. `chat.py` - A terminal chat client\n5. `docs/DETAILS.md` - Detailed documentation\n6. `docs/DUAL-GPU.md` - Dual-GPU research document\n7. `include/strata/` - C++ headers for the engine (layers, kernels, caches, graph capture)\n8. `include/strata/kernels/` - CUDA kernel headers\n9. `include/strata/prefill/` - Prompt processing (chunked, batched)\n10. `include/strata/spec/` - Speculative decoding (MTP, suffix lookup)\n11. `serve/` - API layer (OpenAI/Anthropic compatible)\n12. `ref/` - Reference implementations for validation\n13. `README.md` - User-facing documentation\n\nThe summary should cover the architectural approach: tiered memory (GPU VRAM for dense weights + expert cache, RAM for all 24,576 experts, SSD for the n-gram table), the techniques used (expert caching with profiles, KV streaming, chunked prefill, speculative decoding with MTP, prompt lookup), and how the benchmark results relate to the design.\n\n",
+          "peaks": {
+            "gpus": {
+              "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+                "memory_mib": 14697,
+                "utilization_pct": 100
+              },
+              "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+                "memory_mib": 1191,
+                "utilization_pct": 0
+              }
+            },
+            "ram_mib": 92104
+          },
+          "mtp_acceptance": 0.656,
+          "engine_prompt_tokens": 204800,
+          "engine_prompt_ms": 354052.0,
+          "engine_prefill_tok_s": 578.4,
+          "engine_generated_tokens": 400,
+          "engine_decode_ms": 17167.0,
+          "engine_decode_tok_s": 23.3,
+          "estimated_prompt_tokens": 204800
+        }
+      ],
+      "median": {
+        "prompt_tokens": 204800,
+        "generated_tokens": 400,
+        "usage": {
+          "prompt_tokens": 204800,
+          "completion_tokens": 400,
+          "total_tokens": 205200
+        },
+        "ttft_s": 354.915,
+        "prefill_tok_s": 577.04,
+        "decode_tok_s": 23.32,
+        "elapsed_s": 372.024,
+        "answer_first_200": "The user wants a 600-word technical summary of the provided files. The files are from the \"Strata\" project — an inference engine for running large MoE (Mixture of Experts) models (specifically Qwen3.8",
+        "answer": "The user wants a 600-word technical summary of the provided files. The files are from the \"Strata\" project — an inference engine for running large MoE (Mixture of Experts) models (specifically Qwen3.8-Flash-Next) on consumer hardware with limited VRAM but ample RAM. Let me analyze the files and produce a detailed technical summary.\n\nThe files include:\n1. `bench/ctx_bench.py` - A benchmarking harness for measuring streaming chat latency across prompt lengths\n2. `bench/expert_gpu_smoke.py` - Dual-GPU regression test\n3. `bench/results/` - Various benchmark results (markdown tables with tok/s numbers)\n4. `chat.py` - A terminal chat client\n5. `docs/DETAILS.md` - Detailed documentation\n6. `docs/DUAL-GPU.md` - Dual-GPU research document\n7. `include/strata/` - C++ headers for the engine (layers, kernels, caches, graph capture)\n8. `include/strata/kernels/` - CUDA kernel headers\n9. `include/strata/prefill/` - Prompt processing (chunked, batched)\n10. `include/strata/spec/` - Speculative decoding (MTP, suffix lookup)\n11. `serve/` - API layer (OpenAI/Anthropic compatible)\n12. `ref/` - Reference implementations for validation\n13. `README.md` - User-facing documentation\n\nThe summary should cover the architectural approach: tiered memory (GPU VRAM for dense weights + expert cache, RAM for all 24,576 experts, SSD for the n-gram table), the techniques used (expert caching with profiles, KV streaming, chunked prefill, speculative decoding with MTP, prompt lookup), and how the benchmark results relate to the design.\n\n",
+        "peaks": {
+          "gpus": {
+            "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+              "memory_mib": 14697,
+              "utilization_pct": 100
+            },
+            "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+              "memory_mib": 1191,
+              "utilization_pct": 0
+            }
+          },
+          "ram_mib": 92104
+        },
+        "mtp_acceptance": 0.656,
+        "engine_prompt_tokens": 204800,
+        "engine_prompt_ms": 354052.0,
+        "engine_prefill_tok_s": 578.4,
+        "engine_generated_tokens": 400,
+        "engine_decode_ms": 17167.0,
+        "engine_decode_tok_s": 23.3,
+        "estimated_prompt_tokens": 204800
+      }
+    },
+    {
+      "target": 261232,
+      "runs": [
+        {
+          "prompt_tokens": 261232,
+          "generated_tokens": 400,
+          "usage": {
+            "prompt_tokens": 261232,
+            "completion_tokens": 400,
+            "total_tokens": 261632
+          },
+          "ttft_s": 484.747,
+          "prefill_tok_s": 538.9,
+          "decode_tok_s": 22.89,
+          "elapsed_s": 502.177,
+          "answer_first_200": "We need answer user's request: \"Benchmark nonce: bench-261232-0 ... Now write a detailed, 600-word technical summary of the files above.\" User provided many files (Section 1) with code snippets. Need ",
+          "answer": "We need answer user's request: \"Benchmark nonce: bench-261232-0 ... Now write a detailed, 600-word technical summary of the files above.\" User provided many files (Section 1) with code snippets. Need produce around 600 words technical summary. Need likely summarize the collection of files? They ask summary of the files above. Need final answer only. Need maybe 600 words. Need likely discuss Strata project files: benchmark scripts, docs, headers, serve, setup, etc. Need detailed technical summary. Need count? 600 words. Need produce coherent summary. Need include benchmark nonce? The prompt includes \"Benchmark nonce: bench-261232-0\\nFiles:\\n\\n### Section 1\\n...\". They expect probably a 600-word technical summary of those files. We should write 600 words. Need ensure not too short. Could write around 600 words. Let's craft ~600 words (maybe 580-620). Need technical summary of files above. Include: repository is Strata, engine for Qwen3.8-Flash-Next on consumer GPUs; files include benchmark harness, docs, C++ headers, Python serve/setup, reference scripts. Cover architecture: GPU for dense/attention/KV/cache, RAM experts, SSD n-gram/PLE, MTP speculative decoding, prompt path, serve API, setup install. Also mention measured speeds, benchmarks, dual GPU, KV streaming, Q4 KV, experimental speed projection. Need mention file roles: bench/ctx_bench.py, expert_gpu_smoke.py, results, docs DETAILS/DUAL-GPU, include headers, serve frontend/server/telemetry, setup.py, ref load, etc. Need 600 words. Let's draft about 600. Need maybe count roughly. Let's draft and count mentally",
+          "peaks": {
+            "gpus": {
+              "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+                "memory_mib": 14895,
+                "utilization_pct": 100
+              },
+              "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+                "memory_mib": 1191,
+                "utilization_pct": 0
+              }
+            },
+            "ram_mib": 92044
+          },
+          "mtp_acceptance": 0.679,
+          "engine_prompt_tokens": 261232,
+          "engine_prompt_ms": 483697.0,
+          "engine_prefill_tok_s": 540.1,
+          "engine_generated_tokens": 400,
+          "engine_decode_ms": 17499.0,
+          "engine_decode_tok_s": 22.9,
+          "estimated_prompt_tokens": 261232
+        }
+      ],
+      "clamped_from": 262144,
+      "median": {
+        "prompt_tokens": 261232,
+        "generated_tokens": 400,
+        "usage": {
+          "prompt_tokens": 261232,
+          "completion_tokens": 400,
+          "total_tokens": 261632
+        },
+        "ttft_s": 484.747,
+        "prefill_tok_s": 538.9,
+        "decode_tok_s": 22.89,
+        "elapsed_s": 502.177,
+        "answer_first_200": "We need answer user's request: \"Benchmark nonce: bench-261232-0 ... Now write a detailed, 600-word technical summary of the files above.\" User provided many files (Section 1) with code snippets. Need ",
+        "answer": "We need answer user's request: \"Benchmark nonce: bench-261232-0 ... Now write a detailed, 600-word technical summary of the files above.\" User provided many files (Section 1) with code snippets. Need produce around 600 words technical summary. Need likely summarize the collection of files? They ask summary of the files above. Need final answer only. Need maybe 600 words. Need likely discuss Strata project files: benchmark scripts, docs, headers, serve, setup, etc. Need detailed technical summary. Need count? 600 words. Need produce coherent summary. Need include benchmark nonce? The prompt includes \"Benchmark nonce: bench-261232-0\\nFiles:\\n\\n### Section 1\\n...\". They expect probably a 600-word technical summary of those files. We should write 600 words. Need ensure not too short. Could write around 600 words. Let's craft ~600 words (maybe 580-620). Need technical summary of files above. Include: repository is Strata, engine for Qwen3.8-Flash-Next on consumer GPUs; files include benchmark harness, docs, C++ headers, Python serve/setup, reference scripts. Cover architecture: GPU for dense/attention/KV/cache, RAM experts, SSD n-gram/PLE, MTP speculative decoding, prompt path, serve API, setup install. Also mention measured speeds, benchmarks, dual GPU, KV streaming, Q4 KV, experimental speed projection. Need mention file roles: bench/ctx_bench.py, expert_gpu_smoke.py, results, docs DETAILS/DUAL-GPU, include headers, serve frontend/server/telemetry, setup.py, ref load, etc. Need 600 words. Let's draft about 600. Need maybe count roughly. Let's draft and count mentally",
+        "peaks": {
+          "gpus": {
+            "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+              "memory_mib": 14895,
+              "utilization_pct": 100
+            },
+            "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+              "memory_mib": 1191,
+              "utilization_pct": 0
+            }
+          },
+          "ram_mib": 92044
+        },
+        "mtp_acceptance": 0.679,
+        "engine_prompt_tokens": 261232,
+        "engine_prompt_ms": 483697.0,
+        "engine_prefill_tok_s": 540.1,
+        "engine_generated_tokens": 400,
+        "engine_decode_ms": 17499.0,
+        "engine_decode_tok_s": 22.9,
+        "estimated_prompt_tokens": 261232
+      }
+    }
+  ],
+  "vision": null,
+  "health": {
+    "status": "ok",
+    "max_context": 262144,
+    "model": "qwen3.8-flash-next-uncensored-iq3_xxs-262k",
+    "images": true,
+    "api_key": false
+  }
+}

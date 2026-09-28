@@ -1,0 +1,129 @@
+{
+  "label": "orca-dual-262k",
+  "config": "configs\\strata-orca-iq3_xxs-262k.json",
+  "engine_args": [
+    "--pack",
+    "D:\\Workspace\\Personal_Project\\Strata\\packs\\orca-iq3_xxs",
+    "--native",
+    "D:\\Workspace\\Personal_Project\\Strata\\models\\orca-IQ3_XXS\\Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+    "--ple-gguf",
+    "D:\\Workspace\\Personal_Project\\Strata\\models\\orca-IQ3_XXS\\Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+    "--expert-profile",
+    "D:\\Workspace\\Personal_Project\\Strata\\data\\expert-profile.bin",
+    "--expert-cache",
+    "auto",
+    "--spec",
+    "4",
+    "--spec-min-p",
+    "0.5",
+    "--mtp",
+    "D:\\Workspace\\Personal_Project\\Strata\\mtp\\rt",
+    "--kv",
+    "int8",
+    "--vision",
+    "--vram-reserve-mib",
+    "700",
+    "--prefill",
+    "8192",
+    "--mtp-window",
+    "65536",
+    "--pcie-frac",
+    "0.40",
+    "--max-context",
+    "262144",
+    "--expert-gpu",
+    "1",
+    "--expert-gpu-reserve-mib",
+    "700"
+  ],
+  "token_count_method": "tokenizer",
+  "max_tokens": 400,
+  "contexts": [
+    {
+      "target": 261232,
+      "runs": [
+        {
+          "prompt_tokens": 261232,
+          "generated_tokens": 400,
+          "usage": {
+            "prompt_tokens": 261232,
+            "completion_tokens": 400,
+            "total_tokens": 261632
+          },
+          "ttft_s": 467.271,
+          "prefill_tok_s": 559.06,
+          "decode_tok_s": 24.85,
+          "elapsed_s": 483.33,
+          "answer_first_200": "We need answer user's request: \"Benchmark nonce: bench-261232-0 ... Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words technical summary of files listed. We ",
+          "answer": "We need answer user's request: \"Benchmark nonce: bench-261232-0 ... Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words technical summary of files listed. We have many files from a repo: benchmark results, docs, headers, serve, setup, etc. Need synthesize. User likely expects a detailed technical summary of the files above. Need maybe mention benchmark nonce? The prompt includes \"Benchmark nonce: bench-261232-0\\nFiles:\\n\\n### Section 1\\n\\n### bench\\ctx_bench.py ...\". Need produce 600-word technical summary. We should ensure final answer around 600 words. Need analyze content.\n\nWe have files:\n- bench/ctx_bench.py: benchmark streaming chat latency across prompt lengths, uses config args, token counter, samples hardware peaks, calls /v1/chat/completions, computes TTFT, prefill tok/s, decode tok/s, MTP acceptance.\n- bench/expert_gpu_smoke.py: dual-GPU regression, runs strata.exe with expert-gpu flags, captures memory snapshots, asserts outputs.\n- bench/results/... many markdown results: speed measurements for models Q2_0, IQ2_XS, IQ3_XXS, IQ3_S, 200K/262K context, vision, cache, Q4 KV, ESP vector, etc.\n- docs/DETAILS.md: Strata technical details, speed measured, model choices, requirements, Windows/Linux, API, images, experimental speed projection, troubleshooting.\n- docs/DUAL-GPU.md: dual GPU research, second card as expert cache, worker process, pinned memory, reserve, P2P unavailable, etc.\n- include/strata/core headers: device.hpp, expert_cache.hpp, expert_gpu.hpp, expert_source.hpp,",
+          "peaks": {
+            "gpus": {
+              "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+                "memory_mib": 15070,
+                "utilization_pct": 100
+              },
+              "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+                "memory_mib": 6750,
+                "utilization_pct": 71
+              }
+            },
+            "ram_mib": 93718
+          },
+          "mtp_acceptance": 0.635,
+          "engine_prompt_tokens": 261232,
+          "engine_prompt_ms": 466217.0,
+          "engine_prefill_tok_s": 560.3,
+          "engine_generated_tokens": 400,
+          "engine_decode_ms": 16130.0,
+          "engine_decode_tok_s": 24.8,
+          "estimated_prompt_tokens": 261232
+        }
+      ],
+      "clamped_from": 262144,
+      "median": {
+        "prompt_tokens": 261232,
+        "generated_tokens": 400,
+        "usage": {
+          "prompt_tokens": 261232,
+          "completion_tokens": 400,
+          "total_tokens": 261632
+        },
+        "ttft_s": 467.271,
+        "prefill_tok_s": 559.06,
+        "decode_tok_s": 24.85,
+        "elapsed_s": 483.33,
+        "answer_first_200": "We need answer user's request: \"Benchmark nonce: bench-261232-0 ... Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words technical summary of files listed. We ",
+        "answer": "We need answer user's request: \"Benchmark nonce: bench-261232-0 ... Now write a detailed, 600-word technical summary of the files above.\" Need produce ~600 words technical summary of files listed. We have many files from a repo: benchmark results, docs, headers, serve, setup, etc. Need synthesize. User likely expects a detailed technical summary of the files above. Need maybe mention benchmark nonce? The prompt includes \"Benchmark nonce: bench-261232-0\\nFiles:\\n\\n### Section 1\\n\\n### bench\\ctx_bench.py ...\". Need produce 600-word technical summary. We should ensure final answer around 600 words. Need analyze content.\n\nWe have files:\n- bench/ctx_bench.py: benchmark streaming chat latency across prompt lengths, uses config args, token counter, samples hardware peaks, calls /v1/chat/completions, computes TTFT, prefill tok/s, decode tok/s, MTP acceptance.\n- bench/expert_gpu_smoke.py: dual-GPU regression, runs strata.exe with expert-gpu flags, captures memory snapshots, asserts outputs.\n- bench/results/... many markdown results: speed measurements for models Q2_0, IQ2_XS, IQ3_XXS, IQ3_S, 200K/262K context, vision, cache, Q4 KV, ESP vector, etc.\n- docs/DETAILS.md: Strata technical details, speed measured, model choices, requirements, Windows/Linux, API, images, experimental speed projection, troubleshooting.\n- docs/DUAL-GPU.md: dual GPU research, second card as expert cache, worker process, pinned memory, reserve, P2P unavailable, etc.\n- include/strata/core headers: device.hpp, expert_cache.hpp, expert_gpu.hpp, expert_source.hpp,",
+        "peaks": {
+          "gpus": {
+            "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+              "memory_mib": 15070,
+              "utilization_pct": 100
+            },
+            "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+              "memory_mib": 6750,
+              "utilization_pct": 71
+            }
+          },
+          "ram_mib": 93718
+        },
+        "mtp_acceptance": 0.635,
+        "engine_prompt_tokens": 261232,
+        "engine_prompt_ms": 466217.0,
+        "engine_prefill_tok_s": 560.3,
+        "engine_generated_tokens": 400,
+        "engine_decode_ms": 16130.0,
+        "engine_decode_tok_s": 24.8,
+        "estimated_prompt_tokens": 261232
+      }
+    }
+  ],
+  "vision": null,
+  "health": {
+    "status": "ok",
+    "max_context": 262144,
+    "model": "qwen3.8-flash-next-uncensored-iq3_xxs-262k",
+    "images": true,
+    "api_key": false
+  }
+}
