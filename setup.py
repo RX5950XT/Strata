@@ -835,7 +835,7 @@ def is_wsl() -> bool:
 
 def upgrade_config(cfg_path: Path, cfg: dict) -> dict:
     """Configs written before v0.1.13 read prompts in fixed 2048-token chunks; the engine now picks the chunk
-    itself (`--prefill auto`: up to 8192, as the free VRAM allows - about 2x faster on long prompts).  Under WSL,
+    itself (`--prefill auto`: up to 16384, as the free VRAM allows - about 2x faster on long prompts).  Under WSL,
     KV streaming is dropped: its RAM copy must be pinned, and the driver pins only about 1 GB there."""
     a = cfg.get("args", [])
     changed = False
