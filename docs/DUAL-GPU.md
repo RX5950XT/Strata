@@ -7,7 +7,7 @@
 **把 3060 Ti 當成「第二個 expert cache」，接在 CPU expert pool 的 hook 裡。**
 
 - 5060 Ti 維持現狀：attention、GDN、router、shared expert、MTP、KV、輸出頭，以及它自己的 expert cache。
-- 3060 Ti 放 profile 裡「主卡放不下的下一批」expert，並且跟主卡一樣跟著對話換槽、經自己的 PCIe 分擔 miss、在讀 prompt 時分擔 expert（實作結果見下）。
+- 3060 Ti 放 profile 裡「主卡放不下的下一批」expert，並且跟主卡一樣跟著對話換槽、經自己的 PCIe 分擔 miss（實作結果見下）。
 - CPU 繼續算兩張卡都沒有、也沒被分走的 miss。
 
 預估解碼速度（模型推估，還沒實測，誤差 ±20%）：Q2_0 4K 從 87 到約 100 tok/s（+15%），IQ3_XXS 4K 從 65 到約 77 tok/s（+18%）。長 context 的 miss 更多，增益百分比會更高。Prefill 大致不變。
@@ -27,7 +27,7 @@
 | 快取裡的 expert（解碼） | ✓ | ✓（profile 排名在主卡之後的那一批） |
 | 跟著對話換槽（每 4 輪最多 96 個） | ✓ | ✓（同一層內換，和主卡不重複） |
 | 從 RAM 經自己的 PCIe 搬 miss 來算（解碼） | ✓（剩下的 55%） | ✓（先拿 30%，`--expert-gpu-pcie-frac`） |
-| 讀 prompt 時算 expert | ✓ | ✓（每層約 40%，`--expert-gpu-prefill-frac`） |
+| 讀 prompt 時算 expert | ✓ | —（併入上游 0.1.15 時拿掉，見下） |
 
 ### 實測（Ryzen 7 5700X、96 GB RAM、IQ3_XXS、經 `serve/server.py`、每次 400 token）
 
@@ -41,8 +41,26 @@
 | `bench/expert_gpu_smoke.py`（8K context、200 token） | 28.4、27.2；另一次 22.2 | 35.0、34.6；另一次 27.0 |
 
 - 解碼：雙卡快 12–32%。orca 這次也變快了：第一版因為鎖定上限只能鎖 35 GiB，沒有增益。
-- 讀 prompt：71 token 的第一個請求，首字時間約 2.5–2.6 秒（單卡 2.5–4.5 秒）；4457 token 的 prompt 單卡 301.5 → 雙卡 348.2 tok/s（`generate`，同一段時間）。
+- 讀 prompt：71 token 的第一個請求，首字時間約 2.5–2.6 秒（單卡 2.5–4.5 秒）。
 - 雙卡和單卡的 greedy 輸出 200/200 token 一樣（smoke）。單卡讀 prompt 後的 GDN 狀態雜湊，和這次修改前逐位元相同。
+
+### 併入上游 0.1.15（2026-09-28）
+
+上游把讀 prompt 的路徑整段改寫（llama.cpp 的 MMQ、整段串流，長 prompt 約快 2 倍），也加了同樣做法的 AVX2 多 token CPU kernel。合併時：
+
+- 讀 prompt 用上游的新寫法。舊版「第二張卡每層分擔約 40% expert」接不上新寫法，拿掉了（`--expert-gpu-prefill-frac` 已移除）。重新接上最多只省長 prompt 約 10–15% 的時間，卻要改上游正在頻繁更新的核心程式，每次同步都會再衝突。
+- CPU 的 AVX2 多 token kernel 用上游的版本，這邊的版本不再保留。
+- 解碼時 GPU 每層的改進（IQ 投影一次解碼給所有 token、只讀 CPU 算的那幾列）保留，結果逐位元不變。
+
+同一段時間交錯跑（Qwen IQ3_XXS、16K context，`generate`）：
+
+| | 上游 0.1.15 單卡 | 合併版單卡 | 合併版雙卡 | 合併前雙卡 |
+| --- | --- | --- | --- | --- |
+| 解碼 300 token（tok/s） | 32.2、32.0、31.8 | 32.3、32.9、32.5 | 43.3、41.2、43.8 | |
+| 讀 4457 token 的 prompt（tok/s） | 427、425 | | 470、457 | 345、347 |
+
+- 單卡時合併版和上游的 greedy 輸出 200/200 token 相同。
+- 評估過但沒做：hyper-connection 的 `gr_down` / `gr_up`（每輪合計約 2.7 ms）改寫、orca 的 hc 權重改讀原本的 Q6_K/Q8_0。兩者各自最多省約 1–2%，前者還會改變加總順序（結果不再逐位元相同），不划算。
 
 ### 量到的問題和解法
 
@@ -50,14 +68,13 @@
 2. **沒事做的卡會在 1 秒內掉到 P8，PCIe 也降到 Gen1**。讀 prompt 的那幾秒，第二張卡沒有工作，回覆一開始要花約 1.5 秒爬回全速（每組 expert 一開始 88 µs，熱了以後 7 µs）。現在一個請求一開始，引擎就通知工作行程保溫：每 1 ms 送一個 1 ms 的空轉 kernel，請求結束 1 秒後才停。間隔拉到 15 ms 不夠，約 7 秒後還是會掉速。
 3. **WDDM 每次 CUDA 呼叫約 10 µs，而且同一個行程開多條執行緒送也不會更快**。解碼時：
    - 工作行程每層原本要約 12 次呼叫，現在改成一個 CUDA graph，依 (格式, token 數, k) 各錄一份。
-   - 主卡每層的 PCIe 搬運（2 次 `cudaMemcpyAsync` 加 1 次 `cudaLaunchHostFunc`，約 80 µs）原本卡在 CPU 開始算之前，現在交給 Verifier 的專用執行緒送出。主程式每輪的規劃時間從約 7 ms 降到 1.3–1.7 ms，單卡也一起受惠。
-4. **讀 prompt 時，搬運和計算原本重疊得很差**：每個 expert 都有一次跨 stream 的 event 交接，每層有約 27% 的時間兩邊都閒著。現在每 16 個 expert 才交接一次。反量化仍然一次只做 2 個（約 20 MB），因為一次做 16 個（157 MB）會超出 32 MB 的 L2，GEMM 反而變慢。
-5. 第一版留下的 3 件事仍然有效：WDDM 的 `cudaMalloc` 要等第一次寫入才真的佔用記憶體，所以槽位先寫零，再檢查保留量；表格和輸入一次複製進去、結果一次複製回來；不用 zero-copy。
+   - 主卡每層的 PCIe 搬運（2 次 `cudaMemcpyAsync` 加 1 次 `cudaLaunchHostFunc`，約 80 µs）原本卡在 CPU 開始算之前，改成交給 Verifier 的專用執行緒送出。上游 0.1.14 起預設改用 copy kernel（`--pcie-mode auto`，issue #31），這條執行緒只在 `--pcie-mode dma` 時用到。
+4. 第一版留下的 3 件事仍然有效：WDDM 的 `cudaMalloc` 要等第一次寫入才真的佔用記憶體，所以槽位先寫零，再檢查保留量；表格和輸入一次複製進去、結果一次複製回來；不用 zero-copy。
 
 ### 還沒做的
 
 - 讀長 prompt 時，現在卡在主卡上 expert 以外的部分（attention、GDN、PLE），這部分第二張卡幫不上。
-- CPU 算 IQ3_XXS expert 很慢，只有約 7 GB/s，是解碼剩下的主要瓶頸。這和單卡是同一件事，沒有在這次處理。
+- CPU 算 expert 仍是解碼的主要瓶頸：RAM 實測只讀得到約 25 GB/s，CPU 和兩張卡的 PCIe 讀取共用這個上限。
 - 工作行程只在 Windows 上實作；其他平台的引擎會照常用單卡跑。
 
 ## 為什麼接在 pool hook

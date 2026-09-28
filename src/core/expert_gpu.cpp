@@ -14,8 +14,6 @@
 #include "strata/kernels/iq_kernels.hpp"
 #include "strata/kernels/quantize_act.hpp"
 #include "strata/kernels/s2_expert_grouped.hpp"
-#include "strata/prefill/gemm.hpp"
-#include "strata/prefill/kernels.hpp"
 #include <cuda_runtime.h>
 #include <immintrin.h>
 #include <stdexcept>
@@ -64,8 +62,6 @@ struct EgpuChannel {
     int32_t n_cand, slots;
     struct Cand { int32_t layer, expert; } cand[kCandCap];   ///< rank order; the worker holds the first `slots`
     std::atomic<uint32_t> req, ack, sleeping, stop, swap_req, swap_ack, active;
-    std::atomic<uint32_t> pf_req, pf_ack;
-    int32_t pf_status;
     // the job: groups [0, groups) are resident (item = slot), [groups, groups + groups2) are read over PCIe
     // (item = expert id of `layer`)
     int32_t layer, nt, k, groups, groups2, entries, lo, hi, item[kCap];
@@ -78,25 +74,6 @@ struct EgpuChannel {
 
 #ifdef _WIN32
 namespace {
-// PF_PB experts per copy batch, two batch areas in the decode staging (kStage = 24 blobs): the copy of batch n+1
-// overlaps the compute of batch n.
-constexpr int PF_K = 10, PF_NE = 512, PF_RMAX = 4096, PF_PB = 12, PF_SB = 2;
-struct alignas(256) PfHeader { int32_t layer, tokens, mask[PF_NE]; };
-struct PfView {
-    PfHeader* head;
-    uint16_t* x;
-    int32_t* ids;
-    float *w, *out;
-    PfView(void* base, int cap) : head((PfHeader*) base) {
-        x = (uint16_t*) ((uint8_t*) base + sizeof(PfHeader));
-        ids = (int32_t*) (x + (size_t) cap * kWidth);
-        w = (float*) (ids + (size_t) cap * PF_K);
-        out = w + (size_t) cap * PF_K;
-    }
-};
-size_t pf_bytes(int cap) {
-    return (sizeof(PfHeader) + (size_t) cap * (6 * kWidth + 8 * PF_K) + 4095) & ~(size_t) 4095;
-}
 std::wstring widen(const std::string& s) { return std::wstring(s.begin(), s.end()); }
 
 void checked(cudaError_t error) {
@@ -136,14 +113,6 @@ private:
     uint8_t* stage_[kStage] = {};
     struct Graph { int gu, down, nt, k; cudaGraphExec_t exec = nullptr; };
     std::vector<Graph> graphs_;   // a null exec remembers a failed build; keep using the direct path
-    int pf_cap_ = 0;
-    void *pf_host_ = nullptr, *pf_dev_ = nullptr;
-    uint16_t *pf_xs_ = nullptr, *pf_h_ = nullptr, *pf_gu_w_ = nullptr, *pf_d_w_ = nullptr;
-    float *pf_gu_ = nullptr, *pf_dm_ = nullptr;
-    int32_t* pf_src_ = nullptr;          ///< per row: its token
-    float* pf_rw_ = nullptr;             ///< per row: its router weight
-    cudaEvent_t pf_used_[2] = {}, pf_copied_[2] = {};
-    strata::prefill::Gemm pf_gemm_;
     int fail(const std::string& why) {
         std::snprintf(ch_->error, sizeof ch_->error, "%s", why.c_str());
         ch_->phase.store(-1, std::memory_order_release);
@@ -153,8 +122,6 @@ private:
     void warm();
     cudaError_t submit();
     void swaps();
-    void prefill_init(const char* name, int cap);
-    cudaError_t prefill_submit();
 };
 
 bool Worker::wait_phase(int want) {
@@ -168,7 +135,7 @@ bool Worker::wait_phase(int want) {
 
 int Worker::run(int argc, char** argv) {
     using namespace strata::kernels;
-    if (argc != 10 && argc != 11) return 2;
+    if (argc != 10) return 2;
     HANDLE map = OpenFileMappingW(FILE_MAP_READ | FILE_MAP_WRITE, FALSE, widen(argv[2]).c_str());
     if (!map) return 3;
     ch_ = (EgpuChannel*) MapViewOfFile(map, FILE_MAP_READ | FILE_MAP_WRITE, 0, 0, sizeof(EgpuChannel));
@@ -177,14 +144,6 @@ int Worker::run(int argc, char** argv) {
     const uint64_t arena_bytes = std::strtoull(argv[4], nullptr, 10), pin_bytes = std::strtoull(argv[9], nullptr, 10);
     const int64_t n_layers = std::atoll(argv[6]), n_expert = std::atoll(argv[7]);
     const uint64_t reserve = (uint64_t) std::atoll(argv[8]) << 20;
-    int pf_cap = 0;
-    if (argc == 11) {
-        char* end = nullptr;
-        const long long cap = std::strtoll(argv[10], &end, 10);
-        if (end == argv[10] || *end || cap < 0 || cap > INT32_MAX / PF_K)
-            return fail("invalid prefill chunk");
-        pf_cap = (int) cap;
-    }
     std::string err;
     const char* stage = "start CUDA";
     try {
@@ -222,11 +181,6 @@ int Worker::run(int argc, char** argv) {
         const size_t stage_bytes = ((size_t) layout.max_blob + 255) & ~(size_t) 255;
         checked(cudaMalloc((void**) &stage_[0], stage_bytes * kStage));
         for (int q = 1; q < kStage; ++q) stage_[q] = stage_[0] + (size_t) q * stage_bytes;
-        if (pf_cap > 0) {
-            stage = "allocate prefill buffers";
-            if (n_expert != PF_NE) return fail("prefill requires 512 experts");
-            prefill_init(argv[2], pf_cap);
-        }
         size_t free = 0, total = 0;
         checked(cudaMemGetInfo(&free, &total));
         ch_->vram_free = free;
@@ -320,13 +274,6 @@ int Worker::run(int argc, char** argv) {
     uint32_t served = ch_->ack.load(std::memory_order_relaxed);
     double last = now_ms();
     while (!ch_->stop.load(std::memory_order_acquire)) {
-        const uint32_t pf_want = ch_->pf_req.load(std::memory_order_acquire);
-        if (pf_want != ch_->pf_ack.load(std::memory_order_relaxed)) {
-            ch_->pf_status = (int32_t) prefill_submit();
-            ch_->pf_ack.store(pf_want, std::memory_order_release);
-            last = now_ms();
-            continue;
-        }
         const uint32_t want = ch_->req.load(std::memory_order_acquire);
         if (want == served) {
             const double t = now_ms();
@@ -335,8 +282,7 @@ int Worker::run(int argc, char** argv) {
             const bool hot = t - last < 1000.0;
             if (hot) warm();
             ch_->sleeping.store(1, std::memory_order_seq_cst);
-            if (ch_->req.load(std::memory_order_seq_cst) == served &&
-                ch_->pf_req.load(std::memory_order_seq_cst) == ch_->pf_ack.load() && !ch_->stop.load())
+            if (ch_->req.load(std::memory_order_seq_cst) == served && !ch_->stop.load())
                 WaitForSingleObject(wake_, hot ? 1 : 100);
             ch_->sleeping.store(0, std::memory_order_seq_cst);
             continue;
@@ -348,162 +294,6 @@ int Worker::run(int argc, char** argv) {
     }
     swapper.join();
     return 0;
-}
-
-void Worker::prefill_init(const char* name, int cap) {
-    pf_cap_ = cap;
-    HANDLE map = OpenFileMappingW(FILE_MAP_READ | FILE_MAP_WRITE, FALSE, (widen(name) + L"-prefill").c_str());
-    if (!map) throw std::runtime_error("cannot open prefill section");
-    pf_host_ = MapViewOfFile(map, FILE_MAP_READ | FILE_MAP_WRITE, 0, 0, pf_bytes(cap));
-    CloseHandle(map);
-    if (!pf_host_) throw std::runtime_error("cannot map prefill section");
-    checked(cudaHostRegister(pf_host_, pf_bytes(cap), cudaHostRegisterDefault));
-    auto alloc = [&](auto** p, size_t count) {
-        checked(cudaMalloc((void**) p, count * sizeof(**p)));
-        checked(cudaMemset(*p, 0, count * sizeof(**p)));
-    };
-    checked(cudaMalloc(&pf_dev_, pf_bytes(cap)));
-    checked(cudaMemset(pf_dev_, 0, pf_bytes(cap)));
-    alloc(&pf_src_, (size_t) cap * PF_K);
-    alloc(&pf_rw_, (size_t) cap * PF_K);
-    alloc(&pf_xs_, (size_t) PF_RMAX * kWidth);
-    alloc(&pf_gu_, (size_t) PF_RMAX * 1280);
-    alloc(&pf_h_, (size_t) PF_RMAX * 640);
-    alloc(&pf_dm_, (size_t) PF_RMAX * kWidth);
-    alloc(&pf_gu_w_, (size_t) PF_SB * 1280 * kWidth);
-    alloc(&pf_d_w_, (size_t) PF_SB * kWidth * 640);
-    for (int a = 0; a < 2; ++a) {
-        checked(cudaEventCreateWithFlags(&pf_used_[a], cudaEventDisableTiming));
-        checked(cudaEventCreateWithFlags(&pf_copied_[a], cudaEventDisableTiming));
-    }
-    std::string err;
-    if (!pf_gemm_.init(stream_, 0, err)) throw std::runtime_error(err);
-    // WDDM commits on first touch; include the workspace before measuring room for slots.
-    pf_gemm_.f16(pf_xs_, pf_gu_w_, pf_gu_, 1, 1280, kWidth);
-    checked(cudaDeviceSynchronize());
-}
-
-cudaError_t Worker::prefill_submit() {
-    using namespace strata::prefill;
-    using namespace strata::kernels;
-    if (!pf_host_ || !pf_dev_) return cudaErrorInvalidValue;
-    try {
-        const PfView h(pf_host_, pf_cap_), d(pf_dev_, pf_cap_);
-        const int T = h.head->tokens, l = h.head->layer;
-        const auto& lay = cpu::expert_layout();
-        if (T <= 0 || T > pf_cap_ || l < 0 || l >= lay.n_layers) return cudaErrorInvalidValue;
-        const size_t pairs = (size_t) T * PF_K, bb = (size_t) lay.blob_bytes(l);
-        std::vector<int32_t> cnt(PF_NE, 0), off(PF_NE, 0), order, src;
-        std::vector<float> rw;
-        for (size_t i = 0; i < pairs; ++i) {
-            const int e = h.ids[i];
-            if (e < 0 || e >= PF_NE) return cudaErrorInvalidValue;
-            if (h.head->mask[e] != -1) ++cnt[e];
-        }
-        int rows = 0;
-        for (int e = 0; e < PF_NE; ++e) {
-            const int s = h.head->mask[e];
-            if (s < -2 || s >= ch_->slots) return cudaErrorInvalidValue;
-            if (s == -2 && lay.layer_offset(l) + bb * PF_NE > ch_->pinned) return cudaErrorInvalidValue;
-            off[e] = rows;
-            rows += cnt[e];
-            if (cnt[e]) order.push_back(e);
-        }
-        src.resize(rows);
-        rw.resize(rows);
-        auto fill = off;
-        for (size_t i = 0; i < pairs; ++i) {
-            const int e = h.ids[i];
-            if (h.head->mask[e] == -1) continue;
-            const int r = fill[e]++;
-            src[r] = (int32_t) (i / PF_K);
-            rw[r] = h.w[i];
-        }
-        checked(cudaMemcpyAsync(d.x, h.x, (size_t) T * kWidth * 2, cudaMemcpyHostToDevice, stream_));
-        checked(cudaMemcpyAsync(d.w, h.w, pairs * 4, cudaMemcpyHostToDevice, stream_));
-        checked(cudaMemcpyAsync(d.ids, h.ids, pairs * 4, cudaMemcpyHostToDevice, stream_));
-        if (rows) {
-            checked(cudaMemcpyAsync(pf_src_, src.data(), (size_t) rows * 4, cudaMemcpyHostToDevice, stream_));
-            checked(cudaMemcpyAsync(pf_rw_, rw.data(), (size_t) rows * 4, cudaMemcpyHostToDevice, stream_));
-        }
-        checked(cudaMemsetAsync(d.out, 0, (size_t) T * kWidth * 4, stream_));
-        // Staging: the decode staging (decode and prefill are served one at a time by this thread), in two areas.
-        IqDequantBatch tables[2];
-        auto stage = [&](size_t first, int a) {
-            const int nb = (int) std::min((size_t) PF_PB, order.size() - first);
-            uint8_t* area = stage_[a * PF_PB];
-            if (first >= 2 * (size_t) PF_PB) checked(cudaStreamWaitEvent(copy_, pf_used_[a], 0));
-            for (int i = 0; i < nb;) {
-                const int e = order[first + i], s = h.head->mask[e];
-                if (s >= 0) { tables[a].blob[i++] = cache_.device_slot(s); continue; }
-                int end = i + 1;
-                while (end < nb && h.head->mask[order[first + end]] == -2 &&
-                       order[first + end] == order[first + end - 1] + 1) ++end;
-                checked(cudaMemcpyAsync(area + (size_t) i * bb, arena_ + lay.blob_offset(l, e),
-                                        (size_t) (end - i) * bb, cudaMemcpyHostToDevice, copy_));
-                for (; i < end; ++i) tables[a].blob[i] = area + (size_t) i * bb;
-            }
-            checked(cudaEventRecord(pf_copied_[a], copy_));
-        };
-        if (!order.empty()) stage(0, 0);
-        for (size_t first = 0; first < order.size(); first += PF_PB) {
-            const int nb = (int) std::min((size_t) PF_PB, order.size() - first);
-            const int a = (int) (first / PF_PB % 2);
-            const IqDequantBatch batch = tables[a];
-            checked(cudaStreamWaitEvent(stream_, pf_copied_[a], 0));
-            if (first + PF_PB < order.size()) stage(first + PF_PB, a ^ 1);
-            for (int s0 = 0; s0 < nb; s0 += PF_SB) {
-                const int ns = std::min(PF_SB, nb - s0);
-                IqDequantBatch sub;
-                for (int i = 0; i < ns; ++i) sub.blob[i] = batch.blob[s0 + i];
-                if (lay.native) {
-                    const auto& f = lay.fmt[(size_t) l];
-                    iq_dequant_gu_f16_batch(f.gu_type, sub, ns, f.up_off, f.n_ff, f.n_embd, pf_gu_w_, stream_);
-                    iq_dequant_f16_batch(f.d_type, sub, ns, f.down_off, f.n_embd * f.n_ff, pf_d_w_, stream_);
-                } else {
-                    for (int i = 0; i < ns; ++i)
-                        blob_dequant_f16(sub.blob[i], pf_gu_w_ + (size_t) i * 1280 * kWidth,
-                                         pf_d_w_ + (size_t) i * kWidth * 640, stream_);
-                }
-                if (s0 + ns == nb) checked(cudaEventRecord(pf_used_[a], stream_));
-                const int start = off[order[first + s0]];
-                const int last = order[first + s0 + ns - 1], end = off[last] + cnt[last];
-                for (int begin = start; begin < end; begin += PF_RMAX) {
-                    const int nr = std::min(PF_RMAX, end - begin);
-                    gather_rows16(d.x, pf_src_ + begin, pf_xs_, nr, kWidth, stream_);
-                    auto spans = [&](bool down) {
-                        for (int i = 0; i < ns; ++i) {
-                            const int e = order[first + s0 + i];
-                            const int lo = std::max(begin, off[e]), hi = std::min(begin + nr, off[e] + cnt[e]);
-                            if (hi <= lo) continue;
-                            const size_t r = lo - begin;
-                            if (!down) pf_gemm_.f16(pf_xs_ + r * kWidth, pf_gu_w_ + (size_t) i * 1280 * kWidth,
-                                                    pf_gu_ + r * 1280, hi - lo, 1280, kWidth);
-                            else pf_gemm_.f16(pf_h_ + r * 640, pf_d_w_ + (size_t) i * kWidth * 640,
-                                               pf_dm_ + r * kWidth, hi - lo, kWidth, 640);
-                        }
-                    };
-                    spans(false);
-                    swiglu_interleaved(pf_gu_, pf_h_, nr, stream_);
-                    spans(true);
-                    for (int i = 0; i < ns; ++i) {   // one expert per launch: its tokens are distinct
-                        const int e = order[first + s0 + i];
-                        const int lo = std::max(begin, off[e]), hi = std::min(begin + nr, off[e] + cnt[e]);
-                        if (hi > lo) moe_partial(pf_dm_ + (size_t) (lo - begin) * kWidth, pf_src_ + lo, pf_rw_ + lo, d.out,
-                                                 hi - lo, stream_);
-                    }
-                }
-            }
-        }
-        checked(cudaMemcpyAsync(h.out, d.out, (size_t) T * kWidth * 4, cudaMemcpyDeviceToHost, stream_));
-        checked(cudaStreamSynchronize(stream_));
-        return cudaSuccess;
-    } catch (const std::exception& error) {
-        std::fprintf(stderr, "expert GPU prefill: %s\n", error.what());
-        cudaStreamSynchronize(copy_);
-        cudaStreamSynchronize(stream_);
-        return cudaErrorLaunchFailure;
-    }
 }
 
 // Swaps run on their own thread and stream, off the layer path: a copy from an unpinned layer is synchronous for
@@ -659,13 +449,6 @@ void ExpertGpu::close() {
     }
     if (job_) CloseHandle((HANDLE) job_);
     if (wake_) CloseHandle((HANDLE) wake_);
-    if (pf_registered_) cudaHostUnregister(pf_);
-    if (pf_) UnmapViewOfFile(pf_);
-    if (pf_map_) CloseHandle((HANDLE) pf_map_);
-    pf_ = pf_map_ = nullptr;
-    pf_cap_ = 0;
-    pf_registered_ = pf_pending_ = false;
-    pf_req_ = 0;
     if (ch_) UnmapViewOfFile(ch_);
     if (map_) CloseHandle((HANDLE) map_);
     ch_ = nullptr;
@@ -679,8 +462,8 @@ bool ExpertGpu::open(const Options& opt, const ExpertCache& primary, const std::
     close();
     auto bail = [&](const std::string& why) { err = why; close(); return false; };
     if (profile.empty()) return bail("an expert profile is required");
-    if (opt.reserve_mib < 0 || opt.slots < -1 || opt.prefill_chunk < 0 || opt.prefill_chunk > INT32_MAX / PF_K)
-        return bail("invalid reserve, slot cap or prefill chunk");
+    if (opt.reserve_mib < 0 || opt.slots < -1)
+        return bail("invalid reserve or slot cap");
     n_layers_ = n_layers;
     n_expert_ = n_expert;
     pcie_num_ = std::max(0, std::min(256, opt.pcie_num));
@@ -692,19 +475,6 @@ bool ExpertGpu::open(const Options& opt, const ExpertCache& primary, const std::
     ch_ = (EgpuChannel*) MapViewOfFile((HANDLE) map_, FILE_MAP_READ | FILE_MAP_WRITE, 0, 0, sizeof(EgpuChannel));
     if (!ch_) return bail("cannot map the worker channel");
     ch_->magic = kMagic;
-    if (opt.prefill_chunk > 0) {
-        if (n_expert != PF_NE) return bail("prefill requires 512 experts");
-        pf_cap_ = opt.prefill_chunk;
-        const uint64_t bytes = pf_bytes(pf_cap_);
-        pf_map_ = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, (DWORD) (bytes >> 32),
-                                     (DWORD) bytes, widen(name + "-prefill").c_str());
-        if (!pf_map_) return bail("cannot create prefill section");
-        pf_ = MapViewOfFile((HANDLE) pf_map_, FILE_MAP_READ | FILE_MAP_WRITE, 0, 0, (SIZE_T) bytes);
-        if (!pf_) return bail("cannot map prefill section");
-        const cudaError_t rc = cudaHostRegister(pf_, (size_t) bytes, cudaHostRegisterDefault);
-        if (rc != cudaSuccess) return bail(std::string("cannot pin prefill section: ") + cudaGetErrorString(rc));
-        pf_registered_ = true;
-    }
     wake_ = CreateEventW(nullptr, FALSE, FALSE, widen(name + "-wake").c_str());
     job_ = CreateJobObjectW(nullptr, nullptr);
     if (!wake_ || !job_) return bail("cannot create the worker's event or job object");
@@ -728,8 +498,7 @@ bool ExpertGpu::open(const Options& opt, const ExpertCache& primary, const std::
     std::wstring cmd = L"\"" + std::wstring(exe) + L"\" --expert-gpu-worker " + widen(name) + L" " + widen(arena_name) +
                        L" " + std::to_wstring(arena_bytes) + L" \"" + widen(pack_dir) + L"\" " +
                        std::to_wstring(n_layers) + L" " + std::to_wstring(n_expert) + L" " +
-                       std::to_wstring(opt.reserve_mib) + L" " + std::to_wstring(pin) + L" " +
-                       std::to_wstring(opt.prefill_chunk);
+                       std::to_wstring(opt.reserve_mib) + L" " + std::to_wstring(pin);
     // The worker sees only its GPU.  Its environment is this one with CUDA_VISIBLE_DEVICES swapped for the call.
     wchar_t old_env[4096];
     const DWORD had = GetEnvironmentVariableW(L"CUDA_VISIBLE_DEVICES", old_env, 4096);
@@ -801,56 +570,6 @@ void ExpertGpu::set_active(bool on) {
 
 bool ExpertGpu::contains(int64_t layer, int32_t expert) const {
     return enabled_ && res_[(size_t) layer * (size_t) n_expert_ + (size_t) expert] >= 0;
-}
-
-bool ExpertGpu::layer_pinned(int64_t layer) const {
-    if (!enabled_ || layer < 0 || layer >= n_layers_) return false;
-    const auto& lay = strata::kernels::cpu::expert_layout();
-    return lay.layer_offset(layer) + lay.blob_bytes(layer) * (uint64_t) n_expert_ <= pinned_;
-}
-
-bool ExpertGpu::prefill_ready(int64_t tokens) const {
-    return enabled_ && pf_ && !pf_pending_ && tokens > 0 && tokens <= pf_cap_;
-}
-uint16_t* ExpertGpu::prefill_input() { return PfView(pf_, pf_cap_).x; }
-float* ExpertGpu::prefill_weights() { return PfView(pf_, pf_cap_).w; }
-const float* ExpertGpu::prefill_output() const { return PfView(pf_, pf_cap_).out; }
-
-bool ExpertGpu::prefill_launch(int64_t layer, int tokens, const int32_t* ids, const int32_t* mask) {
-    if (!prefill_ready(tokens) || layer < 0 || layer >= n_layers_ || !ids || !mask) return false;
-    if (!alive()) { disable("the worker process exited before prefill"); return false; }
-    poll_swaps();
-    const PfView h(pf_, pf_cap_);
-    for (int e = 0; e < PF_NE; ++e) {
-        if (mask[e] < -2 || (mask[e] == -2 && !layer_pinned(layer))) return false;
-        const int slot = res_[(size_t) layer * n_expert_ + e];
-        if (mask[e] >= 0 && slot < 0) return false;
-        h.head->mask[e] = mask[e] >= 0 ? slot : mask[e];
-    }
-    for (int i = 0; i < tokens * PF_K; ++i) if (ids[i] < 0 || ids[i] >= PF_NE) return false;
-    h.head->layer = (int32_t) layer;
-    h.head->tokens = tokens;
-    std::memcpy(h.ids, ids, (size_t) tokens * PF_K * 4);
-    pf_pending_ = true;
-    ch_->pf_req.store(++pf_req_, std::memory_order_seq_cst);
-    if (ch_->sleeping.load(std::memory_order_seq_cst)) SetEvent((HANDLE) wake_);
-    return true;
-}
-
-bool ExpertGpu::prefill_wait() {
-    if (!pf_pending_) return false;
-    for (uint32_t i = 1; ch_->pf_ack.load(std::memory_order_acquire) != pf_req_; ++i) {
-        _mm_pause();
-        if ((i & 0xffff) == 0 && !alive()) {
-            pf_pending_ = false;
-            disable("the worker process exited during prefill");
-            return false;
-        }
-    }
-    pf_pending_ = false;
-    if (ch_->pf_status == (int32_t) cudaSuccess) return true;
-    disable(cudaGetErrorString((cudaError_t) ch_->pf_status));
-    return false;
 }
 
 void ExpertGpu::disable(const char* reason) {
@@ -1055,13 +774,6 @@ bool ExpertGpu::open(const Options&, const ExpertCache&, const std::string&, uin
     return false;
 }
 bool ExpertGpu::contains(int64_t, int32_t) const { return false; }
-bool ExpertGpu::layer_pinned(int64_t) const { return false; }
-bool ExpertGpu::prefill_ready(int64_t) const { return false; }
-uint16_t* ExpertGpu::prefill_input() { return nullptr; }
-float* ExpertGpu::prefill_weights() { return nullptr; }
-const float* ExpertGpu::prefill_output() const { return nullptr; }
-bool ExpertGpu::prefill_launch(int64_t, int, const int32_t*, const int32_t*) { return false; }
-bool ExpertGpu::prefill_wait() { return false; }
 void ExpertGpu::set_active(bool) {}
 void ExpertGpu::disable(const char*) {}
 void ExpertGpu::poll_swaps() {}

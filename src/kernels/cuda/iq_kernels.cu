@@ -643,19 +643,6 @@ __global__ void dequant_gu_kernel(int ty, const void* __restrict__ gate, const v
     dq_dispatch<__half>(ty, parity ? up : gate, i, y + ((2 * r + parity) * per_row + c) * QK_K, threadIdx.x);
 }
 
-__global__ void dequant_flat_batch_kernel(int ty, IqDequantBatch src, size_t offset, int64_t n, __half* y) {
-    const int64_t i = blockIdx.x, e = blockIdx.y;
-    dq_dispatch<__half>(ty, src.blob[e] + offset, i, y + e * n + i * QK_K, threadIdx.x);
-}
-__global__ void dequant_gu_batch_kernel(int ty, IqDequantBatch src, size_t up_off, int64_t n_ff,
-                                        int64_t per_row, __half* y) {
-    const int64_t i = blockIdx.x, e = blockIdx.y;
-    const int parity = blockIdx.z;
-    const int64_t r = i / per_row, c = i % per_row;
-    dq_dispatch<__half>(ty, src.blob[e] + (parity ? up_off : 0), i,
-                       y + (e * 2 * n_ff * per_row + (2 * r + parity) * per_row + c) * QK_K, threadIdx.x);
-}
-
 bool is_iq(int t) { return t == 16 || t == 17 || t == 18 || t == 20 || t == 21 || t == 22 || t == 23 || t == 29 || t == 42 || t == 11; }
 
 }  // namespace
@@ -742,27 +729,6 @@ void iq_dequant_gu_f16(int t, const void* gate, const void* up, int64_t n_ff, in
     dequant_gu_kernel<<<dim3((unsigned) (n_ff * per_row), 2), 32, 0, (cudaStream_t) stream>>>(t, gate, up, per_row,
                                                                                            (__half*) dst);
     check("iq_dequant_gu_f16");
-}
-
-void iq_dequant_f16_batch(int t, IqDequantBatch src, int count, size_t offset, int64_t n,
-                          uint16_t* dst, void* stream) {
-    if (count < 1 || count > IQ_DEQUANT_BATCH || n <= 0 || n % 256 != 0 || !is_iq(t)) {
-        std::fprintf(stderr, "iq_dequant_f16_batch: bad arguments\n"); std::exit(1);
-    }
-    dequant_flat_batch_kernel<<<dim3((unsigned) (n / 256), count), 32, 0, (cudaStream_t) stream>>>(
-        t, src, offset, n, (__half*) dst);
-    check("iq_dequant_f16_batch");
-}
-
-void iq_dequant_gu_f16_batch(int t, IqDequantBatch src, int count, size_t up_off,
-                             int64_t n_ff, int64_t n_embd, uint16_t* dst, void* stream) {
-    if (count < 1 || count > IQ_DEQUANT_BATCH || n_ff <= 0 || n_embd <= 0 || n_embd % 256 != 0 || !is_iq(t)) {
-        std::fprintf(stderr, "iq_dequant_gu_f16_batch: bad arguments\n"); std::exit(1);
-    }
-    const int64_t per_row = n_embd / 256;
-    dequant_gu_batch_kernel<<<dim3((unsigned) (n_ff * per_row), count, 2), 32, 0, (cudaStream_t) stream>>>(
-        t, src, up_off, n_ff, per_row, (__half*) dst);
-    check("iq_dequant_gu_f16_batch");
 }
 
 NativeExpertLayout native_expert_layout(int gu_type, int d_type, int64_t n_embd, int64_t n_ff) {

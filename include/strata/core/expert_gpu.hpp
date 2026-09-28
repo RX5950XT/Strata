@@ -29,7 +29,6 @@ public:
         int slots = -1;           ///< cap on its slots (-1 = as many as fit)
         double pin_gib = -1;      ///< arena the worker pins for its PCIe reads (< 0 = what the machine's budget leaves)
         int pcie_num = 0;         ///< share of a verify window's misses (x/256) the worker reads over its PCIe link
-        int prefill_chunk = 0;    ///< maximum prompt tokens; zero leaves the prompt path on GPU0
     };
     ExpertGpu() = default;
     ~ExpertGpu();
@@ -40,13 +39,6 @@ public:
               uint64_t main_pinned, const std::string& pack_dir, int64_t n_layers, int64_t n_expert,
               const std::vector<std::pair<int32_t, int32_t>>& profile, std::string& err);
     bool contains(int64_t layer, int32_t expert) const;
-    bool layer_pinned(int64_t layer) const;
-    bool prefill_ready(int64_t tokens) const;
-    uint16_t* prefill_input();
-    float* prefill_weights();
-    const float* prefill_output() const;
-    bool prefill_launch(int64_t layer, int tokens, const int32_t* ids, const int32_t* mask);
-    bool prefill_wait();
     /// Claims this tier's rows (kind -1 -> -2): its resident experts, and with `pcie` a share of the other misses,
     /// which it reads over its own PCIe link.  kind 0 rows (GPU0's) are never taken.
     bool launch(int64_t layer, const float* x, const int32_t* ids, int nt, int k, float* out, int32_t* kind,
@@ -67,10 +59,6 @@ private:
     static constexpr int cap = 128, max_tokens = 8, width = 2560;
     EgpuChannel* ch_ = nullptr;
     void *map_ = nullptr, *proc_ = nullptr, *job_ = nullptr, *wake_ = nullptr;
-    void *pf_map_ = nullptr, *pf_ = nullptr;
-    int pf_cap_ = 0;
-    bool pf_registered_ = false, pf_pending_ = false;
-    uint32_t pf_req_ = 0;
     bool enabled_ = false, pending_ = false, swapping_ = false;
     int entries_ = 0, pcie_num_ = 0;
     int64_t n_layers_ = 0, n_expert_ = 0;
@@ -89,6 +77,6 @@ private:
 };
 
 /// The worker process's main (`strata --expert-gpu-worker <channel> <arena> <arena bytes> <pack> <layers> <experts>
-/// <reserve MiB> <pin bytes> [prefill chunk]`).
+/// <reserve MiB> <pin bytes>`).
 int expert_gpu_worker_main(int argc, char** argv);
 }  // namespace strata::core

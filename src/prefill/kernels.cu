@@ -299,19 +299,6 @@ __global__ void moe_combine_kernel(const float* __restrict__ Dm, const int32_t* 
     bo[i] = s + shared[i] * sigm(sg[t]);
 }
 
-__global__ void moe_partial_kernel(const float* __restrict__ Dm, const int32_t* __restrict__ tok,
-                                   const float* __restrict__ w, float* __restrict__ P, int rows) {
-    const int64_t i = (int64_t) blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= (int64_t) rows * N) return;
-    const int64_t r = i / N, d = i % N;
-    float* p = P + (int64_t) tok[r] * N + d;
-    *p = fmaf(w[r], Dm[i], *p);
-}
-__global__ void moe_add_kernel(float* __restrict__ bo, const float* __restrict__ P, int64_t T) {
-    const int64_t i = (int64_t) blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < T * N) bo[i] += P[i];
-}
-
 // ---------------------------------------------------------------- QSA helpers
 __global__ void rms_rows_kernel(float* __restrict__ x, const float* __restrict__ w, int64_t cols, int64_t ld, float eps) {
     __shared__ float sh[32];
@@ -498,16 +485,6 @@ void moe_combine(const float* Dm, const int32_t* slot, const float* w, const flo
                  int64_t T, void* stream) {
     moe_combine_kernel<<<blocks_for(T * N), 256, 0, (cudaStream_t) stream>>>(Dm, slot, w, shared, sg, bo, T);
     check("moe_combine");
-}
-void moe_partial(const float* Dm, const int32_t* tok, const float* w, float* P, int rows, void* stream) {
-    if (rows <= 0) return;
-    moe_partial_kernel<<<blocks_for((int64_t) rows * N), 256, 0, (cudaStream_t) stream>>>(Dm, tok, w, P, rows);
-    check("moe_partial");
-}
-void moe_add(float* bo, const float* P, int64_t T, void* stream) {
-    if (T <= 0) return;
-    moe_add_kernel<<<blocks_for(T * N), 256, 0, (cudaStream_t) stream>>>(bo, P, T);
-    check("moe_add");
 }
 void rms_rows(float* x, const float* w, int64_t rows, int64_t cols, int64_t ld, float eps, void* stream) {
     if (rows <= 0) return;

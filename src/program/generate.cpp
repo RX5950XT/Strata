@@ -188,7 +188,6 @@ struct Options {
     /// own PCIe reads (< 0: what the machine's page-lock budget leaves after this process), and reads that share of
     /// a verify window's misses over its own link.
     double expert_gpu_pin_gib = -1.0, expert_gpu_pcie_frac = 0.3;
-    double expert_gpu_prefill_frac = 0.4;
     int expert_cache = 0;
     bool expert_cache_cpu_order = false;
     /// **R4.2g.  ROUND 328 MEASURED THAT THE GLOBAL ADMISSION POLICY CANNOT WORK, AND THIS IS THE FIX.**
@@ -396,7 +395,6 @@ void usage() {
                  "  --expert-gpu-pin-gib G  arena the second GPU pins for its own PCIe reads (default: the rest of\n"
                  "                       the machine's page-lock budget)\n"
                  "  --expert-gpu-pcie-frac F  share of the misses the second GPU reads over its PCIe link (0.3)\n"
-                 "  --expert-gpu-prefill-frac F  second GPU share of prefill experts (default 0.4; 0 disables)\n"
                  "  --expert-profile P   R4.2e: pre-load the VRAM tier from a `profile.bin` (see\n"
                  "                       tools/make_profile.py) instead of admitting on first use.\n"
                  "  --no-hit-poke        R4.2d's A/B arm.  The hit path pokes the driver once right after its\n"
@@ -891,15 +889,6 @@ int main(int argc, char** argv) {
         }
         else if (a == "--expert-gpu-pin-gib") o.expert_gpu_pin_gib = std::atof(next("--expert-gpu-pin-gib"));
         else if (a == "--expert-gpu-pcie-frac") o.expert_gpu_pcie_frac = std::atof(next("--expert-gpu-pcie-frac"));
-        else if (a == "--expert-gpu-prefill-frac") {
-            const char* value = next("--expert-gpu-prefill-frac");
-            char* end = nullptr;
-            const double parsed = std::strtod(value, &end);
-            if (end == value || *end || !std::isfinite(parsed) || parsed < 0.0 || parsed > 1.0) {
-                std::fprintf(stderr, "strata generate: --expert-gpu-prefill-frac needs a number in [0, 1]\n"); return 2;
-            }
-            o.expert_gpu_prefill_frac = parsed;
-        }
         else if (a == "--expert-gpu" || a == "--expert-gpu-reserve-mib" || a == "--expert-gpu-slots") {
             const char* value = next(a.c_str());
             char* end = nullptr;
@@ -1005,9 +994,6 @@ int main(int argc, char** argv) {
     if (o.prefill_auto && (o.no_prefill_borrow || o.expert_profile.empty())) {
         o.prefill_auto = false;       // nothing to lend from: the buffers are reserved for the session, so keep them small
         o.prefill_chunk = 2048;
-    }
-    if (o.expert_gpu >= 0 && o.expert_gpu_prefill_frac > 0 && o.prefill_chunk > 2147483647LL) {
-        std::fprintf(stderr, "strata generate: expert GPU prefill chunk must fit in int32\n"); return 2;
     }
     // docs/DUAL-GPU.md: the second GPU belongs to a worker process.  This process keeps the other devices and never
     // opens a context on that one (a pin here would then be mapped for both GPUs and count twice against Windows'
@@ -1694,7 +1680,6 @@ int main(int argc, char** argv) {
             eo.slots = o.expert_gpu_slots;
             eo.pin_gib = o.expert_gpu_pin_gib;
             eo.pcie_num = (int) (o.expert_gpu_pcie_frac * 256.0 + 0.5);
-            eo.prefill_chunk = 0;   // upstream's prompt path (MMQ, streamed ring) runs on the main GPU alone
             second_gpu = expert_gpu.open(eo, xcache, arena_share, arena_src.arena_bytes(), arena_src.pinned_bytes(),
                                          o.pack, g.n_layers, g.n_expert, profile, gpu_error);
         }
@@ -3426,11 +3411,10 @@ int main(int argc, char** argv) {
         ss.ple_prev[1] = pos_start >= 1 ? (int32_t) o.tokens[(size_t) (pos_start - 1)] : -1;
         const strata::prefill::PrefillStats& ps = prefill.stats();
         std::fprintf(stderr, "strata generate: prefill %lld tokens in %lld chunks, %.1f ms (%.1f tok/s); experts "
-                             "streamed %lld (%lld by DMA, host %.1f ms), resident %lld, gpu1 %lld (waited %.1f ms); PLE %.1f ms\n",
+                             "streamed %lld (%lld by DMA, host %.1f ms), resident %lld; PLE %.1f ms\n",
                      (long long) ps.tokens, (long long) ps.chunks, ps.ms_total,
                      ps.ms_total > 0 ? 1000.0 * (double) ps.tokens / ps.ms_total : 0.0, (long long) ps.experts_streamed,
-                     (long long) ps.experts_dma, ps.ms_experts_host, (long long) ps.experts_resident,
-                     (long long) ps.experts_gpu1, ps.ms_gpu1_wait, ps.ms_ple);
+                     (long long) ps.experts_dma, ps.ms_experts_host, (long long) ps.experts_resident, ps.ms_ple);
     }
 
     for (int64_t pos = pos_start;; ++pos) {
