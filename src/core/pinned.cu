@@ -90,12 +90,41 @@ void* reserve(uint64_t bytes, PageBacking& got, std::string& note) {
 #endif
 }
 
-void release(void* p, uint64_t bytes) {
+#ifdef _WIN32
+// A named, pagefile-backed section: the same pages can be mapped by another process.  No large pages (they would
+// need SeLockMemoryPrivilege here as well).
+void* reserve_shared(uint64_t bytes, const std::string& name, void*& section, std::string& note) {
+    const std::wstring wname(name.begin(), name.end());
+    HANDLE h = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE | SEC_COMMIT, (DWORD) (bytes >> 32),
+                                  (DWORD) bytes, wname.c_str());
+    if (!h) {
+        note = "shared section refused (error " + std::to_string((unsigned long long) GetLastError()) + ")";
+        return nullptr;
+    }
+    void* p = MapViewOfFile(h, FILE_MAP_READ | FILE_MAP_WRITE, 0, 0, (SIZE_T) bytes);
+    if (!p) {
+        note = "shared section view refused (error " + std::to_string((unsigned long long) GetLastError()) + ")";
+        CloseHandle(h);
+        return nullptr;
+    }
+    section = h;
+    note = "shared section " + name + ", 4 KB pages";
+    return p;
+}
+#endif
+
+void release(void* p, uint64_t bytes, void* section) {
     if (!p) return;
 #ifdef _WIN32
     (void) bytes;
+    if (section) {
+        UnmapViewOfFile(p);
+        CloseHandle((HANDLE) section);
+        return;
+    }
     VirtualFree(p, 0, MEM_RELEASE);
 #else
+    (void) section;
     munmap(p, bytes);
 #endif
 }
@@ -129,17 +158,18 @@ PinnedArena::PinnedArena(uint64_t bytes, uint64_t slice) : PinnedArena(bytes, un
     if (slice_bytes) slice_bytes = slice;   // sliced registration: record the uniform size
 }
 
-PinnedArena::PinnedArena(uint64_t bytes, const std::vector<uint64_t>& bounds, uint64_t max_pinned) : capacity(bytes) {
+PinnedArena::PinnedArena(uint64_t bytes, const std::vector<uint64_t>& bounds, const std::string& share) : capacity(bytes) {
     if (bytes == 0) return;
+#ifdef _WIN32
+    if (!share.empty()) base = reserve_shared(bytes, share, section, note);
+    else
+#endif
     base = reserve(bytes, backing, note);
 
     // Register with CUDA BEFORE any page is touched: cudaHostRegister pins what is resident now, and a region
     // that has already been faulted in page by page is far more expensive to register and may fail outright.
     if (base) {
-        // over the cap, the whole range is not even tried: the slices below stop at the cap
-        const cudaError_t e = max_pinned && bytes > max_pinned
-            ? cudaErrorMemoryAllocation
-            : cudaHostRegister(base, (size_t) bytes, cudaHostRegisterPortable | cudaHostRegisterMapped);
+        const cudaError_t e = cudaHostRegister(base, (size_t) bytes, cudaHostRegisterPortable | cudaHostRegisterMapped);
         if (e == cudaSuccess) {
             note = "cudaHostRegister PORTABLE ok; " + note;
             registered_bytes = bytes;
@@ -149,7 +179,6 @@ PinnedArena::PinnedArena(uint64_t bytes, const std::vector<uint64_t>& bounds, ui
             slice_bytes = 1;   // sliced; the uniform constructor records the size
             for (size_t i = 0; i + 1 < bounds.size(); ++i) {
                 const uint64_t off = bounds[i], n = bounds[i + 1] - bounds[i];
-                if (max_pinned && off + n > max_pinned) break;
                 if (cudaHostRegister((uint8_t*) base + off, (size_t) n, cudaHostRegisterPortable | cudaHostRegisterMapped) != cudaSuccess) {
                     (void) cudaGetLastError();
                     break;
@@ -208,7 +237,7 @@ PinnedArena::~PinnedArena() {
         } else {
             cudaHostUnregister(base);
         }
-        release(base, capacity);
+        release(base, capacity, section);
         base = nullptr;
     }
 }

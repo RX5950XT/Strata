@@ -110,6 +110,12 @@ void Verifier::diag(std::FILE* f) const {
 Verifier::~Verifier() {
     const Verifier* self = this;
     g_diag_verifier.compare_exchange_strong(self, nullptr);
+    if (fetcher_.joinable()) {
+        fetch_stop_.store(true, std::memory_order_release);
+        fetch_req_.fetch_add(1, std::memory_order_release);   // wakes it; the stop flag is read first
+        fetch_req_.notify_one();
+        fetcher_.join();
+    }
     if (cs_) cudaStreamSynchronize(cs_);
     for (auto& e : exec_)
         if (e) cudaGraphExecDestroy(e);
@@ -262,6 +268,8 @@ bool Verifier::init(const WeightTable& wt, const ModelGeometry& g, SessionState&
         err = "verify: copy stream create failed";
         return false;
     }
+    cudaGetDevice(&device_);
+    fetcher_ = std::thread(&Verifier::fetch_loop, this);
     if (cudaStreamCreateWithFlags(&cs_, cudaStreamNonBlocking) != cudaSuccess) {
         err = "verify: stream create failed";
         return false;
@@ -839,7 +847,8 @@ bool Verifier::run(int T, const int32_t* tokens, int64_t pos0, PoolMultiFn pool,
     const cudaError_t se = cudaStreamSynchronize(cs_);
     if (se != cudaSuccess) { err = std::string("verify: ") + cudaGetErrorString(se); return false; }
     progress_at("verify window: waiting for the expert copies", (int64_t) T);
-    cudaStreamSynchronize(copy_);   // no host function of this window may raise flag B in the next one
+    fetch_drain();                  // every copy of this window is issued ...
+    cudaStreamSynchronize(copy_);   // ... and no host function of this window may raise flag B in the next one
     // ---- a sampled or penalized request: the head's sampling again, host-side so its parameters are this call's
     // own (a captured kernel would replay the same draws forever).  Row t's draw is Philox(seed, pos0 + t): tied to
     // the POSITION it samples, not to how the text was cut into windows, so a seed replays the same text whatever
@@ -919,12 +928,45 @@ void Verifier::fetch_dma(void* ctx, const uint8_t* const* src, int n, size_t byt
     Verifier* v = (Verifier*) ctx;
     const uint32_t want = v->cur_layer_ + 1;
     if (n <= 0) { raise_flag(v->h_flagB_, want); return; }
-    uint8_t* stage = (uint8_t*) v->sink_.staging;                  // this group's half in a split window
-    for (int i = 0; i < n; ++i) cudaMemcpyAsync(stage + (size_t) i * bytes, src[i], bytes, cudaMemcpyHostToDevice, v->copy_);
     FlagSet& fs = v->flag_sets_[v->cur_layer_ % (sizeof v->flag_sets_ / sizeof v->flag_sets_[0])];
     fs.flag = v->h_flagB_;
     fs.value = want;
-    cudaLaunchHostFunc(v->copy_, [](void* p) { FlagSet* s = (FlagSet*) p; raise_flag(s->flag, s->value); }, &fs);
+    // handed to the fetch thread (a ring of 4: a layer comes every ~1 ms and its calls take ~0.1 ms)
+    const uint32_t r = v->fetch_req_.load(std::memory_order_relaxed);
+    while (r - v->fetch_ack_.load(std::memory_order_acquire) >= 4) _mm_pause();
+    FetchJob& j = v->fetch_ring_[r % 4];
+    j.stage = (uint8_t*) v->sink_.staging;                           // this group's half in a split window
+    j.n = n > 64 ? 64 : n;
+    for (int i = 0; i < j.n; ++i) j.src[i] = src[i];
+    j.bytes = bytes;
+    j.fs = &fs;
+    v->fetch_req_.store(r + 1, std::memory_order_release);
+    v->fetch_req_.notify_one();
+}
+
+void Verifier::fetch_drain() const {
+    while (fetch_ack_.load(std::memory_order_acquire) != fetch_req_.load(std::memory_order_acquire)) _mm_pause();
+}
+
+void Verifier::fetch_loop() {
+    cudaSetDevice(device_);
+    uint32_t done = fetch_ack_.load();
+    auto last = Clock::now();
+    while (true) {
+        const uint32_t want = fetch_req_.load(std::memory_order_acquire);
+        if (fetch_stop_.load(std::memory_order_acquire)) return;
+        if (want == done) {   // spin while layers keep coming, sleep once they stop
+            if (Clock::now() - last < std::chrono::milliseconds(2)) _mm_pause();
+            else fetch_req_.wait(done, std::memory_order_acquire);
+            continue;
+        }
+        const FetchJob& j = fetch_ring_[done % 4];
+        for (int i = 0; i < j.n; ++i)
+            cudaMemcpyAsync(j.stage + (size_t) i * j.bytes, j.src[i], j.bytes, cudaMemcpyHostToDevice, copy_);
+        cudaLaunchHostFunc(copy_, [](void* p) { FlagSet* s = (FlagSet*) p; raise_flag(s->flag, s->value); }, j.fs);
+        fetch_ack_.store(++done, std::memory_order_release);
+        last = Clock::now();
+    }
 }
 
 void Verifier::publish_plan(void* ctx) {

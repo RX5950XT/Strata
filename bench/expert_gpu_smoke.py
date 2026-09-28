@@ -18,6 +18,9 @@ from strata_tokenizer import Tokenizer
 def run(mode):
     config = json.loads((ROOT / "configs/strata-iq3_xxs.json").read_text(encoding="utf-8"))
     args = config["args"][:]
+    for flag in [a for a in args if a.startswith("--expert-gpu")]:   # the installed config may already be dual
+        i = args.index(flag)
+        del args[i:i + 2]
     args.remove("--vision")
     for flag, value in (("--max-context", "8192"), ("--prefill", "2048")):
         args[args.index(flag) + 1] = value
@@ -33,6 +36,7 @@ def run(mode):
     args += ["--tokens", ",".join(map(str, ids)), "--temperature", "0", "--max-new", "200"]
     if mode != "single":
         args += ["--expert-gpu", "1" if mode == "dual" else "5"]
+    args += os.environ.get("SMOKE_EXTRA", "").split()   # e.g. SMOKE_EXTRA="--expert-gpu-pcie-frac 0.4"
     command = [str(ROOT / "build-dual/strata.exe"), *args]
     env = os.environ.copy()
     # the main card first, then the second one: CUDA orders the fastest card first unless this is set

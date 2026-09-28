@@ -34,6 +34,14 @@ void iq_embed_rows(int ggml_type, const void* table, size_t row_bytes, const int
 void iq_dequant_gu_f16(int ggml_type, const void* gate, const void* up, int64_t n_ff, int64_t n_embd, uint16_t* dst,
                        void* stream);
 
+/// Passed by value: no device upload of the batch's pointer table.
+constexpr int IQ_DEQUANT_BATCH = 16;
+struct IqDequantBatch { const uint8_t* blob[IQ_DEQUANT_BATCH] = {}; };
+void iq_dequant_f16_batch(int ggml_type, IqDequantBatch src, int count, size_t offset, int64_t n,
+                          uint16_t* dst, void* stream);
+void iq_dequant_gu_f16_batch(int ggml_type, IqDequantBatch src, int count, size_t up_off,
+                             int64_t n_ff, int64_t n_embd, uint16_t* dst, void* stream);
+
 /// The layout of one native expert blob: [gate rows | up rows | down rows], raw GGUF blocks.
 struct NativeExpertLayout {
     int gu_type = -1, d_type = -1;

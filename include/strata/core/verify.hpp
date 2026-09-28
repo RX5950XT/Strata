@@ -29,6 +29,8 @@
 #include "strata/kernels/sampler.hpp"
 
 #include <cuda_runtime.h>
+#include <atomic>
+#include <thread>
 
 #include <cstdint>
 #include <string>
@@ -147,6 +149,16 @@ private:
     struct FlagSet { uint32_t* flag; uint32_t value; };
     FlagSet flag_sets_[2 * 64 * 2] = {};                          // host-function arguments, one per (layer, group)
     static void fetch_dma(void* ctx, const uint8_t* const* src, int n, size_t bytes);
+    // The DMA calls of fetch_dma are ISSUED on this thread: under WDDM two cudaMemcpyAsync and a cudaLaunchHostFunc
+    // cost ~80 us a layer (Nsight: 28.7 + 24.8 us medians), which the pool thread paid before its CPU work started.
+    struct FetchJob { uint8_t* stage; const uint8_t* src[64]; int n; size_t bytes; FlagSet* fs; };
+    FetchJob fetch_ring_[4] = {};
+    std::atomic<uint32_t> fetch_req_{0}, fetch_ack_{0};
+    std::atomic<bool> fetch_stop_{false};
+    std::thread fetcher_;
+    int device_ = 0;
+    void fetch_loop();
+    void fetch_drain() const;
     static void raise_flag(uint32_t* flag, uint32_t value);
     int32_t* h_plan_ = nullptr;  int32_t* m_plan_ = nullptr;     // counts | start | dst | tok | ptr (as int32 pairs)
     int64_t plan_i32_ = 0;                                        // int32 words in the plan block

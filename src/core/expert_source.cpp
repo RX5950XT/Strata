@@ -306,7 +306,7 @@ void expert_pool_dispatch_multi(ExpertDispatch& d, const float* x_f, const int32
             }
             kind[i] = d.host_res && d.host_res[(size_t) d.layers * (size_t) d.n_expert + e] >= 0 ? 0 : -1;
         }
-        second = d.expert_gpu->launch(d.layers, x_f, ids, (int) n_tok, (int) k, out, kind);
+        second = d.expert_gpu->launch(d.layers, x_f, ids, (int) n_tok, (int) k, out, kind, /*pcie=*/true);
     }
     if (d.plan != nullptr && n <= 128 && n <= d.plan->cap) {
         int64_t distinct[128], first_of[128];
@@ -650,7 +650,7 @@ LoadStats load_experts_gguf(const std::string& gguf, uint8_t* dst, const strata:
 ArenaExpertSource::~ArenaExpertSource() { close(); }
 
 bool ArenaExpertSource::open(const std::string& pack_dir, int64_t n_layers, int64_t n_expert, int threads,
-                             std::string& err, uint64_t pin_max) {
+                             std::string& err, const std::string& share) {
     close();
     const std::string path = pack_dir + "/experts.bin";
     // plan v0.3 P6: the layout (canonical, or a native pack's per-layer blobs) was loaded by the driver
@@ -691,7 +691,7 @@ bool ArenaExpertSource::open(const std::string& pack_dir, int64_t n_layers, int6
         lbytes.push_back(lay.blob_bytes(l) * (uint64_t) n_expert);
     }
     bounds.push_back(want);
-    PinnedArena* a = new PinnedArena(want + (uint64_t) blob, bounds, pin_max);
+    PinnedArena* a = new PinnedArena(want + (uint64_t) blob, bounds, share);
     if (!a->valid()) {
         delete a;
         err = "ArenaExpertSource: the arena could not be reserved (" + std::to_string(want) + " B)";
@@ -739,6 +739,8 @@ void ArenaExpertSource::close() {
     blobs_ = 0;
     n_expert_ = 0;
 }
+
+uint64_t ArenaExpertSource::arena_bytes() const { return arena_ ? ((const PinnedArena*) arena_)->capacity : 0; }
 
 bool ArenaExpertSource::pinned(int64_t layer, int64_t expert) const {
     if (base_ == nullptr || layer < 0 || expert < 0 || expert >= n_expert_) return false;

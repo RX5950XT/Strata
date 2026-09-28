@@ -80,6 +80,11 @@
 #include <string>
 #include <set>
 #include <vector>
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
 
 namespace {
 
@@ -179,9 +184,11 @@ struct Options {
     /// true is that the ADMISSION POLICY gave every slot to the first position, which is why the earlier
     /// measurement found nothing - see `expert_cache_per_layer`.
     int expert_gpu = -1, expert_gpu_reserve_mib = 512, expert_gpu_slots = -1;
-    /// docs/DUAL-GPU.md: with a second GPU context, pinning ~39 GiB of host memory breaks both devices'
-    /// allocations on Windows, so the expert arena pins at most this much (the rest stays resident unpinned).
-    int expert_gpu_pin_gib = 36;
+    /// docs/DUAL-GPU.md: the second GPU runs in a worker process, which pins this much of the expert arena for its
+    /// own PCIe reads (< 0: what the machine's page-lock budget leaves after this process), and reads that share of
+    /// a verify window's misses over its own link.
+    double expert_gpu_pin_gib = -1.0, expert_gpu_pcie_frac = 0.3;
+    double expert_gpu_prefill_frac = 0.4;
     int expert_cache = 0;
     bool expert_cache_cpu_order = false;
     /// **R4.2g.  ROUND 328 MEASURED THAT THE GLOBAL ADMISSION POLICY CANNOT WORK, AND THIS IS THE FIX.**
@@ -386,7 +393,10 @@ void usage() {
                  "  --expert-gpu N       second CUDA expert cache (default off)\n"
                  "  --expert-gpu-reserve-mib M  VRAM to leave free on that GPU (default 512)\n"
                  "  --expert-gpu-slots S  cap second GPU slots (default auto)\n"
-                 "  --expert-gpu-pin-gib G  with --expert-gpu, pin at most G GiB of the expert arena (default 36)\n"
+                 "  --expert-gpu-pin-gib G  arena the second GPU pins for its own PCIe reads (default: the rest of\n"
+                 "                       the machine's page-lock budget)\n"
+                 "  --expert-gpu-pcie-frac F  share of the misses the second GPU reads over its PCIe link (0.3)\n"
+                 "  --expert-gpu-prefill-frac F  second GPU share of prefill experts (default 0.4; 0 disables)\n"
                  "  --expert-profile P   R4.2e: pre-load the VRAM tier from a `profile.bin` (see\n"
                  "                       tools/make_profile.py) instead of admitting on first use.\n"
                  "  --no-hit-poke        R4.2d's A/B arm.  The hit path pokes the driver once right after its\n"
@@ -764,6 +774,7 @@ bool load_control_vectors(const Options& o, const strata::core::ModelGeometry& g
 }  // namespace
 
 int main(int argc, char** argv) {
+    if (argc > 1 && std::string(argv[1]) == "--expert-gpu-worker") return strata::core::expert_gpu_worker_main(argc, argv);
     // **UNBUFFERED, BECAUSE THE INTERESTING OUTPUT IS THE OUTPUT BEFORE A CRASH.**  `stdout` redirected to a
     // pipe or a file is block-buffered, so a program that dies loses every line it had already printed - which
     // turns "it crashed at step 7" into "it crashed somewhere", and the difference is a debugging session.
@@ -868,8 +879,18 @@ int main(int argc, char** argv) {
             const std::string v = next("--expert-cache");
             o.expert_cache = (v == "auto") ? -1 : std::atoi(v.c_str());
         }
-        else if (a == "--expert-gpu" || a == "--expert-gpu-reserve-mib" || a == "--expert-gpu-slots" ||
-                 a == "--expert-gpu-pin-gib") {
+        else if (a == "--expert-gpu-pin-gib") o.expert_gpu_pin_gib = std::atof(next("--expert-gpu-pin-gib"));
+        else if (a == "--expert-gpu-pcie-frac") o.expert_gpu_pcie_frac = std::atof(next("--expert-gpu-pcie-frac"));
+        else if (a == "--expert-gpu-prefill-frac") {
+            const char* value = next("--expert-gpu-prefill-frac");
+            char* end = nullptr;
+            const double parsed = std::strtod(value, &end);
+            if (end == value || *end || !std::isfinite(parsed) || parsed < 0.0 || parsed > 1.0) {
+                std::fprintf(stderr, "strata generate: --expert-gpu-prefill-frac needs a number in [0, 1]\n"); return 2;
+            }
+            o.expert_gpu_prefill_frac = parsed;
+        }
+        else if (a == "--expert-gpu" || a == "--expert-gpu-reserve-mib" || a == "--expert-gpu-slots") {
             const char* value = next(a.c_str());
             char* end = nullptr;
             const long long parsed = std::strtoll(value, &end, 10);
@@ -878,8 +899,7 @@ int main(int argc, char** argv) {
             }
             if (a == "--expert-gpu") o.expert_gpu = (int) parsed;
             else if (a == "--expert-gpu-reserve-mib") o.expert_gpu_reserve_mib = (int) parsed;
-            else if (a == "--expert-gpu-slots") o.expert_gpu_slots = (int) parsed;
-            else o.expert_gpu_pin_gib = (int) parsed;
+            else o.expert_gpu_slots = (int) parsed;
         }
         else if (a == "--vram-reserve-mib") o.vram_reserve_mib = std::atoi(next("--vram-reserve-mib"));
         else if (a == "--prefill") {
@@ -975,6 +995,49 @@ int main(int argc, char** argv) {
     if (o.prefill_auto && (o.no_prefill_borrow || o.expert_profile.empty())) {
         o.prefill_auto = false;       // nothing to lend from: the buffers are reserved for the session, so keep them small
         o.prefill_chunk = 2048;
+    }
+    if (o.expert_gpu >= 0 && o.expert_gpu_prefill_frac > 0 && o.prefill_chunk > 2147483647LL) {
+        std::fprintf(stderr, "strata generate: expert GPU prefill chunk must fit in int32\n"); return 2;
+    }
+    // docs/DUAL-GPU.md: the second GPU belongs to a worker process.  This process keeps the other devices and never
+    // opens a context on that one (a pin here would then be mapped for both GPUs and count twice against Windows'
+    // page-lock budget), so CUDA_VISIBLE_DEVICES is split before the first CUDA call.
+    std::string expert_gpu_worker, arena_share;
+    if (o.expert_gpu >= 0) {
+        std::vector<std::string> devs;
+        const char* env = std::getenv("CUDA_VISIBLE_DEVICES");
+        for (std::string rest = env ? env : ""; !rest.empty();) {
+            const size_t c = rest.find(',');
+            devs.push_back(rest.substr(0, c));
+            rest = c == std::string::npos ? "" : rest.substr(c + 1);
+        }
+        std::string mine;
+        if (env == nullptr) {
+            expert_gpu_worker = std::to_string(o.expert_gpu);
+            mine = o.expert_gpu == 0 ? "" : "0";
+        } else if ((size_t) o.expert_gpu < devs.size() && o.expert_gpu > 0) {
+            expert_gpu_worker = devs[(size_t) o.expert_gpu];
+            for (size_t i = 0; i < devs.size(); ++i)
+                if (i != (size_t) o.expert_gpu) mine += (mine.empty() ? "" : ",") + devs[i];
+        }
+        if (expert_gpu_worker.empty() || mine.empty()) {
+            std::fprintf(stderr, "strata generate: expert GPU %d disabled: it must be a visible device other than device 0\n",
+                         o.expert_gpu);
+            expert_gpu_worker.clear();
+        } else {
+#ifdef _WIN32
+            _putenv_s("CUDA_VISIBLE_DEVICES", mine.c_str());
+#else
+            setenv("CUDA_VISIBLE_DEVICES", mine.c_str(), 1);
+#endif
+            arena_share = "Local\\strata-arena-" + std::to_string(
+#ifdef _WIN32
+                _getpid()
+#else
+                getpid()
+#endif
+            );
+        }
     }
     if (!have_tokens && o.serve) {   // plan v0.3 P8: requests bring their own tokens
         o.tokens = {248045};
@@ -1113,17 +1176,7 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "strata generate: this CPU has no AVX-512: the expert kernels run on %s "
                              "(multi-token for the i-quant gate/up rows)\n",
                      std::getenv("STRATA_NO_IQ256") == nullptr ? "AVX-2" : "ggml-cpu vec_dot (STRATA_NO_IQ256 set)");
-    // The second context has to exist before the expert arena is registered, and that registration
-    // must not be portable: a portable pin maps the 40 GiB arena into every context and the next
-    // cudaMalloc on this device fails, while creating the context only after the pin also fails.
     strata::core::ExpertGpu expert_gpu;
-    bool second_prepared = false;
-    if (o.expert_gpu >= 0) {
-        std::string gpu_error;
-        second_prepared = expert_gpu.prepare(o.expert_gpu, gpu_error);
-        if (!second_prepared) std::fprintf(stderr, "strata generate: expert GPU %d disabled: %s\n",
-                                           o.expert_gpu, gpu_error.c_str());
-    }
     strata::core::NativeEmbed native_embed;
     if (native_pack) {
         if (o.native_preset.empty() || o.spec < 2 || o.keep_canonical ||
@@ -1420,8 +1473,7 @@ int main(int argc, char** argv) {
         srcp = &src;
     } else {
         arena_src.set_gguf(o.native_preset);   // plan v0.3 P6: a native pack may take its experts from shard 1
-        const uint64_t pin_max = second_prepared ? (uint64_t) o.expert_gpu_pin_gib << 30 : 0;
-        if (!arena_src.open(o.pack, g.n_layers, g.n_expert, /*threads=*/6, err, pin_max)) {
+        if (!arena_src.open(o.pack, g.n_layers, g.n_expert, /*threads=*/6, err, expert_gpu_worker.empty() ? "" : arena_share)) {
             std::fprintf(stderr, "strata generate: %s\n", err.c_str());
             return 1;
         }
@@ -1621,16 +1673,22 @@ int main(int argc, char** argv) {
     }
 
     bool second_gpu = false;
-    if (second_prepared) {
+    if (!expert_gpu_worker.empty()) {
         std::string gpu_error;
-        if (!srcp || o.no_pool) gpu_error = "the expert pool is disabled";
-        else second_gpu = expert_gpu.open(o.expert_gpu, o.expert_gpu_reserve_mib, o.expert_gpu_slots,
-                                          xcache, *srcp, profile, gpu_error);
-        if (!second_gpu) {
-            cudaGetLastError();
-            std::fprintf(stderr, "strata generate: expert GPU %d disabled: %s\n",
-                         o.expert_gpu, gpu_error.c_str());
+        if (srcp != &arena_src || o.no_pool) gpu_error = "it needs the expert pool and the arena";
+        else if (!xcache.valid()) gpu_error = "it needs --expert-cache";
+        else {
+            strata::core::ExpertGpu::Options eo;
+            eo.device = expert_gpu_worker;
+            eo.reserve_mib = o.expert_gpu_reserve_mib;
+            eo.slots = o.expert_gpu_slots;
+            eo.pin_gib = o.expert_gpu_pin_gib;
+            eo.pcie_num = (int) (o.expert_gpu_pcie_frac * 256.0 + 0.5);
+            eo.prefill_chunk = 0;   // upstream's prompt path (MMQ, streamed ring) runs on the main GPU alone
+            second_gpu = expert_gpu.open(eo, xcache, arena_share, arena_src.arena_bytes(), arena_src.pinned_bytes(),
+                                         o.pack, g.n_layers, g.n_expert, profile, gpu_error);
         }
+        if (!second_gpu) std::fprintf(stderr, "strata generate: expert GPU %d disabled: %s\n", o.expert_gpu, gpu_error.c_str());
     }
     Drive drive;
     if (second_gpu) drive.d.expert_gpu = &expert_gpu;
@@ -1649,7 +1707,6 @@ int main(int argc, char** argv) {
     uint8_t* d_hit_q8 = nullptr;
     float* d_hit_q8_scale = nullptr;   ///< R4.2h: the fp32 activation scales the CPU path also uses
     float* d_hit_out = nullptr;
-    if (o.expert_gpu >= 0 && !second_gpu) cudaGetLastError();
     if (o.expert_cache > 0 && !o.no_pool) {
         const uint64_t sb = strata::kernels::moe_hit_grouped_scratch_bytes(K, g.n_embd, strata::kernels::cpu::FF);
         if (cudaMalloc(&hit_scratch, (size_t) sb) != cudaSuccess ||
@@ -2501,6 +2558,7 @@ int main(int argc, char** argv) {
                 pending.emplace_back((int32_t) in, slot);      // resident once the copy has landed
             }
             if (!swaps.empty()) cudaEventRecord(adapt_ev, adapt_stream);
+            if (second_gpu) expert_gpu.adapt(drive.d.usage, host_res, pending, o.adapt_swaps);
             for (float& v : drive.d.usage) v *= 0.7f;
             return true;
         };
@@ -2647,7 +2705,12 @@ int main(int argc, char** argv) {
                 BusyScope() { strata::core::progress().busy.store(true); strata::core::progress_at("request"); }
                 ~BusyScope() { strata::core::progress().busy.store(false); strata::core::progress_at("idle"); }
             } busy_scope;
-            const int64_t expert_gpu_hits0 = expert_gpu.hits;
+            struct HotScope {   // the second GPU keeps its clocks up from the prompt on (ExpertGpu::set_active)
+                strata::core::ExpertGpu& gpu;
+                explicit HotScope(strata::core::ExpertGpu& g) : gpu(g) { gpu.set_active(true); }
+                ~HotScope() { gpu.set_active(false); }
+            } hot_scope(expert_gpu);
+            const int64_t expert_gpu_hits0 = expert_gpu.hits, expert_gpu_streamed0 = expert_gpu.streamed;
             const double expert_gpu_ms0 = expert_gpu.ms;
             stop_req.store(false);   // a STOP that arrived between requests is stale
             const bool geni = line.rfind("GENI ", 0) == 0;
@@ -3227,8 +3290,11 @@ int main(int argc, char** argv) {
             std::printf("DONE %lld %lld %.1f %.1f %s %lld %lld %lld\n", (long long) produced_n, (long long) n, prompt_ms,
                         decode_ms, finish, (long long) draft_accepted, (long long) draft_offered, (long long) resume);
             std::fflush(stdout);
-            if (second_gpu) std::fprintf(stderr, "strata serve: expert GPU: %lld experts, %.3f ms (launch through completion, overlaps CPU)\n",
-                                         (long long) (expert_gpu.hits - expert_gpu_hits0), expert_gpu.ms - expert_gpu_ms0);
+            if (second_gpu) std::fprintf(stderr, "strata serve: expert GPU: %lld experts (%lld read over its PCIe), %.3f ms "
+                                                 "(launch through completion, overlaps CPU), %lld swapped in so far\n",
+                                         (long long) (expert_gpu.hits - expert_gpu_hits0),
+                                         (long long) (expert_gpu.streamed - expert_gpu_streamed0), expert_gpu.ms - expert_gpu_ms0,
+                                         (long long) expert_gpu.swapped);
             const int64_t fresh = n - resume;
             std::fprintf(stderr, "strata serve: prompt %lld tokens = %lld reused + %lld read in %.0f ms (%.1f tok/s), "
                                  "%lld generated in %.0f ms (%.1f tok/s), drafts accepted %lld of %lld, %zu checkpoints%s\n",
@@ -3318,6 +3384,7 @@ int main(int argc, char** argv) {
                 return mtp.prefill(R_rows, nxt.data(), T, p0, e);
             };
         }
+        expert_gpu.set_active(true);   // warm through the prompt, so the reply starts at full clocks
         const Clock::time_point tp0 = Clock::now();
         const int64_t n_batched = (o.prefill_until > 0 && o.prefill_until < n_prompt - 1) ? o.prefill_until : n_prompt - 1;
         if (!prefill.run(o.tokens.data(), n_batched, 0, err)) {
@@ -3349,10 +3416,11 @@ int main(int argc, char** argv) {
         ss.ple_prev[1] = pos_start >= 1 ? (int32_t) o.tokens[(size_t) (pos_start - 1)] : -1;
         const strata::prefill::PrefillStats& ps = prefill.stats();
         std::fprintf(stderr, "strata generate: prefill %lld tokens in %lld chunks, %.1f ms (%.1f tok/s); experts "
-                             "streamed %lld (%lld by DMA, host %.1f ms), resident %lld; PLE %.1f ms\n",
+                             "streamed %lld (%lld by DMA, host %.1f ms), resident %lld, gpu1 %lld (waited %.1f ms); PLE %.1f ms\n",
                      (long long) ps.tokens, (long long) ps.chunks, ps.ms_total,
                      ps.ms_total > 0 ? 1000.0 * (double) ps.tokens / ps.ms_total : 0.0, (long long) ps.experts_streamed,
-                     (long long) ps.experts_dma, ps.ms_experts_host, (long long) ps.experts_resident, ps.ms_ple);
+                     (long long) ps.experts_dma, ps.ms_experts_host, (long long) ps.experts_resident,
+                     (long long) ps.experts_gpu1, ps.ms_gpu1_wait, ps.ms_ple);
     }
 
     for (int64_t pos = pos_start;; ++pos) {
@@ -3684,6 +3752,7 @@ int main(int argc, char** argv) {
                 pending.emplace_back((int32_t) in, slot);      // resident once the copy has landed
             }
             if (!swaps.empty()) cudaEventRecord(adapt_ev, adapt_stream);
+            if (second_gpu) expert_gpu.adapt(drive.d.usage, host_res, pending, o.adapt_swaps);
             for (float& v : drive.d.usage) v *= 0.7f;
             swaps_total += (int64_t) swaps.size();
             ms_adapt += std::chrono::duration<double, std::milli>(Clock::now() - ta).count();
@@ -4036,9 +4105,11 @@ int main(int argc, char** argv) {
     cudaFree(d_parts);
     cudaFree(sbuf);
     cudaFree(arena);
-    if (second_gpu) std::fprintf(stderr, "strata generate: expert GPU: %lld experts in %lld launches, %.3f ms (launch through "
-                                         "completion, overlaps CPU); %.3f ms launching, %.3f ms waiting, %.3f ms on the GPU\n",
-                                 (long long) expert_gpu.hits, (long long) expert_gpu.launches, expert_gpu.ms,
-                                 expert_gpu.ms_launch, expert_gpu.ms_wait, expert_gpu.ms_gpu);
+    if (second_gpu) std::fprintf(stderr, "strata generate: expert GPU: %lld experts (%lld read over its PCIe) in %lld launches, "
+                                         "%.3f ms (launch through completion, overlaps CPU); %.3f ms launching, %.3f ms waiting, "
+                                         "%.3f ms on the GPU; %lld swapped in\n",
+                                 (long long) expert_gpu.hits, (long long) expert_gpu.streamed, (long long) expert_gpu.launches,
+                                 expert_gpu.ms, expert_gpu.ms_launch, expert_gpu.ms_wait, expert_gpu.ms_gpu,
+                                 (long long) expert_gpu.swapped);
     return 0;
 }

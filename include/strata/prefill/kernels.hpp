@@ -49,6 +49,11 @@ void gather_rows16(const uint16_t* x16, const int32_t* src, uint16_t* dst16, int
 /// bo[t, :] = shared[t, :] * sigmoid(sg[t]) + sum_k w[t, k] * D[slot[t, k], :]
 void moe_combine(const float* D, const int32_t* slot, const float* w, const float* shared, const float* sg, float* bo,
                  int64_t T, void* stream);
+/// P[tok[r], :] += w[r] * D[r, :] for `rows` rows of ONE expert (its tokens are distinct, so no two threads write the
+/// same element; experts go one launch at a time, which fixes the order).
+void moe_partial(const float* D, const int32_t* tok, const float* w, float* P, int rows, void* stream);
+/// Add the other GPU's routed-expert contribution after moe_combine.
+void moe_add(float* bo, const float* P, int64_t T, void* stream);
 
 // ---- QSA helpers
 /// In place: x[r, :] = x[r, :] * rsqrt(mean x^2 + eps) * w  over rows of `cols` (row stride `ld`).

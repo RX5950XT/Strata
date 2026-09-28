@@ -7,37 +7,58 @@
 **把 3060 Ti 當成「第二個 expert cache」，接在 CPU expert pool 的 hook 裡。**
 
 - 5060 Ti 維持現狀：attention、GDN、router、shared expert、MTP、KV、輸出頭，以及它自己的 expert cache。
-- 3060 Ti 只放 profile 裡「主卡放不下的下一批」expert（約 6.5 GB，Q2_0 約 4,500 個），也只負責算這些 expert。
-- CPU 繼續算兩張卡都沒有的 miss。
+- 3060 Ti 放 profile 裡「主卡放不下的下一批」expert，並且跟主卡一樣跟著對話換槽、經自己的 PCIe 分擔 miss、在讀 prompt 時分擔 expert（實作結果見下）。
+- CPU 繼續算兩張卡都沒有、也沒被分走的 miss。
 
 預估解碼速度（模型推估，還沒實測，誤差 ±20%）：Q2_0 4K 從 87 到約 100 tok/s（+15%），IQ3_XXS 4K 從 65 到約 77 tok/s（+18%）。長 context 的 miss 更多，增益百分比會更高。Prefill 大致不變。
 
-## 實作結果（2026-09-28）
+## 實作結果（2026-09-28，第二版）
 
-用法：`setup.py --expert-gpu yes`（或在設定檔加 `"expert_gpu": "<第二張卡 UUID>"`，引擎參數加 `--expert-gpu 1 --expert-gpu-reserve-mib 700`）。引擎要用這份原始碼自己編（`86;120`），現成引擎不認得這個參數。第二張卡不能用時，引擎印一行 `expert GPU ... disabled: <原因>`，照常用單卡跑。
+用法不變：`setup.py --expert-gpu yes`，或在設定檔加 `"expert_gpu": "<第二張卡 UUID>"`、引擎參數加 `--expert-gpu 1 --expert-gpu-reserve-mib 700`。引擎要用這份原始碼自己編（`86;120`）。第二張卡不能用時，引擎印一行 `expert GPU ... disabled: <原因>`，照常用單卡跑。
 
-實測（Ryzen 7 5700X、96 GB RAM、IQ3_XXS、262K context 設定、經 `serve/server.py`、每次 400 token）：
+### 架構：第二張卡交給一個獨立的工作行程
 
-| | 輸出 tok/s |
-| --- | --- |
-| 原本的引擎 | 27.4、29.3 |
-| 新引擎，單卡 | 25.9、27.6；另一次 31.3、34.1 |
-| 新引擎，雙卡（3060 Ti 放 3,299 個 expert，和看圖共用） | 35.9、32.3；另一次 35.7、38.6 |
-| 6K token 的 prompt 之後：單卡 → 雙卡 | 18.5 → 31.0、24.3 → 37.9 |
+引擎發現 `--expert-gpu` 時，會用同一個 `strata.exe` 啟動一個看不到主卡、只看得到第二張卡的工作行程（`strata --expert-gpu-worker ...`，`src/core/expert_gpu.cpp` 的 `Worker`），用 job object 綁住，引擎結束它就跟著結束。expert 區改放在具名的共用記憶體（pagefile section），兩個行程看到同一份，不多佔 RAM。引擎負責所有決定（哪些 expert 放第二張卡、哪些 miss 交給它、換哪些槽），工作行程只負責搬資料和計算，兩邊用共用記憶體裡的計數器交接。
 
-- 短 prompt 時雙卡快 13–38%（中位數約 +20%）；context 越長、CPU 要算的越多，差距越大。
-- 讀 prompt 的速度不變（6K token：單卡 264、雙卡 275 tok/s）。
-- 雙卡和單卡的 greedy 輸出 200/200 token 一樣。這台機器的單卡自己跑兩次，本來就會在第 90 個 token 左右分岔。
-- 同一份工作量，這台機器前後跑的速度會差到 ±20%，所以上面每一格都是同一段時間內跑的。
-- **orca（uncensored）沒有變快**（單卡 26.7、22.8；雙卡 22.3、25.2）。原因是它的 expert 區有 49 GiB，雙卡時只能釘住 35 GiB（見下面第 1 點），而它的 `--pcie-frac 0.40` 需要釘住的記憶體，沒釘住的那 14 層就退回給 CPU 算，抵掉了第二張卡的好處。
+第二張卡現在做的事，和主卡一樣：
 
-實作時踩到的三件事（都量過）：
+| | 主卡 | 第二張卡 |
+| --- | --- | --- |
+| 快取裡的 expert（解碼） | ✓ | ✓（profile 排名在主卡之後的那一批） |
+| 跟著對話換槽（每 4 輪最多 96 個） | ✓ | ✓（同一層內換，和主卡不重複） |
+| 從 RAM 經自己的 PCIe 搬 miss 來算（解碼） | ✓（剩下的 55%） | ✓（先拿 30%，`--expert-gpu-pcie-frac`） |
+| 讀 prompt 時算 expert | ✓ | ✓（每層約 40%，`--expert-gpu-prefill-frac`） |
 
-1. **Windows 上，有兩個 GPU context 時，釘住（pin）超過約 38–39 GiB 的主機記憶體，兩張卡的 `cudaMalloc` 就一起壞掉**，事後放開也救不回來；跟 `Portable`／`Mapped` 旗標、context 建立順序都無關。單卡時 49 GiB 都沒問題。所以開雙卡時，expert 區最多只釘 36 GiB（`--expert-gpu-pin-gib`，預設 36），其餘照引擎原本的方式用 working-set lock 留在 RAM；讀 prompt 時這幾層改走一般複製，實測速度沒變。
-2. **3060 Ti 只拿到零碎的工作時，驅動讓它停在 P8（核心 210 MHz、記憶體 405 MHz）**，每層的 kernel 要 0.7 ms。解法是在低優先權的 stream 上反覆送 1 ms 的「保持運作」kernel（`src/kernels/cuda/keep_warm.cu`）。不能用長的：一個 200 ms 的會把正事卡在後面（p90 193 ms）。
-3. **kernel 直接透過 PCIe 讀主機記憶體裡的查表、逐個 float 寫回結果（zero-copy），每層會變成上萬個 PCIe 小交易**，比 CPU 還慢。改成一次 H2D 複製查表和輸入、一次 D2H 複製結果；所有 CUDA 呼叫都交給一條固定在第二張卡上的工作執行緒（`ExpertGpu::work`），主執行緒只填表，不再付每層約 0.2 ms 的 launch 成本。
+### 實測（Ryzen 7 5700X、96 GB RAM、IQ3_XXS、經 `serve/server.py`、每次 400 token）
 
-還沒做的：第二張卡的 expert 固定是啟動時從 profile 挑的，不會跟著對話調整；profile 只有 8,000 組排名，第二張卡最多就放主卡剩下的那些；讀 prompt 時第二張卡不幫忙。
+同一段時間內交錯跑。這台機器同一份工作量前後會差到 ±15%，所以看同一行的比較：
+
+| 設定 | 單卡 tok/s | 雙卡 tok/s |
+| --- | --- | --- |
+| Qwen IQ3_XXS、262K context（看圖也在第二張卡） | 28.2、29.3 | 31.5、33.8；安裝後另一次 33.1、37.3 |
+| orca IQ3_XXS、262K | 25.4、27.6 | 32.6、36.3 |
+| orca IQ3_XXS、200K | 24.3、25.7 | 29.8、31.8 |
+| `bench/expert_gpu_smoke.py`（8K context、200 token） | 28.4、27.2；另一次 22.2 | 35.0、34.6；另一次 27.0 |
+
+- 解碼：雙卡快 12–32%。orca 這次也變快了：第一版因為鎖定上限只能鎖 35 GiB，沒有增益。
+- 讀 prompt：71 token 的第一個請求，首字時間約 2.5–2.6 秒（單卡 2.5–4.5 秒）；4457 token 的 prompt 單卡 301.5 → 雙卡 348.2 tok/s（`generate`，同一段時間）。
+- 雙卡和單卡的 greedy 輸出 200/200 token 一樣（smoke）。單卡讀 prompt 後的 GDN 狀態雜湊，和這次修改前逐位元相同。
+
+### 量到的問題和解法
+
+1. **鎖定記憶體的上限，是所有 GPU 加起來的總額，約 78 GiB（這台 96 GB 的電腦）**。同一個行程有兩個 GPU context 時，每鎖 1 GiB 會同時算在兩張卡上，所以第一版只能鎖約 39 GiB。改成兩個行程以後，主卡照單卡的方式鎖滿整個 expert 區（Qwen 39 GiB、orca 49 GiB），工作行程用剩下的額度，鎖住前面的層，給自己的 PCIe 讀取用：預設是 RAM 的 3/4，扣掉主卡已鎖的量，再留 2 GiB（Qwen 29.6 GiB、orca 19.7 GiB）。可以用 `--expert-gpu-pin-gib` 指定。量法：兩個行程鎖同一塊共用記憶體，41 + 30 GiB 正常，44 + 34 GiB 在第 78 GiB 時失敗。
+2. **沒事做的卡會在 1 秒內掉到 P8，PCIe 也降到 Gen1**。讀 prompt 的那幾秒，第二張卡沒有工作，回覆一開始要花約 1.5 秒爬回全速（每組 expert 一開始 88 µs，熱了以後 7 µs）。現在一個請求一開始，引擎就通知工作行程保溫：每 1 ms 送一個 1 ms 的空轉 kernel，請求結束 1 秒後才停。間隔拉到 15 ms 不夠，約 7 秒後還是會掉速。
+3. **WDDM 每次 CUDA 呼叫約 10 µs，而且同一個行程開多條執行緒送也不會更快**。解碼時：
+   - 工作行程每層原本要約 12 次呼叫，現在改成一個 CUDA graph，依 (格式, token 數, k) 各錄一份。
+   - 主卡每層的 PCIe 搬運（2 次 `cudaMemcpyAsync` 加 1 次 `cudaLaunchHostFunc`，約 80 µs）原本卡在 CPU 開始算之前，現在交給 Verifier 的專用執行緒送出。主程式每輪的規劃時間從約 7 ms 降到 1.3–1.7 ms，單卡也一起受惠。
+4. **讀 prompt 時，搬運和計算原本重疊得很差**：每個 expert 都有一次跨 stream 的 event 交接，每層有約 27% 的時間兩邊都閒著。現在每 16 個 expert 才交接一次。反量化仍然一次只做 2 個（約 20 MB），因為一次做 16 個（157 MB）會超出 32 MB 的 L2，GEMM 反而變慢。
+5. 第一版留下的 3 件事仍然有效：WDDM 的 `cudaMalloc` 要等第一次寫入才真的佔用記憶體，所以槽位先寫零，再檢查保留量；表格和輸入一次複製進去、結果一次複製回來；不用 zero-copy。
+
+### 還沒做的
+
+- 讀長 prompt 時，現在卡在主卡上 expert 以外的部分（attention、GDN、PLE），這部分第二張卡幫不上。
+- CPU 算 IQ3_XXS expert 很慢，只有約 7 GB/s，是解碼剩下的主要瓶頸。這和單卡是同一件事，沒有在這次處理。
+- 工作行程只在 Windows 上實作；其他平台的引擎會照常用單卡跑。
 
 ## 為什麼接在 pool hook
 
