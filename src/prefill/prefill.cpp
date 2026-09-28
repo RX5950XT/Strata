@@ -985,18 +985,16 @@ bool Prefill::run(const int64_t* tokens, int64_t n, int64_t pos0, std::string& e
                     if (st.kv_q4) strata::kernels::fwht256_inplace_cuda(m.q, T * 24, m.cs);
                     rms_rows(m.q_idx, (const float*) wiqn->data, T * 4, 128, 128, EPS, m.cs);
                     rope(m.q_idx, T, 4, 128, 512, p0, (float) strata::kernels::qsa_freq_base(), m.cs);
-                    // the indexer appends, token by token; then scores + selection for many queries at once:
-                    // a query reads completed blocks (final once completed) and `dead` for its own tail block
+                    // the indexer appends the chunk's tokens (as if one by one); then scores + selection for many
+                    // queries at once: a query reads completed blocks (final once completed) and `dead` for its own tail block
                     const strata::kernels::QsaIndexerBuffers ib{st.idx_tail, st.idx_dead, st.idx_pooled, st.idx_block_pos};
                     pt.mark(kPfQsaIdx, cs);
-                    for (int64_t t = 0; t < T; ++t) {
-                        const int32_t* step_t = m.steps_dev + t * strata::kernels::kStepCount;
-                        try {
-                            strata::kernels::native_qsa_indexer_append(m.idx_raw + t * 128, step_t + strata::kernels::kStepPos, 0,
-                                                                       (const float*) wikn->data, EPS, ib, s, st.max_cells,
-                                                                       (float) strata::kernels::qsa_freq_base(), m.cs);
-                        } catch (const std::exception& e) { err = std::string("prefill indexer: ") + e.what(); return false; }
-                    }
+                    try {
+                        strata::kernels::native_qsa_indexer_append_batch(m.idx_raw, T, m.steps_dev + strata::kernels::kStepPos,
+                                                                         strata::kernels::kStepCount, 0,
+                                                                         (const float*) wikn->data, EPS, ib, s, st.max_cells,
+                                                                         (float) strata::kernels::qsa_freq_base(), m.cs);
+                    } catch (const std::exception& e) { err = std::string("prefill indexer: ") + e.what(); return false; }
                     pt.mark(kPfQsaSel, cs);
                     for (int64_t t0 = 0; t0 < T; t0 += m.sel_batch) {
                         const int64_t nb = std::min(m.sel_batch, T - t0);

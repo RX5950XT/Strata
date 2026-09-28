@@ -471,10 +471,8 @@ bool Verifier::record_window(int T, cudaStream_t cs, std::string& err) {
                                        vcur_ + t * NKV * HD, s, cs, &st.host);
                 }
                 const QsaIndexerBuffers ib{st.idx_tail, st.idx_dead, st.idx_pooled, st.idx_block_pos};
-                for (int t = tb; t < te; ++t)
-                    native_qsa_indexer_append(idx_raw + t * ID, step_ + t * kStepCount + kStepPos, 0,
-                                              (const float*) wikn->data, EPS, ib, s, st.max_cells,
-                                              (float) qsa_freq_base(), cs);
+                native_qsa_indexer_append_batch(idx_raw + tb * ID, te - tb, step_ + tb * kStepCount + kStepPos, kStepCount, 0,
+                                                (const float*) wikn->data, EPS, ib, s, st.max_cells, (float) qsa_freq_base(), cs);
                 native_mmvq(wq->native_type, wq->native_data, xq_, qfull_ + tb * NH * 2 * HD, (int) N, (int) (NH * 2 * HD),
                             n, cs);
                 for (int t = tb; t < te; ++t) {
@@ -722,10 +720,8 @@ bool Verifier::capture_commit(std::string& err) {
                 if (!wikn) { ok = false; break; }
                 copy_from_mapped(st.idx_tail, tail_snap_ + (size_t) qsa_index * TS, TS, cs_);
                 const QsaIndexerBuffers ib{st.idx_tail, st.idx_dead, st.idx_pooled, st.idx_block_pos};
-                for (int64_t t = 0; t < MT; ++t)
-                    native_qsa_indexer_append(idx_raw_L_ + (size_t) (qsa_index * MT + t) * ID, commit_ + 2 + t, 0,
-                                              (const float*) wikn->data, EPS, ib, s, st.max_cells,
-                                              (float) qsa_freq_base(), cs_);
+                native_qsa_indexer_append_batch(idx_raw_L_ + (size_t) qsa_index * MT * ID, MT, commit_ + 2, 1, 0,
+                                                (const float*) wikn->data, EPS, ib, s, st.max_cells, (float) qsa_freq_base(), cs_);
                 ++qsa_index;
             }
         }
