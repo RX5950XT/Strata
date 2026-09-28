@@ -753,6 +753,8 @@ def build_engine(gpu, vision, yes, llama, expert=False) -> Path:
     meta = json.loads(stamp.read_text()) if stamp.exists() else {}
     want_vision = vision != "none"
     local = meta.get("source") == "local"
+    # a recompile after a `git pull` (update_installed_engine) keeps a dual-GPU build dual while the card is there
+    expert = expert or (local and meta.get("expert_gpu") is True and isinstance(gpu.get("expert"), dict))
     src, vsrc = source_hash(ENGINE_SOURCES), source_hash(VISION_SOURCES)
     need_archs = engine_cuda_archs(gpu, expert)
     covers = local and (eng / EXE).exists() and local_engine_covers(meta, need_archs, expert=expert)
