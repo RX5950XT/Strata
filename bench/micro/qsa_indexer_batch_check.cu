@@ -90,7 +90,7 @@ void run(int start, const std::vector<int>& chunks, int cap, int base, int strid
     int offset = std::max(start, 0);
     for (int n : chunks) {
         for (int i = offset; i < offset + n; ++i) one(single, i);
-        native_qsa_indexer_append_batch(dr.p + size_t(offset) * 128, n, dp.p + size_t(offset) * stride,
+        native_qsa_indexer_append_rows(dr.p + size_t(offset) * 128, n, dp.p + size_t(offset) * stride,
             stride, base, dg.p, 1e-6f, batch.buffers(), qsa_real_shapes(), cap, 1e7f, stream);
         check(cudaStreamSynchronize(stream));
         compare(single, batch, cap);

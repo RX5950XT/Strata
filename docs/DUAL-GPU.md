@@ -77,6 +77,23 @@
 - CPU 算 expert 仍是解碼的主要瓶頸：RAM 實測只讀得到約 25 GB/s，CPU 和兩張卡的 PCIe 讀取共用這個上限。
 - 工作行程只在 Windows 上實作；其他平台的引擎會照常用單卡跑。
 
+## 跟上游 layer split 比較（2026-09-29，引擎 0.1.24）
+
+上游 0.1.24 內建另一種雙卡做法：模型的層切兩段，每張卡跑自己那段（`--gpus 0,1` / `--layer-split`，docs/MULTI_GPU.md）。每張卡都要放一份 dense 權重、自己的 KV、prompt 暫存，還多留 1 GiB，所以 8 GB 的 3060 Ti 扣完就沒空間放 expert：
+
+- 262K、131K、65K、32K context 都開不起來（`layer split, CUDA1 expert cache: no room`），純上游版本一樣。
+- 硬壓到 16K、`--prefill 512`、`--vram-reserve-mib 0` 才跑得動，3060 Ti 只分到第 47 層：解碼 10–16 tok/s、prefill 33 tok/s，比單卡還慢。
+
+所以這台繼續用 `--expert-gpu`。兩者不能同時開（引擎直接報錯）；setup 只在第二張卡有 12 GB 以上才推薦 layer split，已經設定 `expert_gpu` 的模型啟動時也不會再問。
+
+合併 0.1.24 後經 server 的實測（greedy、兩輪交錯，tok/s）：
+
+| | Qwen 解碼 | Qwen prefill 16K / 64K | Orca 解碼 | Orca prefill 16K / 64K |
+| --- | ---: | ---: | ---: | ---: |
+| 0.1.24 + worker | 44.6 / 42.1 | 1148 / 1093 | 37–40 / 36 | 1415 / 1421 |
+| 0.1.20 + worker | 44.0 / 41.7 | 840 / 808 | 36–40 / 37 | 883–960 |
+| 0.1.24 單卡 | 30–31 | ~1005 | 26–33 | ~1400 |
+
 ## 為什麼接在 pool hook
 
 每一層的 CPU 交接流程本來就長這樣：GPU0 用 doorbell 把 `x` 和 miss 清單寫進 mapped pinned 記憶體，host 執行緒呼叫 `pool(...)` 算完 miss，把結果寫進 `y_miss`，最後設定 `flag`，GPU0 才接著往下跑（`src/core/session.cpp:915`、`:678`；`src/core/verify.cpp` 的 verify window 也是同一種形狀，走 `drive_pool_multi`）。

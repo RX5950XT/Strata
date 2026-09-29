@@ -32,6 +32,8 @@
 namespace strata::core {
 class ExpertGpu;
 
+class RemoteExperts;
+
 /// Where one routed expert's bytes come from.
 ///
 /// Phase 2 has NO cache (`phase-2-correct-engine.md`: hit rate `h = 0`), so the only implementation is a
@@ -94,6 +96,8 @@ struct ExpertDispatch {
     ExpertGpu* expert_gpu = nullptr;
     strata::kernels::cpu::ExpertPool* pool = nullptr;
     ExpertSource* src = nullptr;
+    RemoteExperts* remote[3] = {}; ///< optional CUDA1..3 tiers for otherwise CPU-served rows
+    int remote_count = 0;
     int64_t n_expert = strata::kernels::cpu::NE;
 
     /// Counters, for the driver to report rather than for control flow.
@@ -324,7 +328,7 @@ public:
     /// rate, because those are the two numbers that say whether the arena is the one that was asked for.
     /// `share`: the arena becomes that named section (PinnedArena), for the second-GPU worker process.
     bool open(const std::string& pack_dir, int64_t n_layers, int64_t n_expert, int threads, std::string& err,
-              const std::string& share = {});
+              const std::string& share = {}, uint64_t max_pinned_bytes = 0);
     /// Plan v0.3 P6: a native pack without experts.bin takes its experts from the model's shard 1.
     void set_gguf(const std::string& shard1) { gguf_ = shard1; }
     void close();
@@ -342,6 +346,12 @@ public:
     double load_gib_per_second() const { return gib_per_s_; }
     uint64_t pinned_bytes() const { return pinned_bytes_; }
     uint64_t arena_bytes() const;    ///< the whole reservation (the file plus one blob)
+    // Loader fix: the load, split.  `load_seconds()` is the wall clock of the load loop; the other two are
+    // sums over the reader threads (see LoadStats), so on their own they say how much of that wall was spent
+    // waiting for the disk and how much in memcpy + FNV-1a.
+    double load_seconds() const { return load_seconds_; }
+    double load_read_seconds() const { return load_read_s_; }
+    double load_copy_seconds() const { return load_copy_s_; }
 
 private:
     void* arena_ = nullptr;          ///< the PinnedArena, owned
@@ -353,6 +363,9 @@ private:
     int64_t reads_ = 0;
     std::string note_;
     double gib_per_s_ = 0.0;
+    double load_seconds_ = 0.0;
+    double load_read_s_ = 0.0;
+    double load_copy_s_ = 0.0;
     uint64_t pinned_bytes_ = 0;
     std::string gguf_;
 };

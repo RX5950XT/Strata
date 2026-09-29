@@ -426,24 +426,6 @@ __global__ void add_hits_kernel(float* __restrict__ parts, const float* __restri
         parts[row + i] += hit_out[row + i];
 }
 
-// one block per entry: the GPU's own rows come from hit_out, only the host's rows cross PCIe from the mapped copy
-__global__ void rows_from_mapped_kernel(float4* __restrict__ parts, const volatile float4* mapped,
-                                        const float4* __restrict__ hit_out, const int32_t* __restrict__ dst,
-                                        const int32_t* __restrict__ count, int n4) {
-    const int r = blockIdx.x;
-    __shared__ int gpu;
-    if (threadIdx.x == 0) {
-        int g = 0;
-        for (int h = 0, c = *count; h < c; ++h) g |= dst[h] == r;
-        gpu = g;
-    }
-    __syncthreads();
-    const size_t row = (size_t) r * (size_t) n4;
-    if (gpu)
-        for (int i = threadIdx.x; i < n4; i += blockDim.x) parts[row + i] = hit_out[row + i];
-    else
-        for (int i = threadIdx.x; i < n4; i += blockDim.x) parts[row + i] = const_cast<const float4*>(mapped)[row + i];
-}
 }  // namespace
 
 void moe_hit_select(const int32_t* ids, const int32_t* res_row, int k, int n_expert, int32_t* slot, int32_t* dst,
@@ -757,19 +739,6 @@ void moe_hit_add(float* parts, const float* hit_out, const int32_t* dst, const i
     const dim3 grid((unsigned) ((n_embd + 255) / 256 < 8 ? (n_embd + 255) / 256 : 8), (unsigned) cap);
     add_hits_kernel<<<grid, 256, 0, (cudaStream_t) stream>>>(parts, hit_out, dst, count, (int) n_embd);
     check("moe_hit_add", stream);
-}
-
-void moe_rows_from_mapped(float* parts, const float* mapped, const float* hit_out, const int32_t* dst,
-                          const int32_t* count, int64_t rows, int64_t n_embd, void* stream) {
-    if (rows <= 0) return;
-    if ((n_embd & 3) != 0 || ((uintptr_t) parts & 15) != 0 || ((uintptr_t) mapped & 15) != 0 || ((uintptr_t) hit_out & 15) != 0) {
-        std::fprintf(stderr, "moe_rows_from_mapped: n_embd must be a multiple of 4 and the rows 16-byte aligned\n");
-        std::exit(1);
-    }
-    rows_from_mapped_kernel<<<(unsigned) rows, 256, 0, (cudaStream_t) stream>>>((float4*) parts, (const volatile float4*) mapped,
-                                                                              (const float4*) hit_out, dst, count,
-                                                                              (int) (n_embd / 4));
-    check("moe_rows_from_mapped", stream);
 }
 
 void moe_hit_grouped_s2_cpu_order(const uint8_t* blob_base, const int32_t* slot_index,
