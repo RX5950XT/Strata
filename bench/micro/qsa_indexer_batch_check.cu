@@ -12,9 +12,10 @@ using namespace strata::kernels;
 #ifdef ORIGINAL_CHECK
 namespace strata::kernels {
 void native_qsa_indexer_append_original(const float*, const int32_t*, int32_t, const float*, float,
-    const QsaIndexerBuffers&, const QsaShapes&, int64_t, float, void*);
+    const QsaIndexerBuffers&, const QsaShapes&, int64_t, const RopeScaling&, void*);
 }
 #endif
+RopeScaling g_scaling;   // none, then YaRN (the verify path takes the run's rope config)
 void check(cudaError_t e) { if (e != cudaSuccess) throw std::runtime_error(cudaGetErrorString(e)); }
 template<class T> struct Device {
     T* p = nullptr;
@@ -84,14 +85,14 @@ void run(int start, const std::vector<int>& chunks, int cap, int base, int strid
     State single(cap), batch(cap);
     auto one = [&](State& state, int i) {
         native_qsa_indexer_append(dr.p + size_t(i) * 128, dp.p + size_t(i) * stride, base,
-            dg.p, 1e-6f, state.buffers(), qsa_real_shapes(), cap, 1e7f, stream);
+            dg.p, 1e-6f, state.buffers(), qsa_real_shapes(), cap, g_scaling, stream);
     };
     for (int i = 0; i < std::max(start, 0); ++i) { one(single, i); one(batch, i); }
     int offset = std::max(start, 0);
     for (int n : chunks) {
         for (int i = offset; i < offset + n; ++i) one(single, i);
         native_qsa_indexer_append_rows(dr.p + size_t(offset) * 128, n, dp.p + size_t(offset) * stride,
-            stride, base, dg.p, 1e-6f, batch.buffers(), qsa_real_shapes(), cap, 1e7f, stream);
+            stride, base, dg.p, 1e-6f, batch.buffers(), qsa_real_shapes(), cap, g_scaling, stream);
         check(cudaStreamSynchronize(stream));
         compare(single, batch, cap);
         offset += n;
@@ -100,7 +101,7 @@ void run(int start, const std::vector<int>& chunks, int cap, int base, int strid
     State original(cap);
     for (int i = 0; i < total; ++i)
         native_qsa_indexer_append_original(dr.p + size_t(i) * 128, dp.p + size_t(i) * stride, base,
-            dg.p, 1e-6f, original.buffers(), qsa_real_shapes(), cap, 1e7f, stream);
+            dg.p, 1e-6f, original.buffers(), qsa_real_shapes(), cap, g_scaling, stream);
     check(cudaStreamSynchronize(stream));
     compare(original, single, cap);
 #endif
@@ -127,6 +128,13 @@ int main(int argc, char** argv) {
         std::printf("GPU %d: %s\n", device, prop.name);
         cudaStream_t stream;
         check(cudaStreamCreate(&stream));
+        for (int pass = 0; pass < 2; ++pass) {
+        if (pass == 1) {
+            g_scaling.type = RopeScalingType::YaRN;
+            g_scaling.factor = 2.0;
+            g_scaling.ext_factor = 1.0;
+            std::puts("-- YaRN factor 2");
+        }
         for (int n : {1, 2, 3, 4, 5, 8191, 8192}) run(0, {n}, 8200, 0, 1, false, stream);
         for (int start : {1, 2, 3, 5})
             for (int n : {1, 2, 3, 4, 5, 17}) run(start, {n}, 40, 0, 19, false, stream);
@@ -137,11 +145,12 @@ int main(int argc, char** argv) {
         run(-5, {20}, 9, 16, 3, true, stream);
         for (int start : {0, 1, 2, 3, 4, 5, 6, 7})
             for (int k : {1, 2, 3, 4, 5}) run(start, {5, 5, 5}, 40, 0, 7, false, stream, {k, 5 - k / 2, k});
+        }
         check(cudaStreamDestroy(stream));
 #ifdef ORIGINAL_CHECK
         std::puts("PASS original single-append behavior unchanged");
 #endif
-        std::puts("PASS all 83 cases: tail, dead, pooled, block_pos (memcmp)");
+        std::puts("PASS all 83 cases x {none, YaRN}: tail, dead, pooled, block_pos (memcmp)");
         return 0;
     } catch (const std::exception& e) {
         std::fprintf(stderr, "FAIL: %s\n", e.what());
