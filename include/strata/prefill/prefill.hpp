@@ -21,6 +21,8 @@
 #include <memory>
 #include <string>
 
+namespace strata::core { class PeerExperts; }
+
 namespace strata::prefill {
 
 struct PrefillStats {
@@ -73,6 +75,9 @@ public:
     /// ring (a big one only pays when the copy engine, not the host copies, is the limit); set before bytes_needed.
     static void set_pinned_share(double share);
     static double pinned_share();
+    /// #340: the streamed ring's slot count for chunks that stream every expert, instead of the pinned-share rule
+    /// (0 = that rule). Set before any `bytes_needed`/`init` (both count the ring); STRATA_PREFILL_RING still wins.
+    static void set_ring_override(int slots);
 
     /// Device bytes `init` needs for a chunk of `chunk` tokens (what a borrowed region must hold).
     static uint64_t bytes_needed(const core::ModelGeometry& g, const core::SessionState& ss, int64_t chunk);
@@ -82,6 +87,11 @@ public:
     bool run(const int64_t* tokens, int64_t n, int64_t pos0, std::string& err);
 
     const PrefillStats& stats() const { return stats_; }
+
+    /// multi-GPU: the experts the peer GPU holds are computed THERE for every prompt chunk (up to `cap_rows` routed
+    /// rows per layer; the rest of the peer's experts are read by this GPU over P2P).  Allocates the peer's buffers for
+    /// chunks of up to init's `chunk` tokens.  Needs P2P between the two cards.
+    bool set_peer(core::PeerExperts* peer, int64_t cap_rows, std::string& err);
 
     /// Plan v0.3 P6: called after every chunk with the chunk's final multi-stream residual rows (device,
     /// T x hc*n_embd, valid until the next chunk) and the chunk's first position; the MTP draft layer builds its

@@ -355,7 +355,7 @@ cudaError_t Worker::submit() {
                     const auto& f = layout.fmt[(size_t) layer];
                     native_expert_grouped(native_expert_layout(f.gu_type, f.d_type, f.n_embd, f.n_ff), ptr,
                                           start, count, dev_->dst, dev_->tok, n, ne, quant_, scratch_,
-                                          dev_->out, stream_, true);
+                                          dev_->out, stream_, 0, true);
                 } else {
                     moe_grouped_s2(ptr, start, count, dev_->dst, dev_->tok, n, ne, quant_, scales_,
                                    scratch_, dev_->out, stream_, true);

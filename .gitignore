@@ -36,6 +36,7 @@ td.log
 /run-*.sh
 /configs/
 /build-strata.bat
+/.strata-mcp/
 
 # image encoder (setup.py --vision): build output and the generated build script
 build-vision*/
@@ -51,3 +52,4 @@ build-vision.bat
 
 # control panel (serve/panel.py): API key, running model, logs
 /.panel/
+/.rocm-win/
