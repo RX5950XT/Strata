@@ -69,6 +69,7 @@ HF_REVISIONS = {
     "ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF": "b22d729eae29b5796f76fb70f91aef549b9fc52c",   # 2026-09-24
     "ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF": "5348543e0147355ac9cbcb031184a3546350988e",  # 2026-09-29
     "unsloth/Qwen3.8-Flash-Next-GGUF": "38bb39ee97821de2c9009abb7e93950eec396e66",                   # 2026-09-30
+    "orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF": "e43d00f4e2b8b40b89f75e9adeb1045ac34c8acc",     # 2026-10-02
 }
 
 
@@ -177,9 +178,9 @@ FAMILIES = {
               "profile": "expert-profile-coder.bin"},
     "orca": {"title": "Uncensored", "by": "orcarouter's abliterated Qwen3.8-Flash-Next (imatrix quant, not GSQ-RCO)",
              "about": "refusals removed; no safety filter, you are responsible for its use",
-             "hf": "https://huggingface.co/orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF/resolve/main/",
+             "hf": hf("orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF"),
              "file": "Qwen3.8-Flash-Next-Uncensored-{q}-0000{i}-of-00002.gguf", "tag": "orca-",
-             "mmproj_hf": "https://huggingface.co/orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF/resolve/main/",
+             "mmproj_hf": hf("orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF"),
              "mmproj": "mmproj-Qwen3.8-Flash-Next-Uncensored-F16.gguf", "name": "qwen3.8-flash-next-uncensored",
              "sizes": ["IQ3_XXS"], "download_gb": 85.2,
              # ordinary quants also quantize the small projections the kernels read as BF16 (docs/ORCA.md)
@@ -433,10 +434,10 @@ def gpus():
 
 
 GPU_PICK = None                                         # --gpu N (issue #51); None: the card with the most VRAM
-SPLIT_MIN_VRAM_GB = 12                                  # a card sharing a model holds the dense weights and its own
-                                                        # prompt buffers too (docs/MULTI_GPU.md); an 8 GB RTX 3060 Ti
-                                                        # kept no room for experts even at 32K context (2026-09-29),
-                                                        # so a smaller card is the expert worker instead (DUAL-GPU.md)
+SPLIT_MIN_VRAM_GB = 8                                   # a card sharing a model holds the dense weights and its own
+                                                        # prompt buffers too (docs/MULTI_GPU.md); below
+                                                        # SPLIT_PROMPT_VRAM_GB the split is offered but one card is the
+                                                        # default, and the expert worker is asked next (DUAL-GPU.md)
 SPLIT_PROMPT_VRAM_GB = 12                               # #448: a split stage lends a prompt chunk's buffers from its
                                                         # own cache; below this one cannot fund a 4096-token chunk
                                                         # (a 10 GB RTX 3080 beside a 32 GB card: 512 tokens, prompts
@@ -731,7 +732,7 @@ def gpu_info(pick=None):
         return None
     pick = GPU_PICK if pick is None else pick
     if pick is not None:
-        g = next((x for x in found if pick in (x["index"], x["uuid"])), None)
+        g = next((x for x in found if pick in (x["index"], x.get("uuid"))), None)
         if g is None:
             fail(f"there is no GPU {pick}: " + ", ".join(f"{x['index']} = {x['name']}" for x in found))
     else:
@@ -2764,15 +2765,6 @@ def start(cfg_path: Path, port: int | None, gpu: int | list | None = None, open_
     cfg_path.touch()                                     # the most recently used model
     if "--mtp" in cfg["args"][:-1]:
         refresh_draft_vocab(Path(cfg["args"][cfg["args"].index("--mtp") + 1]), cfg.get("draft_vocab", "cjk"))
-    if WIN:                                              # through the control panel: no console window to keep open,
-        pyw = Path(sys.executable).with_name("pythonw.exe")  # and it switches models or turns them off
-        cmd = [str(pyw if pyw.exists() else sys.executable), str(ROOT / "serve" / "panel.py"),
-               "--start", cfg_path.stem.removeprefix("strata-")] + (["--open"] if open_browser else [])
-        subprocess.Popen(cmd, cwd=str(ROOT), creationflags=0x00000008 | 0x00000200)  # DETACHED_PROCESS, new group
-        say()
-        say(f"Starting {cfg.get('model_name', 'the model')} in the control panel, http://127.0.0.1:8091 (loads 34-43 GB")
-        say("into RAM: 30-90 s). Turn it off or switch models there; this window can be closed.")
-        return 0
     cmd = [sys.executable, str(ROOT / "serve" / "server.py"), "--engine", "strata", "--config", str(cfg_path),
            "--port", str(port or cfg.get("port", 8080))]
     if cfg.get("backend") == "hip":                    # AMD, numbered as HIP numbers them (setup's KFD order)
@@ -2840,6 +2832,18 @@ def start(cfg_path: Path, port: int | None, gpu: int | list | None = None, open_
         if g is not None:
             cfg = ensure_engine_for([g], cfg_path, cfg, yes)
             ok("GPU: " + gpu_name(g))
+    if WIN:                                              # through the control panel: no console window to keep open,
+        pyw = Path(sys.executable).with_name("pythonw.exe")  # and it switches models or turns them off
+        cmd = [str(pyw if pyw.exists() else sys.executable), str(ROOT / "serve" / "panel.py"),
+               "--start", cfg_path.stem.removeprefix("strata-")] + (["--open"] if open_browser else [])
+        subprocess.Popen(cmd, cwd=str(ROOT), creationflags=0x00000008 | 0x00000200)  # DETACHED_PROCESS, new group
+        say()
+        for n, line in enumerate(textwrap.wrap(f"Settings ({cfg_path.name}): {settings_summary(cfg, port)}", 100,
+                                               break_on_hyphens=False)):   # #564: what this start uses
+            say(("  " if n == 0 else "    ") + line)
+        say(f"Starting {cfg.get('model_name', 'the model')} in the control panel, http://127.0.0.1:8091 (loads 34-43 GB")
+        say("into RAM: 30-90 s). Turn it off or switch models there; this window can be closed.")
+        return 0
     if open_browser:
         cmd.append("--open")
     gb = 0.0
@@ -3798,7 +3802,8 @@ def main() -> int:
         # the package's profile, with llama.cpp's flags (the engine takes the same ones)
         args += ["--control-vector-scaled", f"{esp}:1.0", "--control-vector-layer-range", "4", "44",
                  "--cvec-mode", "project", "--cvec-dir", "per-layer"]
-    cfg = {"exe": str(eng / EXE), "args": args, "cwd": str(ROOT), "tokenizer": str(pack / "tokenizer"), "gpu": gpu["uuid"],
+    cfg = {"exe": str(eng / EXE), "args": args, "cwd": str(ROOT), "tokenizer": str(pack / "tokenizer"),
+           **({"gpu": gpu["uuid"]} if gpu.get("uuid") else {}),   # NVIDIA: the card by uuid
            "model_name": f"{fam['name']}-{model.lower()}", "log": str(CONFIGS / f"strata-{tag.lower()}.log"),
            "lib_dirs": lib_dirs, "port": port}
     if hip:
@@ -3812,6 +3817,7 @@ def main() -> int:
         if resident:   # ROCm: large page-locked host allocations can fail or be slow for the CPU; keep the copy pageable
             cfg.setdefault("env", {})["STRATA_RESIDENT_PIN"] = "0"
     if gpu["count"] > 1 or a.gpu is not None:
+        cfg.setdefault("gpu", gpu["index"])            # no uuid (AMD): the engine is told this card (issue #51)
         cfg["gpus_asked"] = True                       # chosen at setup: not asked again at start ("gpu": its uuid)
     if multi:                                          # a layer split across these cards (the server adds the flag)
         cfg["gpu"] = multi
@@ -3827,7 +3833,7 @@ def main() -> int:
         cfg["vision"] = {"exe": str(eng / VEXE), "mmproj": str(mmproj), "model": str(shards[0]),
                          "gpu": vision == "gpu", "max_tokens": VISION[vision]["max_tokens"]}
         if vision == "gpu" and gpu["spare"]:
-            cfg["vision"]["gpu_uuid"] = gpu["spare"]["uuid"]
+            cfg["vision"]["gpu_uuid"] = gpu["spare"].get("uuid")
         if vision == "cpu":
             cfg["vision"]["threads"] = max(1, (os.cpu_count() or 8) // 2)
     try:

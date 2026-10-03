@@ -69,6 +69,8 @@ FALLBACK_FAMILIES = {
                                              "authors' numbers)", "tag": "swift-"},
     "coder": {"title": "Qwen3.8-Flash-Next Coder", "about": "half the experts (code, tools, images kept): needs ~32 GB "
                                                             "of RAM, faster; weaker outside coding", "tag": "coder-"},
+    "orca": {"title": "Uncensored", "about": "refusals removed; no safety filter, you are responsible for its use",
+             "tag": "orca-"},
     "unsloth": {"title": "Qwen3.8-Flash-Next (Unsloth)", "about": "4-bit, 111 GB download, most experts read from the "
                                                                   "SSD: slow (7-8.5 tokens/s on a 64 GB PC)",
                 "tag": "unsloth-", "experimental": True, "vision": False},
