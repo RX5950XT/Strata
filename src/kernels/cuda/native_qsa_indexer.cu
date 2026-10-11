@@ -44,65 +44,74 @@ __device__ float warp_sum(float x) {
 // with it merely skipped at run time, the compiled default path changed its results).
 template <bool TAB>
 __global__ void append(const float* __restrict__ raw, const int32_t* __restrict__ pos_dev,
+                        int pos_stride, int n_steps,
                         int pos_base, const float* __restrict__ gamma, float epsilon,
                         float* __restrict__ tail, float* __restrict__ dead,
                         float* __restrict__ pooled, int32_t* __restrict__ block_pos,
                         int max_cells, float theta_scale, float freq_scale, float corr_low,
                         float corr_high, float ext_factor, float mscale,
                         const int32_t* __restrict__ mtab, RopeTab rt) {
-    const int pos = *pos_dev, d = threadIdx.x;
-    if (pos < 0 || pos >= max_cells) return;
-    const int slot = pos % R;
-    float incoming = 0.0f;
-    if (d < D) {
-        // SET_ROWS stores F16; GET_ROWS expands those exact values to F32.
-        incoming = __half2float(__float2half_rn(raw[d]));
-        if (slot < R - 1) tail[slot * D + d] = incoming;
-    }
-    if (pos != 0 && slot != R - 1) return;
     __shared__ float values[D];
     __shared__ float partials[32];
-    float mean = 0.0f;
-    if (d < D) {
-        // The spare's four gather indices all name cell zero. Completed blocks
-        // use chronological slices; each graph ADD materializes an F32 sum.
-        float sum = pos == 0 ? incoming : tail[d];
+    const int d = threadIdx.x;
+    for (int step_idx = 0; step_idx < n_steps; ++step_idx) {
+        const int pos = pos_dev[(std::size_t) step_idx * pos_stride];
+        if (pos >= 0 && pos < max_cells) {
+            const float* raw_step = raw + (std::size_t) step_idx * D;
+            const int slot = pos % R;
+            float incoming = 0.0f;
+            if (d < D) {
+                // SET_ROWS stores F16; GET_ROWS expands those exact values to F32.
+                incoming = __half2float(__float2half_rn(raw_step[d]));
+                if (slot < R - 1) tail[slot * D + d] = incoming;
+            }
+            if (pos == 0 || slot == R - 1) {
+                float mean = 0.0f;
+                if (d < D) {
+                    // The spare's four gather indices all name cell zero. Completed blocks
+                    // use chronological slices; each graph ADD materializes an F32 sum.
+                    float sum = pos == 0 ? incoming : tail[d];
 #pragma unroll
-        for (int j = 1; j < R; ++j)
-            sum = __fadd_rn(sum, pos == 0 || j == R - 1 ? incoming : tail[j * D + d]);
-        mean = __fmaf_rn(0.25f, sum, 0.0f); // SCALE includes a zero bias.
-    }
-    float square_sum = 0.0f;
-    if (d < D) square_sum += mean * mean;
-    square_sum = warp_sum(square_sum);
-    const int lane = d % 32;
-    if (lane == 0) partials[d / 32] = square_sum;
-    __syncthreads();
-    square_sum = lane < THREADS / 32 ? partials[lane] : 0.0f;
-    square_sum = warp_sum(square_sum);
-    const float scale = rsqrtf(square_sum / D + epsilon);
-    if (d < D) values[d] = scale * mean * gamma[d];
-    __syncthreads();
-    if (d >= D) return;
-    const int b = pos / R;
-    const int rope_pos = pos == 0 ? 0 : pos_base + R * b;
-    float y = values[d];
-    if (d < ROT) {
-        const int pair = d % (ROT / 2);
-        // The spare (pos == 0) keeps its zero angle; under YaRN the mscale magnitude still rides in
-        // through cos(0) - which is exactly what the queries are scaled by, so the top-k is unmoved.
-        float c, s;
-        if (!(TAB && rope_tab_cs(rt, pos == 0 ? 0 : mrope_pos(mtab, rope_pos, pair), pair, c, s))) {
-            const float theta_extrap = (pos == 0 ? 0 : mrope_pos(mtab, rope_pos, pair)) * powf(theta_scale, float(pair));
-            rope_scaled_angle(theta_extrap, freq_scale, corr_low, corr_high, ext_factor, mscale, pair, c, s);
+                    for (int j = 1; j < R; ++j)
+                        sum = __fadd_rn(sum, pos == 0 || j == R - 1 ? incoming : tail[j * D + d]);
+                    mean = __fmaf_rn(0.25f, sum, 0.0f); // SCALE includes a zero bias.
+                }
+                float square_sum = 0.0f;
+                if (d < D) square_sum += mean * mean;
+                square_sum = warp_sum(square_sum);
+                const int lane = d % 32;
+                if (lane == 0) partials[d / 32] = square_sum;
+                __syncthreads();
+                square_sum = lane < THREADS / 32 ? partials[lane] : 0.0f;
+                square_sum = warp_sum(square_sum);
+                const float scale = rsqrtf(square_sum / D + epsilon);
+                if (d < D) values[d] = scale * mean * gamma[d];
+                __syncthreads();
+                if (d < D) {
+                    const int b = pos / R;
+                    const int rope_pos = pos == 0 ? 0 : pos_base + R * b;
+                    float y = values[d];
+                    if (d < ROT) {
+                        const int pair = d % (ROT / 2);
+                        // The spare (pos == 0) keeps its zero angle; under YaRN the mscale magnitude still rides in
+                        // through cos(0) - which is exactly what the queries are scaled by, so the top-k is unmoved.
+                        float c, s;
+                        if (!(TAB && rope_tab_cs(rt, pos == 0 ? 0 : mrope_pos(mtab, rope_pos, pair), pair, c, s))) {
+                            const float theta_extrap = (pos == 0 ? 0 : mrope_pos(mtab, rope_pos, pair)) * powf(theta_scale, float(pair));
+                            rope_scaled_angle(theta_extrap, freq_scale, corr_low, corr_high, ext_factor, mscale, pair, c, s);
+                        }
+                        const float a = values[pair], z = values[pair + ROT / 2];
+                        y = d < ROT / 2 ? a * c - z * s : a * s + z * c;
+                    }
+                    pooled[std::size_t(b) * D + d] = y;
+                    if (pos == 0) dead[d] = y;
+                    else pooled[std::size_t(b + 1) * D + d] = dead[d];
+                    if (d == 0 && pos != 0) *block_pos = rope_pos;
+                }
+            }
         }
-        const float a = values[pair], z = values[pair + ROT / 2];
-        y = d < ROT / 2 ? a * c - z * s : a * s + z * c;
+        if (n_steps > 1) __syncthreads();
     }
-    pooled[std::size_t(b) * D + d] = y;
-    if (pos == 0) dead[d] = y;
-    else pooled[std::size_t(b + 1) * D + d] = dead[d];
-    if (d == 0 && pos != 0) *block_pos = rope_pos;
 }
 // ---- C-2: the batched append.  The pooled key of a completed block b (its last cell pos = 4b+3), computed with
 // the single append's arithmetic: keys rounded through F16, summed tail[0]+tail[1]+tail[2]+incoming in that order,
@@ -211,75 +220,6 @@ __global__ void append_tail(const float* __restrict__ raw, int64_t n, int64_t p0
     if (cell < p0) return;
     tail[s * D + d] = __half2float(__float2half_rn(raw[(cell - p0) * D + d]));
 }
-// ---- the verify path's appends: T cells at device positions positions[t * stride] (consecutive; a rejected
-// token is -1), in two launches instead of T single appends.  This one writes the completed blocks and cell zero's
-// spare with the single append's arithmetic; append_rows_finish writes the tail and the spare row after it, once
-// every block here has read the old tail.  TAB: as the single append's.
-template <bool TAB>
-__global__ void append_rows(const float* __restrict__ raw, int64_t T, const int32_t* __restrict__ positions,
-                            int64_t stride, int pos_base, const float* __restrict__ gamma, float epsilon,
-                            QsaIndexerBuffers buffers, int max_cells, float theta_scale, float freq_scale,
-                            float corr_low, float corr_high, float ext_factor, float mscale,
-                            const int32_t* __restrict__ mtab, RopeTab rt) {
-    const int64_t t = blockIdx.x;
-    const int pos = positions[t * stride], d = threadIdx.x;
-    if (pos < 0 || pos >= max_cells || (pos != 0 && pos % R != R - 1)) return;
-    __shared__ float values[D];
-    __shared__ float partials[32];
-    float mean = 0.0f;
-    if (d < D) {
-        const float incoming = __half2float(__float2half_rn(raw[t * D + d]));
-        // cell pos - (R - 1) + j: a row of this batch, or the tail the cells before it left
-        auto key = [&](int j) -> float {
-            if (pos == 0 || j == R - 1) return incoming;
-            const int64_t source = t - (R - 1) + j;
-            return source >= 0 ? __half2float(__float2half_rn(raw[source * D + d])) : buffers.tail[j * D + d];
-        };
-        float sum = key(0);
-#pragma unroll
-        for (int j = 1; j < R; ++j) sum = __fadd_rn(sum, key(j));
-        mean = __fmaf_rn(0.25f, sum, 0.0f);
-    }
-    const float square_sum = norm_scale(mean, partials, d);
-    const float scale = rsqrtf(square_sum / D + epsilon);
-    if (d < D) values[d] = scale * mean * gamma[d];
-    __syncthreads();
-    if (d >= D) return;
-    const int rope_pos = pos == 0 ? 0 : pos_base + R * (pos / R);
-    const float y = pooled_value<TAB>(values, d, rope_pos, theta_scale, freq_scale, corr_low, corr_high, ext_factor,
-                                      mscale, mtab, pos == 0, rt);
-    if (pos == 0) buffers.dead[d] = y;
-    else buffers.pooled[std::size_t(pos / R) * D + d] = y;
-}
-__global__ void append_rows_finish(const float* raw, int64_t T, const int32_t* positions, int64_t stride,
-                                   int pos_base, QsaIndexerBuffers buffers, int max_cells) {
-    const int d = threadIdx.x;
-    // the last in-range cell: a verify commit pads the rejected tokens with -1
-    __shared__ int64_t last_t;
-    if (d == 0) {
-        last_t = -1;
-        for (int64_t t = T - 1; t >= 0; --t) {
-            const int p = positions[t * stride];
-            if (p >= 0 && p < max_cells) { last_t = t; break; }
-        }
-    }
-    __syncthreads();
-    if (last_t < 0) return;
-    const int64_t last = positions[last_t * stride], first = last - last_t;
-    // Each tail slot retains its last write, even after a block completes.
-    for (int j = 0; j < R - 1; ++j) {
-        const int64_t pos = last - (last - j + R) % R, t = pos - first;
-        if (d < D && pos >= 0 && t >= 0 && t < T && positions[t * stride] == pos)
-            buffers.tail[j * D + d] = __half2float(__float2half_rn(raw[t * D + d]));
-    }
-    const int64_t complete = last - (last + 1) % R, t = complete - first;
-    if (complete >= 0 && t >= 0 && t < T && positions[t * stride] == complete) {
-        if (d < D) buffers.pooled[std::size_t(complete / R + 1) * D + d] = buffers.dead[d];
-        if (d == 0) *buffers.block_pos = pos_base + R * int(complete / R);
-    } else if (first <= 0 && -first < T && positions[-first * stride] == 0) {
-        if (d < D) buffers.pooled[d] = buffers.dead[d];
-    }
-}
 struct Span { const void* p; std::size_t n; };
 void validate(Span s) {
     const auto p = reinterpret_cast<std::uintptr_t>(s.p);
@@ -294,15 +234,18 @@ bool overlaps(Span a, Span b) {
 
 void native_qsa_indexer_set_enabled(bool value) { enabled.store(value, std::memory_order_relaxed); }
 bool native_qsa_indexer_enabled() { return enabled.load(std::memory_order_relaxed); }
-void native_qsa_indexer_append(const float* raw, const int32_t* relative_pos_device, int32_t pos_base,
-                               const float* gamma, float epsilon, const QsaIndexerBuffers& b,
-                               const QsaShapes& s, int64_t max_cells, const RopeScaling& scaling, void* stream) {
+void native_qsa_indexer_append_steps(const float* raw, const int32_t* relative_pos_device,
+                                     int pos_stride, int n_steps, int32_t pos_base,
+                                     const float* gamma, float epsilon, const QsaIndexerBuffers& b,
+                                     const QsaShapes& s, int64_t max_cells, const RopeScaling& scaling, void* stream) {
+    if (n_steps <= 0) return;
     if (!stream || s.idx_dim != D || s.idx_block != R || s.n_rot != ROT ||
         max_cells < 1 || max_cells > INT32_MAX || pos_base < 0 || pos_base % R ||
         int64_t(pos_base) + max_cells > INT32_MAX || !std::isfinite(epsilon) || epsilon <= 0.0f ||
         rope_scaling_invalid(scaling) != nullptr)
         throw std::invalid_argument("native QSA indexer requires fixed geometry, aligned position base, positive capacity/epsilon, valid frequency/scaling and explicit stream");
-    const Span spans[] = {{raw,D*4},{relative_pos_device,4},{gamma,D*4},{b.tail,(R-1)*D*4},
+    const std::size_t pos_span = (n_steps == 1 || pos_stride <= 0) ? 4 : (std::size_t(n_steps - 1) * pos_stride + 1) * 4;
+    const Span spans[] = {{raw,std::size_t(n_steps)*D*4},{relative_pos_device,pos_span},{gamma,D*4},{b.tail,(R-1)*D*4},
         {b.dead,D*4},{b.pooled,std::size_t(max_cells/R+1)*D*4},{b.block_pos,4}};
     for (const auto& span : spans) validate(span);
     for (int i = 0; i < 7; ++i) for (int j = i + 1; j < 7; ++j)
@@ -311,49 +254,21 @@ void native_qsa_indexer_append(const float* raw, const int32_t* relative_pos_dev
     const RopeKernelArgs k = scaling.kernel_args(ROT);   // none: the identity constants
     const RopeTab rt = rope_table_for(scaling);
     if (rt.cos != nullptr)
-        append<true><<<1,THREADS,0,static_cast<cudaStream_t>(stream)>>>(raw,relative_pos_device,pos_base,gamma,epsilon,
+        append<true><<<1,THREADS,0,static_cast<cudaStream_t>(stream)>>>(raw,relative_pos_device,pos_stride,n_steps,pos_base,gamma,epsilon,
             b.tail,b.dead,b.pooled,b.block_pos,int(max_cells),theta_scale,k.freq_scale,
             k.corr_low,k.corr_high,k.ext_factor,k.attn_factor,mrope_table(),rt);
     else
-        append<false><<<1,THREADS,0,static_cast<cudaStream_t>(stream)>>>(raw,relative_pos_device,pos_base,gamma,epsilon,
+        append<false><<<1,THREADS,0,static_cast<cudaStream_t>(stream)>>>(raw,relative_pos_device,pos_stride,n_steps,pos_base,gamma,epsilon,
             b.tail,b.dead,b.pooled,b.block_pos,int(max_cells),theta_scale,k.freq_scale,
             k.corr_low,k.corr_high,k.ext_factor,k.attn_factor,mrope_table(),rt);
     const auto error = cudaGetLastError();
     if (error != cudaSuccess) throw std::runtime_error(cudaGetErrorString(error));
 }
-void native_qsa_indexer_append_rows(const float* raw, int64_t T, const int32_t* relative_pos_device,
-                                    int64_t pos_stride, int32_t pos_base, const float* gamma, float epsilon,
-                                    const QsaIndexerBuffers& b, const QsaShapes& s, int64_t max_cells,
-                                    const RopeScaling& scaling, void* stream) {
-    if (T < 1 || T > INT32_MAX || pos_stride < 1 ||
-        uint64_t(T) > SIZE_MAX / (D * sizeof(float)) ||
-        uint64_t(pos_stride) > (SIZE_MAX / sizeof(int32_t) - 1) / uint64_t(T > 1 ? T - 1 : 1))
-        throw std::invalid_argument("native QSA indexer requires bounded positive batch size and position stride");
-    if (!stream || s.idx_dim != D || s.idx_block != R || s.n_rot != ROT ||
-        max_cells < 1 || max_cells > INT32_MAX || pos_base < 0 || pos_base % R ||
-        int64_t(pos_base) + max_cells > INT32_MAX || !std::isfinite(epsilon) || epsilon <= 0.0f ||
-        rope_scaling_invalid(scaling) != nullptr)
-        throw std::invalid_argument("native QSA indexer requires fixed geometry, aligned position base, positive capacity/epsilon, valid frequency/scaling and explicit stream");
-    const Span spans[] = {{raw,std::size_t(T)*D*4},{relative_pos_device,(std::size_t(T-1)*pos_stride+1)*4},{gamma,D*4},{b.tail,(R-1)*D*4},
-        {b.dead,D*4},{b.pooled,std::size_t(max_cells/R+1)*D*4},{b.block_pos,4}};
-    for (const auto& span : spans) validate(span);
-    for (int i = 0; i < 7; ++i) for (int j = i + 1; j < 7; ++j)
-        if (overlaps(spans[i], spans[j])) throw std::invalid_argument("native QSA indexer buffers overlap");
-    const float theta_scale = powf((float) scaling.freq_base, -2.0f / ROT);
-    const RopeKernelArgs k = scaling.kernel_args(ROT);   // none: the identity constants
-    const cudaStream_t st = static_cast<cudaStream_t>(stream);
-    const RopeTab rt = rope_table_for(scaling);
-    if (rt.cos != nullptr)
-        append_rows<true><<<unsigned(T),THREADS,0,st>>>(raw,T,relative_pos_device,pos_stride,pos_base,gamma,epsilon,b,
-            int(max_cells),theta_scale,k.freq_scale,k.corr_low,k.corr_high,k.ext_factor,k.attn_factor,mrope_table(),rt);
-    else
-        append_rows<false><<<unsigned(T),THREADS,0,st>>>(raw,T,relative_pos_device,pos_stride,pos_base,gamma,epsilon,b,
-            int(max_cells),theta_scale,k.freq_scale,k.corr_low,k.corr_high,k.ext_factor,k.attn_factor,mrope_table(),rt);
-    auto error = cudaGetLastError();
-    if (error != cudaSuccess) throw std::runtime_error(cudaGetErrorString(error));
-    append_rows_finish<<<1,THREADS,0,st>>>(raw,T,relative_pos_device,pos_stride,pos_base,b,int(max_cells));
-    error = cudaGetLastError();
-    if (error != cudaSuccess) throw std::runtime_error(cudaGetErrorString(error));
+
+void native_qsa_indexer_append(const float* raw, const int32_t* relative_pos_device, int32_t pos_base,
+                               const float* gamma, float epsilon, const QsaIndexerBuffers& b,
+                               const QsaShapes& s, int64_t max_cells, const RopeScaling& scaling, void* stream) {
+    native_qsa_indexer_append_steps(raw, relative_pos_device, 0, 1, pos_base, gamma, epsilon, b, s, max_cells, scaling, stream);
 }
 void native_qsa_indexer_append_batch(const float* raw, int64_t n, int64_t p0, int32_t pos_base, const float* gamma,
                                      float epsilon, const QsaIndexerBuffers& b, const QsaShapes& s, int64_t max_cells,

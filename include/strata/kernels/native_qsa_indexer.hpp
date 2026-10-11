@@ -43,12 +43,10 @@ void native_qsa_indexer_append(const float* raw, const int32_t* relative_pos_dev
                                const QsaIndexerBuffers& buffers, const QsaShapes& shapes,
                                int64_t max_cells, const RopeScaling& scaling, void* stream);
 
-// Appends T consecutive cells in two launches. raw is [T,128]; token t reads
-// relative_pos_device[t * pos_stride]. T and pos_stride must be positive.
-// Same buffers and preconditions as the single append; invalid cells are skipped.
-void native_qsa_indexer_append_rows(const float* raw, int64_t T, const int32_t* relative_pos_device,
-                                    int64_t pos_stride, int32_t pos_base, const float* gamma, float epsilon,
-                                    const QsaIndexerBuffers& buffers, const QsaShapes& shapes,
-                                    int64_t max_cells, const RopeScaling& scaling, void* stream);
+void native_qsa_indexer_append_steps(const float* raw, const int32_t* relative_pos_device,
+                                     int pos_stride, int n_steps, int32_t pos_base,
+                                     const float* gamma, float epsilon,
+                                     const QsaIndexerBuffers& buffers, const QsaShapes& shapes,
+                                     int64_t max_cells, const RopeScaling& scaling, void* stream);
 
 } // namespace strata::kernels
