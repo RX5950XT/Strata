@@ -457,7 +457,8 @@ class VramReserve(unittest.TestCase):
             with mock.patch.object(setup, "gpus", lambda: self.found), \
                     mock.patch.object(setup, "is_wsl", lambda: False), \
                     mock.patch.object(setup, "ensure_engine_for", lambda cards, path, cfg, yes: cfg), \
-                    mock.patch.object(setup.subprocess, "call", call):
+                    mock.patch.object(setup.subprocess, "call", call), \
+                    mock.patch.object(setup.subprocess, "Popen", call):
                 for n in ("2048", "1024"):
                     _, out = quiet(setup.start, p, None, None, False, True, None, {"vram_reserve_mib": int(n)})
                     self.assertEqual(json.loads(p.read_text())["args"], ["--kv", "int8", "--vram-reserve-mib", n])

@@ -942,7 +942,7 @@ def pcie_lines(link: dict) -> tuple[str, str | None]:
 
 
 GPU_PICK = None                                         # --gpu N (issue #51); None: the card with the most VRAM
-SPLIT_MIN_VRAM_GB = 12                                  # a card sharing a model holds the dense weights and its own
+SPLIT_MIN_VRAM_GB = 8                                   # a card sharing a model holds the dense weights and its own
                                                         # prompt buffers too (docs/MULTI_GPU.md); below
                                                         # SPLIT_PROMPT_VRAM_GB the split is offered but one card is the
                                                         # default, and the expert worker is asked next (DUAL-GPU.md)
@@ -4128,10 +4128,13 @@ def readable_config(path: Path) -> bool:
     return False
 
 
+CONFIGS = None                                 # a test may point it at a folder; None: ROOT / "configs"
+
+
 def configs_dir() -> Path:
     """strata-<model>.json (the installed models) and their engine logs.  Read from ROOT at call time, so a test that
     points ROOT at a temporary folder never writes the real configs."""
-    return ROOT / "configs"
+    return CONFIGS or ROOT / "configs"
 
 
 def model_config_files(folder: Path) -> list:
@@ -4202,7 +4205,7 @@ def model_config(path: Path) -> bool:
 
 
 def installed_configs():
-    return [p for p in sorted(model_config_files(configs_dir()), key=lambda p: p.stat().st_mtime, reverse=True)
+    return [p for p in sorted([*model_config_files(configs_dir()), *model_config_files(ROOT)], key=lambda p: p.stat().st_mtime, reverse=True)
             if model_config(p)]
 
 

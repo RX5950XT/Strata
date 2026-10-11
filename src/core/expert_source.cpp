@@ -3580,7 +3580,7 @@ void expert_pool_dispatch(void* user, const float* x_f, const int32_t* ids, cons
         }
         if (graph_hits) ++d.cache_refused;   // token graph: a miss (nothing is admitted during a token)
 
-        if (second && second_kind[i] == -2) continue;
+        if (second && second_kind[i] == -3) continue;
         bool remote_owns = false;
         for (int r = 0; r < d.remote_count; ++r) remote_owns |= d.remote[r]->owns(i);
         if (remote_owns) {
@@ -3681,7 +3681,7 @@ void expert_pool_dispatch_multi(ExpertDispatch& d, const float* x_f, const int32
     // ---- plan v0.3 P6: the GPU's share, decided and published FIRST so the GPU starts while the CPU works.
     // Distinct experts in routing order; resident ones and the last pcie_num/256 of the missed ones go to the GPU.
     const int64_t n = n_tok * k;
-    int32_t kind[kMaxWindowEntries];       // per entry: -2 GPU1, -1 CPU, 0 VRAM, 1 PCIe
+    int32_t kind[kMaxWindowEntries];       // per entry: -3 GPU1 (expert GPU worker), -2 tail skip, -1 CPU, 0 VRAM, 1 PCIe
     bool second = false;
     if (d.expert_gpu) {
         if (n > kMaxWindowEntries) { d.failed = true; d.fail = "expert GPU routing list is too large"; return; }
@@ -3715,7 +3715,7 @@ void expert_pool_dispatch_multi(ExpertDispatch& d, const float* x_f, const int32
                 distinct[nd++] = i;
                 const int32_t e = ids[i];
                 if (e >= 0 && e < d.n_expert && d.host_res[(size_t) d.layers * (size_t) d.n_expert + (size_t) e] < 0 &&
-                    !(second && kind[i] == -2) && !(d.peer != nullptr && d.peer->has(d.layers, e)) && !helper_holds(e)) ++nmiss;
+                    !(second && kind[i] == -3) && !(d.peer != nullptr && d.peer->has(d.layers, e)) && !helper_holds(e)) ++nmiss;
             }
         }
         // STRATA_ROUTE_TAIL_SKIP=R (default 7 on CUDA serve, =0 off; changes the output): a missed expert that EVERY token of the window routes
@@ -3735,7 +3735,7 @@ void expert_pool_dispatch_multi(ExpertDispatch& d, const float* x_f, const int32
             for (int q = 0; q < nd; ++q) {
                 const int32_t e = ids[distinct[q]];
                 if (e < 0 || e >= d.n_expert || minr[q] < tail_rank) continue;
-                if (second && kind[distinct[q]] == -2) continue;   // the expert GPU worker computes it
+                if (second && kind[distinct[q]] == -3) continue;   // the expert GPU worker computes it
                 if (d.host_res[(size_t) d.layers * (size_t) d.n_expert + (size_t) e] >= 0) continue;   // resident
                 skip_d[q] = true;
                 --nmiss;
@@ -3751,7 +3751,7 @@ void expert_pool_dispatch_multi(ExpertDispatch& d, const float* x_f, const int32
         for (int q = 0; q < nd; ++q) {
             const int64_t i0 = distinct[q];
             const int32_t e = ids[i0];
-            if (second && kind[i0] == -2) continue;
+            if (second && kind[i0] == -3) continue;
             int kd = -1;
             unsigned long long ptr = 0;
             if (skip_d[q]) {                       // STRATA_ROUTE_TAIL_SKIP: neither copied nor computed
@@ -3825,7 +3825,7 @@ void expert_pool_dispatch_multi(ExpertDispatch& d, const float* x_f, const int32
     } else {
         for (int64_t i = 0; i < n; ++i) {
             const int32_t e = ids[i];
-            if (second && kind[i] == -2) continue;
+            if (second && kind[i] == -3) continue;
             kind[i] = (e >= 0 && e < d.n_expert && d.host_res != nullptr &&
                        d.host_res[(size_t) d.layers * (size_t) d.n_expert + (size_t) e] >= 0) ? 0
                     : (e >= 0 && e < d.n_expert && d.peer != nullptr && d.peer->has(d.layers, e)) ? 2 : -1;
@@ -3912,7 +3912,7 @@ void expert_pool_dispatch_multi(ExpertDispatch& d, const float* x_f, const int32
                 continue;
             }
             ++d.cache_refused;
-            if (second && kind[i] == -2) continue;
+            if (second && kind[i] == -3) continue;
             int16_t& jo = d.job_of[(size_t) e];
             if (jo < 0) {
                 const uint8_t* b = d.src->blob(d.layers, e);

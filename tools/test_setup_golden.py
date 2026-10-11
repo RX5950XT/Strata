@@ -72,8 +72,9 @@ def install(ram, found, argv, answers=None, extra=(), avx512=False, configs=()):
         eng = t / "engine"
         eng.mkdir()
         (eng / "BUILD.json").write_text(json.dumps({"version": "0.1.32", "source": "local", "cuda_dirs": ["<cuda>"]}))
+        (t / "configs").mkdir()
         for name, c in configs:
-            (t / name).write_text(json.dumps(c))
+            (t / "configs" / name).write_text(json.dumps(c))
         asked = []
 
         def fake_input(prompt=""):
@@ -93,6 +94,8 @@ def install(ram, found, argv, answers=None, extra=(), avx512=False, configs=()):
 
         patches = [
             mock.patch.object(setup, "ROOT", t),
+            mock.patch.object(setup, "CONFIGS", t / "configs"),
+            mock.patch.object(setup, "choose_expert_gpu", lambda *a: False),
             mock.patch.object(setup, "GPU_PICK", None),
             mock.patch.object(setup, "data_folder", lambda d: (t / "data", [])),
             mock.patch.object(setup, "load_settings", lambda: {}),
@@ -135,7 +138,7 @@ def install(ram, found, argv, answers=None, extra=(), avx512=False, configs=()):
                     code = setup.main()
                 except SystemExit as e:
                     code = e.code
-        written = sorted(t.glob("strata-*.json"), key=lambda p: p.stat().st_mtime)
+        written = sorted((t / "configs").glob("strata-*.json"), key=lambda p: p.stat().st_mtime)
         cfg = None
         if written and code == 0:
             cfg = normalize(json.loads(written[-1].read_text(encoding="utf-8")), t)

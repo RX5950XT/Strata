@@ -206,14 +206,15 @@ class NoBrowser(unittest.TestCase):
             with unittest.mock.patch.object(setup, "gpus", lambda: self.found), \
                     unittest.mock.patch.object(setup, "is_wsl", lambda: False), \
                     unittest.mock.patch.object(setup, "ensure_engine_for", lambda cards, path, c, yes: c), \
-                    unittest.mock.patch.object(setup.subprocess, "call", call):
+                    unittest.mock.patch.object(setup.subprocess, "call", call), \
+                    unittest.mock.patch.object(setup.subprocess, "Popen", call):
                 _, out = quiet(setup.start, p, None, None, True, True, None, keep)
             return call.call_args[0][0], out, json.loads(p.read_text())
 
     def test_on_a_start(self):
         cmd, out, _ = self.start_cmd({})
         self.assertIn("--open", cmd)                                      # the default, as before
-        self.assertIn("the browser opens when it is ready", out)
+        self.assertIn("control panel" if setup.WIN else "the browser opens when it is ready", out)
         cmd, out, _ = self.start_cmd({"open_browser": False})
         self.assertNotIn("--open", cmd)
         self.assertNotIn("the browser opens", out)

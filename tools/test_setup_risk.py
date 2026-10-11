@@ -355,7 +355,8 @@ class StartOnSeveralGpus(unittest.TestCase):
             with mock.patch.object(setup, "gpus", lambda: found), \
                     mock.patch.object(setup, "ensure_engine_for", lambda cards, path, cfg, yes: cfg), \
                     mock.patch.object(setup, "is_wsl", lambda: False), \
-                    mock.patch.object(setup.subprocess, "call", call):
+                    mock.patch.object(setup.subprocess, "call", call), \
+                    mock.patch.object(setup.subprocess, "Popen", call):
                 code, out, _ = run(setup.start, p, None, [0, 1], False, True)
             cfg = json.loads(p.read_text())
         self.assertIsNone(code, out)

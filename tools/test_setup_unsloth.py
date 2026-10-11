@@ -170,6 +170,8 @@ class Base(unittest.TestCase):
 
         patches = [
             mock.patch.object(setup, "ROOT", self.t),
+            mock.patch.object(setup, "CONFIGS", self.t / "configs"),
+            mock.patch.object(setup, "choose_expert_gpu", lambda *a: False),
             mock.patch.object(setup, "GPU_PICK", None),
             mock.patch.object(setup, "data_folder", lambda d: (self.t / "data", [])),
             mock.patch.object(setup, "installed_configs", lambda: []),
@@ -204,7 +206,7 @@ class Base(unittest.TestCase):
             for p in patches:
                 st.enter_context(p)
             code, out = quiet(setup.main)
-        cfg = self.t / f"strata-unsloth-{m.lower()}.json"
+        cfg = self.t / "configs" / f"strata-unsloth-{m.lower()}.json"
         return code, out, (json.loads(cfg.read_text()) if cfg.exists() else None)
 
 class Main(Base):
@@ -643,7 +645,8 @@ class LayerSplit(unittest.TestCase):
                     mock.patch.object(setup, "engine_runs_on", lambda g: True), \
                     mock.patch.object(setup, "ensure_engine_for", lambda cards, path, cfg, yes: cfg), \
                     mock.patch.object(setup, "is_wsl", lambda: False), \
-                    mock.patch.object(setup.subprocess, "call", call):
+                    mock.patch.object(setup.subprocess, "call", call), \
+                    mock.patch.object(setup.subprocess, "Popen", call):
                 code, out, asked = run(setup.start, p, None, list(gpu) if gpu else None, False, offered is None,
                                        stdin=offered)
             return code, out, json.loads(p.read_text()), call.called

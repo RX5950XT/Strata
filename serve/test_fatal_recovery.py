@@ -71,7 +71,10 @@ class FatalRecovery(unittest.TestCase):
                 with urllib.request.urlopen(req,timeout=5) as r:return r.read().decode()
             text=post()
             self.assertIn('"error"',text);self.assertTrue(text.rstrip().endswith('data: [DONE]'))
-            with urllib.request.urlopen(base+'/health',timeout=5) as r:self.assertFalse(json.load(r)['loaded'])
+            with self.assertRaises(urllib.error.HTTPError) as failed:
+                urllib.request.urlopen(base+'/health',timeout=5)
+            self.assertEqual(failed.exception.code,503)
+            self.assertFalse(json.load(failed.exception)['loaded'])
             body['stream']=False
             self.assertEqual(json.loads(post())['usage']['completion_tokens'],1)
             with urllib.request.urlopen(base+'/health',timeout=5) as r:self.assertTrue(json.load(r)['loaded'])

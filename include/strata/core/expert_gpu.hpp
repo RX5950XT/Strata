@@ -39,7 +39,7 @@ public:
               uint64_t main_pinned, const std::string& pack_dir, int64_t n_layers, int64_t n_expert,
               const std::vector<std::pair<int32_t, int32_t>>& profile, std::string& err);
     bool contains(int64_t layer, int32_t expert) const;
-    /// Claims this tier's rows (kind -1 -> -2): its resident experts, and with `pcie` a share of the other misses,
+    /// Claims this tier's rows (kind -1 -> -3): its resident experts, and with `pcie` a share of the other misses,
     /// which it reads over its own PCIe link.  kind 0 rows (GPU0's) are never taken.
     bool launch(int64_t layer, const float* x, const int32_t* ids, int nt, int k, float* out, int32_t* kind,
                 bool pcie = false);

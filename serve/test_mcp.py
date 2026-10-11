@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 import sys
 import tempfile
 import threading
@@ -175,12 +176,15 @@ class HttpClient(unittest.TestCase):
     def setUpClass(cls):
         cls.httpd = fake.http_server(0)
         url = f"http://127.0.0.1:{cls.httpd.server_address[1]}/mcp"
-        cls.hub = McpHub({"web": {"url": url}, "down": {"url": "http://127.0.0.1:9/mcp"}}, {"timeout_s": 1.5})
+        cls.down = socket.socket()
+        cls.down.bind(("127.0.0.1", 0))
+        cls.hub = McpHub({"web": {"url": url}, "down": {"url": f"http://127.0.0.1:{cls.down.getsockname()[1]}/mcp"}}, {"timeout_s": 1.5})
         cls.hub.start(wait=True)
 
     @classmethod
     def tearDownClass(cls):
         cls.hub.close()
+        cls.down.close()
         cls.httpd.shutdown()
         cls.httpd.server_close()
 

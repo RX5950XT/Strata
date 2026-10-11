@@ -603,7 +603,7 @@ bool ExpertGpu::launch(int64_t layer, const float* x, const int32_t* ids, int nt
             if (kind[j] != -1 || ids[j] != ids[i]) continue;
             io.dst[entries_] = j;
             io.tok[entries_++] = j / k;
-            kind[j] = -2;
+            kind[j] = -3;
         }
     };
     const size_t row = (size_t) layer * (size_t) n_expert_;

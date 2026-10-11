@@ -2243,11 +2243,6 @@ class Vision:
 NO_WINDOW = 0x08000000 if os.name == "nt" else 0       # CREATE_NO_WINDOW
 
 
-def alive(child) -> bool:
-    proc = getattr(child, "proc", None)
-    return proc is None or proc.poll() is None
-
-
 def engine_visible_devices(cfg: dict, gpu: str | None) -> str | None:
     """CUDA_VISIBLE_DEVICES for the engine process. No expert_gpu: the main uuid alone, unchanged.
     With it, the main card is ordinal 0 and the expert card is ordinal 1 (main uuid first)."""
@@ -4960,10 +4955,10 @@ def make_handler(svc: Service):
                 self.wfile.write(body)
             elif path in ("/health", "/api/health"):
                 # server.py can outlive its engine: say so (an engine stopped on purpose, idle unload, is not down)
-                engine_up = alive(svc.engine) or getattr(svc.engine, "unloaded", False)
+                engine_up = svc.loaded() or getattr(svc.engine, "unloaded", False)
                 self._json(200 if engine_up else 503,
                            {"status": "ok" if engine_up else "engine stopped", "max_context": svc.reported_ctx(),
-                            "model": svc.model, "images": svc.vision is not None and alive(svc.vision),
+                            "model": svc.model, "images": svc.vision is not None and svc.vision.alive(),
                             "api_key": bool(svc.api_key), "loaded": svc.loaded(), "service": "strata"})
             elif path == "/status":
                 if not self._authorized():                  # #212: it shows the end of the last answer
@@ -6376,7 +6371,8 @@ def main() -> int:
               + ("" if svc.api_key or "*" not in svc.cors_origins else
                  " - WARNING: any web page may use the model (no API key)"), flush=True)
     svc.idle_unload_s = a.idle_unload if a.idle_unload is not None else float(cfg.get("idle_unload_s") or 0)
-    svc.min_free_vram_mib = a.min_free_vram_mib if a.min_free_vram_mib is not None else         int(cfg.get("min_free_vram_mib") or 0)
+    svc.min_free_vram_mib = a.min_free_vram_mib if a.min_free_vram_mib is not None else \
+        int(cfg.get("min_free_vram_mib") or 0)
     svc.before_load = a.before_load or cfg.get("before_load") or None
     # --slot-save-path is relative to the working directory the server was started in; the config's slot_save_path
     # to the config's "cwd" (the engine's folder) when it has one.  Either way the engine gets an absolute path.

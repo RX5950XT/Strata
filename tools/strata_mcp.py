@@ -1417,7 +1417,11 @@ class Tools:
                 if st == 409 and not force:
                     raise ToolError("Strata is busy (a request is running or queued); call again with force=true "
                                     "to stop anyway")
-                proc_terminate(tracked["pid"], tracked["ident"])   # POSIX: SIGTERM = the server's own Ctrl+C path
+                # Windows' venv launcher can leave the actual server running when only the launcher is ended.
+                if WIN:
+                    proc_kill_tree(tracked["pid"], tracked["ident"])
+                else:
+                    proc_terminate(tracked["pid"], tracked["ident"])   # SIGTERM = the server's own Ctrl+C path
                 clean = wait_gone(tracked["pid"], tracked["ident"], 30)
                 if not clean:
                     proc_kill_tree(tracked["pid"], tracked["ident"])
