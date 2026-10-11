@@ -111,6 +111,27 @@
 - 重開機或閒置一陣子後，3060 Ti 前幾題會慢 3–5 倍（還在 P8 / PCIe Gen1），量測要丟掉這幾輪。
 - `--prefill auto` 的上限在這個 fork 預設 16384（上游 32768）；要更大用 `auto:32768` 或 `STRATA_PREFILL_AUTO_MAX`。
 
+## 併入上游 0.1.43（2026-10-12）
+
+上游改寫了 Git 歷史，和這個 fork 沒有共同祖先：舊 main 的 `6f32ec07` 和上游新的 `a1641e9f` 內容完全相同，所以把 `a1641e9f..舊 main` 的改動重放到上游 `7695859a` 上，再記成同時接兩邊的 merge（不用 force push）。
+
+- QSA indexer 一次寫多格、verify 的 DMA 發送：改用上游的寫法（`append_steps`、`cudaMemcpyBatchAsync`），這邊的版本拿掉。
+- worker 接手的 expert 原本標 `-2`，但上游的 route tail skip 也用 `-2` 表示「這個 expert 不算、補零」，會把 worker 的列清成 0 並算成略過。改成 `-3`。
+- setup 的 `configs/` 路徑改成呼叫時才從 `ROOT` 算（`configs_dir()`），面板改經 `subprocess.call` 開：setup 的測試不會再寫進真正的 `configs/`，也不會開出真的面板。
+
+經 server 的實測（orca IQ3_XXS 262K、`--expert-gpu`、關看圖、`temperature` 0.6、生成 400 token、各跑一次，所以 ±15% 內不算差別）：
+
+| prompt | 讀 prompt tok/s（0.1.39 → 0.1.43） | 生成 tok/s（0.1.39 → 0.1.43） | MTP 接受率 |
+| ---: | ---: | ---: | ---: |
+| 64K | 1627 → 1535 | 36.8 → 44.2 | 61% → 70% |
+| 128K | 1604 → 1610 | 39.0 → 43.0 | 73% → 58% |
+| 150K | 1576 → 1589 | 38.2 → 48.5 | 68% → 69% |
+| 200K | 1546 → 1555 | 36.0 → 47.4 | 62% → 64% |
+| 250K | 1485 → 1499 | 38.7 → 43.5 | 65% → 63% |
+
+- 生成每個長度都快 10–27%，讀 prompt 大致持平。第二輪對照因為系統記憶體不足被中止，沒有重複驗證。
+- 陷阱：沒開模型時其他程式就佔約 43–45 GB 的 commit，arena 一次要 53.5 GB，Windows 的 commit 上限只有約 102–106 GB。上限不夠時引擎印 `shared section refused (error 1450 / 1455)` 退出，前一個沒關乾淨的 `strata.exe` 也會佔住整塊 arena。量測腳本每次啟動前都要先清掉殘留的 `strata.exe`。
+
 ## 為什麼接在 pool hook
 
 每一層的 CPU 交接流程本來就長這樣：GPU0 用 doorbell 把 `x` 和 miss 清單寫進 mapped pinned 記憶體，host 執行緒呼叫 `pool(...)` 算完 miss，把結果寫進 `y_miss`，最後設定 `flag`，GPU0 才接著往下跑（`src/core/session.cpp:915`、`:678`；`src/core/verify.cpp` 的 verify window 也是同一種形狀，走 `drive_pool_multi`）。
