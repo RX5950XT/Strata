@@ -1,0 +1,20 @@
+strata generate: loaded 49.80 GiB at 2.00 GiB/s
+strata generate: session is up (engine 0.1.39)
+strata generate: expert arena: locked 2 MiB via working-set minimum + VirtualLock; cudaHostRegister of the whole arena FAILED (out of memory); 48 slices pinned (49 GiB); shared section Local\strata-arena-37932, 4 KB pages
+strata generate: loaded 49.80 GiB at 2.02 GiB/s
+strata generate: session is up (engine 0.1.43)
+strata serve: Windows commit: 1.3 GiB left of a 117.8 GiB limit (RAM + page file)
+strata serve: WARNING the Windows commit limit is 117.8 GiB (RAM + page file) and 1.3 GiB of it is left, but this run plans 2.0 GiB of host allocations and keeps 4.0 GiB free: it can end at the limit with no message (exit code 0xC0000409, #1607) while RAM is still free. Raise the page file (System managed, or RAM-sized) or lower --conversation-cache-mib / --max-context / --prefill
+strata serve: decode expert cache hit rate: 51.7% (38443 hits / 74414 lookups); 5555 more read by the GPU over PCIe or from another GPU (6.9% of all 79969 routed)
+strata serve: decode expert cache hit rate: 64.5% (47715 hits / 74033 lookups); 3128 more read by the GPU over PCIe or from another GPU (4.1% of all 77161 routed)
+strata generate: expert arena: locked 2 MiB via working-set minimum + VirtualLock; cudaHostRegister of the whole arena FAILED (out of memory); 48 slices pinned (49 GiB); shared section Local\strata-arena-47824, 4 KB pages, committed after reservation
+strata generate: loaded 49.80 GiB at 1.96 GiB/s
+strata generate: session is up (engine 0.1.43)
+strata serve: Windows commit: 2.1 GiB left of a 127.4 GiB limit (RAM + page file)
+strata serve: WARNING the Windows commit limit is 127.4 GiB (RAM + page file) and 2.1 GiB of it is left, but this run plans 2.0 GiB of host allocations and keeps 4.0 GiB free: it can end at the limit with no message (exit code 0xC0000409, #1607) while RAM is still free. Raise the page file (System managed, or RAM-sized) or lower --conversation-cache-mib / --max-context / --prefill
+strata serve: decode expert cache hit rate: 35.8% (2360 hits / 6589 lookups); 659 more read by the GPU over PCIe or from another GPU (9.1% of all 7248 routed)
+strata serve: decode expert cache hit rate: 44.9% (6224 hits / 13872 lookups); 1069 more read by the GPU over PCIe or from another GPU (7.2% of all 14941 routed)
+strata serve: prompt 100013 tokens = 0 reused + 100013 read in 100726 ms (992.9 tok/s), 400 generated in 15191 ms (26.3 tok/s), drafts accepted 202 of 273, 6 checkpoints
+strata serve: decode expert cache hit rate: 53.8% (103613 hits / 192478 lookups); 10837 more read by the GPU over PCIe or from another GPU (5.3% of all 203315 routed)
+strata serve: prompt 200014 tokens = 0 reused + 200014 read in 204655 ms (977.3 tok/s), 400 generated in 16109 ms (24.8 tok/s), drafts accepted 232 of 328, 6 checkpoints
+strata serve: decode expert cache hit rate: 54.6% (111708 hits / 204698 lookups); 10824 more read by the GPU over PCIe or from another GPU (5.0% of all 215522 routed)

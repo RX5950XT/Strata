@@ -1,0 +1,54 @@
+[
+  {
+    "context": 100000,
+    "condition": "normal",
+    "n": 3,
+    "median_decode_tok_s": 32.14969702678095,
+    "median_cpu_estimated_mhz": 4590.691187076538,
+    "median_cpu_path_ms_window": 40.53,
+    "decode_range_tok_s": [
+      27.340787970053295,
+      36.74570821611069
+    ],
+    "identical_output_hashes": false
+  },
+  {
+    "context": 100000,
+    "condition": "cap3400",
+    "n": 3,
+    "median_decode_tok_s": 31.183385102625007,
+    "median_cpu_estimated_mhz": 3375.7908102290758,
+    "median_cpu_path_ms_window": 40.31,
+    "decode_range_tok_s": [
+      30.836314578590443,
+      32.988415396312
+    ],
+    "identical_output_hashes": false
+  },
+  {
+    "context": 200000,
+    "condition": "normal",
+    "n": 3,
+    "median_decode_tok_s": 33.15439457614826,
+    "median_cpu_estimated_mhz": 4575.113473413201,
+    "median_cpu_path_ms_window": 45.3,
+    "decode_range_tok_s": [
+      30.844674173007295,
+      34.37279715350274
+    ],
+    "identical_output_hashes": false
+  },
+  {
+    "context": 200000,
+    "condition": "cap3400",
+    "n": 3,
+    "median_decode_tok_s": 30.787362749696335,
+    "median_cpu_estimated_mhz": 3375.8566554850445,
+    "median_cpu_path_ms_window": 50.14,
+    "decode_range_tok_s": [
+      29.995371807865585,
+      32.48256916820515
+    ],
+    "identical_output_hashes": false
+  }
+]

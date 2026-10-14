@@ -1,0 +1,74 @@
+
+AMDuProfPcm Report
+
+Processor Name:,AMD Ryzen 7 5700X 8-Core Processor             
+System:,Family(0x19) Model(0x21) Stepping(0x2)
+Number of Sockets :,1
+Number of Core Complexes(CCX) :,1
+Number of Cores :,8
+Number of Threads :,16
+SMT Enabled in HW:,True
+
+CPU Topology:
+Socket, CCX, Core(s)
+0,0, 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
+
+Core P0 state frequency (MHz):,3400.000000
+Multiplex interval (ms):,100
+Data Collection Driver:,MSR Driver
+Version:,5.3.521.0 (Public)
+
+Hypervisor Info:
+Hypervisor Enabled:,True
+Hypervisor Supported:,True
+Hypervisor Vendor:,Microsoft Hyper-V
+Root/Host Partition:,1
+Command:,"AMDuProfPcm -r -m ipc,dc,l2 -a -d 3 -u 1 -C -P 6 -o D:\Workspace\Personal_Project\Strata\bench\results\2026-10-14-local-5700x-cpu-ram\r0-normal-ram-c8-t3.csv"
+
+Abbreviation :
+IPC    : Instructions Per CPU Cycle
+CPI    : CPU Cycles Per Instructions
+pti    : Per Thousand Instructions
+ptc    : Per Thousand CPU Cycles
+pto    : Per Thousand Operations
+
+Profile Time: 2026/10/14 10:04:13:226
+CORE METRICS
+Metric,System (Aggregated)
+Retired Instructions,198344144733.000000
+Retired Macro Ops,200660700359.000000
+Cycles Not in Halt,141171985745.000000
+Utilization (%),89.454187
+System time (%),0.000000
+User time (%),73.720400
+System instructions (%),0.000000
+User instructions (%),100.000000
+Eff Freq (MHz),4196.455445
+IPC (Sys + User),1.597393
+IPC (Sys),0.000000
+IPC (User),1.597393
+CPI (Sys + User),0.626020
+CPI (Sys),0.000000
+CPI (User),0.626020
+Giga Instructions Per Sec,70.729848
+Locked Instructions (pti),0.000000
+Retired Branches (pti),51.991781
+Retired Branches Mispredicted (pti),0.466521
+All Data Cache (DC) Fills (pti),8.280988
+DC Fills From Same CCX (pti),6.691587
+DC Fills From different CCX (pti),0.000000
+DC Fills From Memory (pti),1.589401
+L2 Access (pti),14.730747
+L2 Access from IC Miss (pti),1.904675
+L2 Access from DC Miss (pti),7.372235
+L2 Access from L2 HWPF (pti),3.428362
+L2 Miss (pti),4.987377
+L2 Miss from IC Miss (pti),0.982836
+L2 Miss from DC Miss (pti),1.164700
+L2 Miss from L2 HWPF (pti),2.839841
+L2 Hit (pti),7.348866
+L2 Hit from IC Miss (pti),1.211475
+L2 Hit from DC Miss (pti),5.545682
+L2 Hit from L2 HWPF (pti),0.588521
+
+

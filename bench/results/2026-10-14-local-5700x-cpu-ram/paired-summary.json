@@ -1,0 +1,40 @@
+[
+  {
+    "tokens_per_expert": 1,
+    "normal_clock_estimated_mhz": 4278.008972530965,
+    "pairs": 48,
+    "median": {
+      "hot": {
+        "batch_ms": 0.4748411935,
+        "gu_ms_per_batch": 0.3621392115,
+        "down_ms_per_batch": 0.1125063365
+      },
+      "ram": {
+        "batch_ms": 0.7001016449999999,
+        "gu_ms_per_batch": 0.44147436799999995,
+        "down_ms_per_batch": 0.25547652249999997
+      }
+    },
+    "median_paired_hot_over_ram": 0.7290986118927243,
+    "median_paired_ram_removal_saving_pct": 27.09013881072757
+  },
+  {
+    "tokens_per_expert": 2,
+    "normal_clock_estimated_mhz": 4229.282703196652,
+    "pairs": 48,
+    "median": {
+      "hot": {
+        "batch_ms": 0.5864424435,
+        "gu_ms_per_batch": 0.427036316,
+        "down_ms_per_batch": 0.14971619949999998
+      },
+      "ram": {
+        "batch_ms": 0.7272900885,
+        "gu_ms_per_batch": 0.46981126900000003,
+        "down_ms_per_batch": 0.2353897425
+      }
+    },
+    "median_paired_hot_over_ram": 0.7860399155730473,
+    "median_paired_ram_removal_saving_pct": 21.39600844269527
+  }
+]

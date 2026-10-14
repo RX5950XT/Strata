@@ -1,0 +1,148 @@
+{
+  "date": "2026-10-13",
+  "model": "qwen3.8-flash-next-uncensored-iq3_xxs",
+  "engine": "0.1.43",
+  "health": {
+    "status": "ok",
+    "max_context": 204800,
+    "model": "qwen3.8-flash-next-uncensored-iq3_xxs",
+    "images": true,
+    "api_key": true,
+    "loaded": true,
+    "service": "strata"
+  },
+  "token_count_method": "tokenizer",
+  "config": "configs/strata-orca-iq3_xxs.json",
+  "engine_args": [
+    "--pack",
+    "<strata-dir>\\packs\\orca-iq3_xxs",
+    "--native",
+    "<strata-dir>\\models\\orca-IQ3_XXS\\Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+    "--ple-gguf",
+    "<strata-dir>\\models\\orca-IQ3_XXS\\Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+    "--expert-profile",
+    "<strata-dir>\\data\\expert-profile.bin",
+    "--expert-cache",
+    "auto",
+    "--spec",
+    "4",
+    "--spec-min-p",
+    "0.5",
+    "--mtp",
+    "<strata-dir>\\mtp\\rt",
+    "--kv",
+    "int8",
+    "--vision",
+    "--vram-reserve-mib",
+    "700",
+    "--prefill",
+    "8192",
+    "--mtp-window",
+    "65536",
+    "--pcie-frac",
+    "0.40",
+    "--max-context",
+    "204800",
+    "--expert-gpu",
+    "1",
+    "--expert-gpu-reserve-mib",
+    "700"
+  ],
+  "max_output_tokens": 400,
+  "warmup_tokens": {
+    "prompt": 60,
+    "output": 30
+  },
+  "runs": [
+    {
+      "target_prompt_tokens": 100000,
+      "prompt_tokens": 100013,
+      "generated_tokens": 400,
+      "usage": {
+        "prompt_tokens": 100013,
+        "completion_tokens": 400,
+        "total_tokens": 100413,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "ttft_s": 100.947,
+      "prefill_tok_s": 990.75,
+      "decode_tok_s": 26.32,
+      "elapsed_s": 116.107,
+      "peaks": {
+        "gpus": {
+          "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+            "memory_mib": 12667,
+            "utilization_pct": 100
+          },
+          "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+            "memory_mib": 6751,
+            "utilization_pct": 71
+          }
+        },
+        "ram_mib": 96041
+      },
+      "mtp_acceptance": 0.74,
+      "engine_prompt_tokens": 100013,
+      "engine_prompt_ms": 100726.0,
+      "engine_prefill_tok_s": 992.9,
+      "engine_generated_tokens": 400,
+      "engine_decode_ms": 15191.0,
+      "engine_decode_tok_s": 26.3,
+      "estimated_prompt_tokens": 100000
+    },
+    {
+      "target_prompt_tokens": 200000,
+      "prompt_tokens": 200014,
+      "generated_tokens": 400,
+      "usage": {
+        "prompt_tokens": 200014,
+        "completion_tokens": 400,
+        "total_tokens": 200414,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "ttft_s": 204.982,
+      "prefill_tok_s": 975.76,
+      "decode_tok_s": 24.83,
+      "elapsed_s": 221.05,
+      "peaks": {
+        "gpus": {
+          "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+            "memory_mib": 12678,
+            "utilization_pct": 100
+          },
+          "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+            "memory_mib": 6751,
+            "utilization_pct": 71
+          }
+        },
+        "ram_mib": 96220
+      },
+      "mtp_acceptance": 0.707,
+      "engine_prompt_tokens": 200014,
+      "engine_prompt_ms": 204655.0,
+      "engine_prefill_tok_s": 977.3,
+      "engine_generated_tokens": 400,
+      "engine_decode_ms": 16109.0,
+      "engine_decode_tok_s": 24.8,
+      "estimated_prompt_tokens": 200001
+    }
+  ],
+  "sampling_errors": [],
+  "samples_per_run": 346,
+  "peak_ram_mib": 96220,
+  "gpu_peaks": {
+    "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445": {
+      "memory_mib": 12678,
+      "utilization_pct": 100
+    },
+    "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97": {
+      "memory_mib": 6751,
+      "utilization_pct": 71
+    }
+  },
+  "complete": true
+}

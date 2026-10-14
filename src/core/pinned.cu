@@ -278,6 +278,13 @@ void* reserve_shared(uint64_t bytes, const std::string& name, void*& section, st
     const std::wstring wname(name.begin(), name.end());
     HANDLE h = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE | SEC_COMMIT, (DWORD) (bytes >> 32),
                                   (DWORD) bytes, wname.c_str());
+    bool reserved = false;
+    if (!h && (GetLastError() == ERROR_NO_SYSTEM_RESOURCES || GetLastError() == ERROR_COMMITMENT_LIMIT)) {
+        // VirtualAlloc can grow the paging file where a large SEC_COMMIT section is refused.
+        h = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE | SEC_RESERVE,
+                               (DWORD) (bytes >> 32), (DWORD) bytes, wname.c_str());
+        reserved = h != nullptr;
+    }
     if (!h) {
         note = "shared section refused (error " + std::to_string((unsigned long long) GetLastError()) + ")";
         return nullptr;
@@ -288,8 +295,15 @@ void* reserve_shared(uint64_t bytes, const std::string& name, void*& section, st
         CloseHandle(h);
         return nullptr;
     }
+    if (reserved && !VirtualAlloc(p, (SIZE_T) bytes, MEM_COMMIT, PAGE_READWRITE)) {
+        note = "shared section commit refused (error " + std::to_string((unsigned long long) GetLastError()) + ")";
+        UnmapViewOfFile(p);
+        CloseHandle(h);
+        return nullptr;
+    }
     section = h;
     note = "shared section " + name + ", 4 KB pages";
+    if (reserved) note += ", committed after reservation";
     return p;
 }
 #endif

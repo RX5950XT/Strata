@@ -1,0 +1,42 @@
+{
+  "server_status": "ready",
+  "health_status": "ok",
+  "env": {
+    "STRATA_ABOVE_NORMAL": "1"
+  },
+  "pcie_frac": "0.40",
+  "installed_binary_sha256": "221599d718282d953caa5fab5fc1d066003186af04ca6ea22ef9cd5bf538e4d2",
+  "installed_matches_built": true,
+  "processes": [
+    {
+      "Id": 15140,
+      "PriorityClass": 32768
+    },
+    {
+      "Id": 47956,
+      "PriorityClass": 32768
+    }
+  ],
+  "usage": [
+    {
+      "Name": "C:\\pagefile.sys",
+      "AllocatedBaseSize": 31391
+    },
+    {
+      "Name": "D:\\pagefile.sys",
+      "AllocatedBaseSize": 65536
+    }
+  ],
+  "settings": [
+    {
+      "Name": "c:\\pagefile.sys",
+      "InitialSize": 1000,
+      "MaximumSize": 40000
+    },
+    {
+      "Name": "D:\\pagefile.sys",
+      "InitialSize": 65536,
+      "MaximumSize": 98304
+    }
+  ]
+}

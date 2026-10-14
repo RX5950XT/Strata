@@ -1,0 +1,63 @@
+{
+  "exe": "D:\\Workspace\\Personal_Project\\Strata\\engine-local\\strata.exe",
+  "args": [
+    "--pack",
+    "D:\\Workspace\\Personal_Project\\Strata\\packs\\orca-iq3_xxs",
+    "--native",
+    "D:\\Workspace\\Personal_Project\\Strata\\models\\orca-IQ3_XXS\\Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+    "--ple-gguf",
+    "D:\\Workspace\\Personal_Project\\Strata\\models\\orca-IQ3_XXS\\Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+    "--expert-profile",
+    "D:\\Workspace\\Personal_Project\\Strata\\data\\expert-profile.bin",
+    "--spec",
+    "4",
+    "--mtp",
+    "D:\\Workspace\\Personal_Project\\Strata\\mtp\\rt",
+    "--kv",
+    "int8",
+    "--vision",
+    "--vram-reserve-mib",
+    "700",
+    "--prefill",
+    "8192",
+    "--mtp-window",
+    "65536",
+    "--pcie-frac",
+    "0.40",
+    "--max-context",
+    "204800",
+    "--expert-gpu",
+    "1",
+    "--expert-gpu-reserve-mib",
+    "700",
+    "--spec-min-p",
+    "0.5",
+    "--host-core",
+    "last",
+    "--expert-cache",
+    "auto"
+  ],
+  "cwd": "D:\\Workspace\\Personal_Project\\Strata",
+  "tokenizer": "D:\\Workspace\\Personal_Project\\Strata\\packs\\orca-iq3_xxs\\tokenizer",
+  "gpu": "GPU-368bf66e-8473-1408-2e7a-76e0ef2e7445",
+  "model_name": "qwen3.8-flash-next-uncensored-iq3_xxs",
+  "log": "D:\\Workspace\\Personal_Project\\Strata\\configs\\strata-orca-iq3_xxs.log",
+  "lib_dirs": [
+    "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.3\\bin\\x64",
+    "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.3\\bin",
+    "D:\\Workspace\\Personal_Project\\Strata\\.venv\\Lib\\site-packages\\nvidia\\cu13\\bin\\x86_64"
+  ],
+  "port": 8080,
+  "vision": {
+    "exe": "D:\\Workspace\\Personal_Project\\Strata\\engine\\strata-vision.exe",
+    "mmproj": "D:\\Workspace\\Personal_Project\\Strata\\models\\mmproj-Qwen3.8-Flash-Next-Uncensored-F16.gguf",
+    "model": "D:\\Workspace\\Personal_Project\\Strata\\models\\orca-IQ3_XXS\\Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+    "gpu": true,
+    "max_tokens": 1024,
+    "gpu_uuid": "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97"
+  },
+  "expert_gpu": "GPU-41ae48b1-0c55-1d2f-bf8b-efc2a5758d97",
+  "env": {
+    "STRATA_ABOVE_NORMAL": "1"
+  }
+}

@@ -1,0 +1,116 @@
+[
+  {
+    "label": "cpu-default",
+    "slots": 1780,
+    "rates": {
+      "0": [
+        33.6,
+        33.5,
+        34.8
+      ],
+      "1": [
+        35.7,
+        38.4,
+        33.9
+      ]
+    },
+    "median": {
+      "0": 33.6,
+      "1": 35.7
+    },
+    "score": 34.634087255188355,
+    "args": [
+      "--pack",
+      "D:\\Workspace\\Personal_Project\\Strata\\packs\\orca-iq3_xxs",
+      "--native",
+      "D:\\Workspace\\Personal_Project\\Strata\\models\\orca-IQ3_XXS\\Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+      "--ple-gguf",
+      "D:\\Workspace\\Personal_Project\\Strata\\models\\orca-IQ3_XXS\\Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+      "--expert-profile",
+      "D:\\Workspace\\Personal_Project\\Strata\\data\\expert-profile.bin",
+      "--expert-cache",
+      "auto",
+      "--spec",
+      "4",
+      "--mtp",
+      "D:\\Workspace\\Personal_Project\\Strata\\mtp\\rt",
+      "--kv",
+      "int8",
+      "--vision",
+      "--vram-reserve-mib",
+      "700",
+      "--prefill",
+      "8192",
+      "--mtp-window",
+      "65536",
+      "--pcie-frac",
+      "0.40",
+      "--max-context",
+      "204800",
+      "--expert-gpu",
+      "1",
+      "--expert-gpu-reserve-mib",
+      "700",
+      "--spec-min-p",
+      "0.5"
+    ]
+  },
+  {
+    "label": "cpu-workers-5",
+    "slots": 2015,
+    "rates": {
+      "0": [
+        35.7,
+        30.3,
+        32.3
+      ],
+      "1": [
+        40.2,
+        34.5,
+        38.3
+      ]
+    },
+    "median": {
+      "0": 32.3,
+      "1": 38.3
+    },
+    "score": 35.17229022966801,
+    "args": [
+      "--pack",
+      "D:\\Workspace\\Personal_Project\\Strata\\packs\\orca-iq3_xxs",
+      "--native",
+      "D:\\Workspace\\Personal_Project\\Strata\\models\\orca-IQ3_XXS\\Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+      "--ple-gguf",
+      "D:\\Workspace\\Personal_Project\\Strata\\models\\orca-IQ3_XXS\\Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+      "--expert-profile",
+      "D:\\Workspace\\Personal_Project\\Strata\\data\\expert-profile.bin",
+      "--expert-cache",
+      "auto",
+      "--spec",
+      "4",
+      "--mtp",
+      "D:\\Workspace\\Personal_Project\\Strata\\mtp\\rt",
+      "--kv",
+      "int8",
+      "--vision",
+      "--vram-reserve-mib",
+      "700",
+      "--prefill",
+      "8192",
+      "--mtp-window",
+      "65536",
+      "--pcie-frac",
+      "0.40",
+      "--max-context",
+      "204800",
+      "--expert-gpu",
+      "1",
+      "--expert-gpu-reserve-mib",
+      "700",
+      "--spec-min-p",
+      "0.5",
+      "--pool-workers",
+      "5"
+    ]
+  }
+]

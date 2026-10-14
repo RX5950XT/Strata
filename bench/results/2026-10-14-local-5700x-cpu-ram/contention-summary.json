@@ -1,0 +1,118 @@
+[
+  {
+    "dma_active": false,
+    "mode": "hot",
+    "tokens": 1,
+    "n": 3,
+    "median_batch_ms": 0.476583129,
+    "median_gu_ms": 0.359349786,
+    "median_down_ms": 0.115034313,
+    "range_ms": [
+      0.439868172,
+      0.658528578
+    ]
+  },
+  {
+    "dma_active": false,
+    "mode": "ram",
+    "tokens": 1,
+    "n": 3,
+    "median_batch_ms": 0.605183925,
+    "median_gu_ms": 0.381628983,
+    "median_down_ms": 0.221629931,
+    "range_ms": [
+      0.599103295,
+      0.68887461
+    ]
+  },
+  {
+    "dma_active": false,
+    "mode": "hot",
+    "tokens": 2,
+    "n": 3,
+    "median_batch_ms": 0.601633367,
+    "median_gu_ms": 0.442693904,
+    "median_down_ms": 0.155594426,
+    "range_ms": [
+      0.582185348,
+      0.658847101
+    ]
+  },
+  {
+    "dma_active": false,
+    "mode": "ram",
+    "tokens": 2,
+    "n": 3,
+    "median_batch_ms": 0.732257164,
+    "median_gu_ms": 0.495796925,
+    "median_down_ms": 0.230358091,
+    "range_ms": [
+      0.698536158,
+      0.815488913
+    ]
+  },
+  {
+    "dma_active": false,
+    "mode": "read",
+    "n": 3,
+    "median_GB_s": 23.002835
+  },
+  {
+    "dma_active": true,
+    "mode": "hot",
+    "tokens": 1,
+    "n": 3,
+    "median_batch_ms": 0.618708888,
+    "median_gu_ms": 0.466689152,
+    "median_down_ms": 0.149362446,
+    "range_ms": [
+      0.557141244,
+      0.761241893
+    ]
+  },
+  {
+    "dma_active": true,
+    "mode": "ram",
+    "tokens": 1,
+    "n": 3,
+    "median_batch_ms": 1.202586814,
+    "median_gu_ms": 0.725411623,
+    "median_down_ms": 0.473096633,
+    "range_ms": [
+      1.110138587,
+      1.352298738
+    ]
+  },
+  {
+    "dma_active": true,
+    "mode": "hot",
+    "tokens": 2,
+    "n": 3,
+    "median_batch_ms": 0.740541001,
+    "median_gu_ms": 0.541155547,
+    "median_down_ms": 0.200912076,
+    "range_ms": [
+      0.726146878,
+      0.960388156
+    ]
+  },
+  {
+    "dma_active": true,
+    "mode": "ram",
+    "tokens": 2,
+    "n": 3,
+    "median_batch_ms": 1.146091215,
+    "median_gu_ms": 0.724822651,
+    "median_down_ms": 0.415971276,
+    "range_ms": [
+      0.934616199,
+      1.175681191
+    ]
+  },
+  {
+    "dma_active": true,
+    "mode": "read",
+    "n": 3,
+    "median_GB_s": 14.220101
+  }
+]

@@ -1746,6 +1746,19 @@ static double ple_direct_rows_per_s(strata::kernels::PleTable& t) {
 }
 
 int main(int argc, char** argv) {
+#ifdef _WIN32
+    // Opt-in under CPU contention; the expert GPU worker needs the same priority.
+    if (const char* priority = std::getenv("STRATA_ABOVE_NORMAL")) {
+        if (std::strcmp(priority, "0") != 0 && std::strcmp(priority, "1") != 0) {
+            std::fprintf(stderr, "strata: STRATA_ABOVE_NORMAL must be 0 or 1\n");
+            return 2;
+        }
+        if (priority[0] == '1' && !SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS)) {
+            std::fprintf(stderr, "strata: cannot set AboveNormal priority (Windows error %lu)\n", GetLastError());
+            return 1;
+        }
+    }
+#endif
     if (argc > 1 && std::string(argv[1]) == "--expert-gpu-worker") return strata::core::expert_gpu_worker_main(argc, argv);
     // **UNBUFFERED, BECAUSE THE INTERESTING OUTPUT IS THE OUTPUT BEFORE A CRASH.**  `stdout` redirected to a
     // pipe or a file is block-buffered, so a program that dies loses every line it had already printed - which

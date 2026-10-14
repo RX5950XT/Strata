@@ -132,6 +132,34 @@
 - 生成每個長度都快 10–27%，讀 prompt 大致持平。第二輪對照因為系統記憶體不足被中止，沒有重複驗證。
 - 陷阱：沒開模型時其他程式就佔約 43–45 GB 的 commit，arena 一次要 53.5 GB，Windows 的 commit 上限只有約 102–106 GB。上限不夠時引擎印 `shared section refused (error 1450 / 1455)` 退出，前一個沒關乾淨的 `strata.exe` 也會佔住整塊 arena。量測腳本每次啟動前都要先清掉殘留的 `strata.exe`。
 
+### Windows 共用 arena 啟動修正（2026-10-13）
+
+在同一台 96 GB、5060 Ti + 3060 Ti 的機器重現：orca 載入 CUDA 與 vision 後，可用 commit 約 45.4 GiB，49.8 GiB 的 `SEC_COMMIT` section 報 1450。現在僅在 1450／1455 時改用 `SEC_RESERVE`，再由 `VirtualAlloc(MEM_COMMIT)` 配置；本機實測這條路徑可讓 Windows 擴充分頁檔，正常路徑不變。失敗時會釋放 view 與 handle，仍回報錯誤。
+
+`tools/test_shared_reserve_windows.py` 檢查正常配置、兩種錯誤備援、共用內容與失敗清理；`build-dual.bat` 通過 sm_86／sm_120 編譯。原 orca 設定（雙 GPU、vision、204800 context）啟動成功，log 出現 `committed after reservation`，API 實際回覆 `OK`。當次只驗證啟動，仍有 commit 餘裕不足警告；備援不代表分頁檔上限或 RAM 可以無限增加。後續長上下文與效能調整見下節。
+
+### Windows CPU 競爭下的解碼調整（2026-10-14）
+
+本機 config 的 `env` 加入 `"STRATA_ABOVE_NORMAL": "1"`，主引擎與第二張卡的 expert worker 都以 AboveNormal 啟動，讓 Windows 較優先給它們 CPU 時間。預設及 `0` 不變更優先權，其他值報錯；不改模型計算。僅 Windows 有這個選項。
+
+同一台 Ryzen 7 5700X、96 GiB RAM、5060 Ti + 3060 Ti，背景程式繼續執行，100k prompt 快取暖機後、256 output、temperature 0、seed 123，Normal／AboveNormal 交錯各三次，中位數 30.5 → 37.0 tok/s（+21.3%）。PCIe 比例 0.40／0.55／0.75／0.90 也各跑三次，0.40 最快，因此保留原值。
+
+另在 D 槽新增初始 64 GiB、最大 96 GiB 分頁檔；C 槽保留原本 1,000／40,000 MiB，沒有重開 Windows。重載模型後 D 槽實際配置仍為 64 GiB，commit 餘裕從約 1–2 GiB 增至約 65 GiB。主卡快取從 1,780 槽增至 2,018 槽（3.61 → 4.09 GiB），副卡仍是 2,499 槽；尚未達 auto 預估的 3,362 主卡槽位，CUDA 可用 VRAM 的低餘裕警告仍存在。分頁檔增加的是 commit 額度與磁碟占用，不是實體 RAM。
+
+保留設定後完整預填、沒有重用 prompt，各生成 400 tokens：100,013 input 為預填 1,045.9／解碼 35.9 tok/s；200,014 input 為 1,031.6／31.9 tok/s。各測一次，不能把不同輪次的速度差全歸給某個設定；優先權的增益以交錯測試為準。測後 `/health` 為 `ok`，commit 最低仍有約 60.8 GiB。完整數據與硬體取樣：[調整測試](../bench/results/2026-10-13-local-5060ti-3060ti-orca-context/tuning-after-pagefile/README.md)、[完整 100k／200k](../bench/results/2026-10-13-local-5060ti-3060ti-orca-context/optimized/README.md)。
+
+`build-dual.bat` 通過 CUDA sm_86／sm_120 編譯；`tools/test_windows_priority.py` 通過預設、停用、錯誤值、實際優先權與 Windows API 失敗測試，並確認 worker 分流前就套用。未驗證 HIP／SYCL、模型逐 token 相同或長時間穩定性。
+
+### 後續 MTP／CPU／cache 校準（2026-10-14）
+
+再測 MTP 門檻 0.3／0.5／0.7、pool workers 7／5／4／2、host 核心 first／last 與兩組 adaptive cache 參數，沒有保留新設定。`last` 在短提示詞有增益，但回到正常 `expert-cache auto`、實際同為 1780 槽時，100k／200k 解碼只有 31.6／33.6 tok/s；還原 `first` 後為 36.8／34.4，沒有重現短測加速。背景負載有波動，這只能說本輪證據不足以採用。
+
+最後原設定完整預填、各生成 400 tokens、prompt 重用 0：100,013 input 為預填 1053.6／解碼 36.8 tok/s；200,013 input 為 1046.0／34.4 tok/s。各一次、temperature 0、seed 123，是原配置重測，不能算本輪的新增益。此時主卡為 1780 槽、副卡 2499 槽，啟動完成有 572 MiB CUDA0 VRAM 餘裕，commit 最低 61.2 GiB，服務與兩個 AboveNormal 行程核對正常。[完整校準與還原紀錄](../bench/results/2026-10-14-local-5060ti-3060ti-orca-tuning/README.md)。
+
+### CPU／RAM 分離實測（2026-10-14）
+
+後續 CPU／RAM 分離實測（2026-10-14）：直接連結既有 CPU kernels，讓四個相同 orca experts 反覆留在 8.70 MB CPU 快取，或從 557 MB 工作集讀 RAM；輸出逐位元相同。同一程序內快速配對後，移除大部分 RAM 讀取只省約 21–27% 的 pool 時間，gate/up 仍是最大階段，顯示 CPU 側處理為主、RAM 供料次之。GPU DMA 占用供料時，RAM 組又比快取組受影響更多，因此記憶體競爭也確實存在。這是 CPU expert 路徑的判定，不能當成整段 decode 的純算術百分比。[完整對照、原始數據與還原紀錄](../bench/results/2026-10-14-local-5700x-cpu-ram/README.md)。
+
 ## 為什麼接在 pool hook
 
 每一層的 CPU 交接流程本來就長這樣：GPU0 用 doorbell 把 `x` 和 miss 清單寫進 mapped pinned 記憶體，host 執行緒呼叫 `pool(...)` 算完 miss，把結果寫進 `y_miss`，最後設定 `flag`，GPU0 才接著往下跑（`src/core/session.cpp:915`、`:678`；`src/core/verify.cpp` 的 verify window 也是同一種形狀，走 `drive_pool_multi`）。

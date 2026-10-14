@@ -1,0 +1,25 @@
+{
+  "hardware": "Ryzen 7 5700X, 96 GiB DDR4-2133, Windows 11",
+  "power_plans": {
+    "original": "381b4222-f694-41f0-9685-ff5bb260df2e",
+    "temporary": "4efcc98a-4409-4904-a342-aff6adfe0011",
+    "cap_mhz": 3400
+  },
+  "binary_sha256": "547373fe106d48204fc15188d09fd12a60278f91c02a605c13fe95483ec8656b",
+  "kernel_library_sha256": "4f082e458a3e2b4e1edf6cbc36e86e569deef1ce6decfaabcdebbfef66f7ab0a",
+  "config_sha256": "6680819548494928e423d750a31c5694217fd3e496a8754a3e30bcbd43124e00",
+  "IBS": "unavailable: IBS counters are not available",
+  "core_PMC": "Separate diagnostic in counter-runs.json; excluded from timing comparisons",
+  "timing_seconds": 3,
+  "frequency_source": "Windows Processor Information % Processor Performance * base MHz",
+  "power_plan_restored": true,
+  "config_unchanged": true,
+  "successful_runs": 45,
+  "pbo_state": {
+    "enabled_throughout_session": true,
+    "source": "User clarification, 2026-10-14; BIOS readback not performed",
+    "bios_pbo_changed_by_tests": false,
+    "windows_boost_policy_tested": true,
+    "pbo_on_off_gain_tested": false
+  }
+}

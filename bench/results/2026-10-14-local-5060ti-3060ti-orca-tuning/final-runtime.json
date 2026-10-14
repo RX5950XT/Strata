@@ -1,0 +1,78 @@
+{
+  "server_status": "ready",
+  "health_status": "ok",
+  "env": {
+    "STRATA_ABOVE_NORMAL": "1"
+  },
+  "args": [
+    "--pack",
+    "D:\\Workspace\\Personal_Project\\Strata\\packs\\orca-iq3_xxs",
+    "--native",
+    "D:\\Workspace\\Personal_Project\\Strata\\models\\orca-IQ3_XXS\\Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+    "--ple-gguf",
+    "D:\\Workspace\\Personal_Project\\Strata\\models\\orca-IQ3_XXS\\Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+    "--expert-profile",
+    "D:\\Workspace\\Personal_Project\\Strata\\data\\expert-profile.bin",
+    "--expert-cache",
+    "auto",
+    "--spec",
+    "4",
+    "--spec-min-p",
+    "0.5",
+    "--mtp",
+    "D:\\Workspace\\Personal_Project\\Strata\\mtp\\rt",
+    "--kv",
+    "int8",
+    "--vision",
+    "--vram-reserve-mib",
+    "700",
+    "--prefill",
+    "8192",
+    "--mtp-window",
+    "65536",
+    "--pcie-frac",
+    "0.40",
+    "--max-context",
+    "204800",
+    "--expert-gpu",
+    "1",
+    "--expert-gpu-reserve-mib",
+    "700"
+  ],
+  "configuration_matches_original": true,
+  "pcie_frac": "0.40",
+  "installed_binary_sha256": "221599d718282d953caa5fab5fc1d066003186af04ca6ea22ef9cd5bf538e4d2",
+  "installed_matches_built": true,
+  "processes": [
+    {
+      "Id": 50996,
+      "PriorityClass": 32768
+    },
+    {
+      "Id": 52528,
+      "PriorityClass": 32768
+    }
+  ],
+  "usage": [
+    {
+      "Name": "C:\\pagefile.sys",
+      "AllocatedBaseSize": 31391
+    },
+    {
+      "Name": "D:\\pagefile.sys",
+      "AllocatedBaseSize": 65536
+    }
+  ],
+  "settings": [
+    {
+      "Name": "c:\\pagefile.sys",
+      "InitialSize": 1000,
+      "MaximumSize": 40000
+    },
+    {
+      "Name": "D:\\pagefile.sys",
+      "InitialSize": 65536,
+      "MaximumSize": 98304
+    }
+  ]
+}

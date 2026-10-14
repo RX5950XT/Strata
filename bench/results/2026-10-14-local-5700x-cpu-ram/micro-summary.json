@@ -1,0 +1,182 @@
+[
+  {
+    "condition": "normal",
+    "mode": "hot",
+    "tokens": 1,
+    "n": 3,
+    "median_batch_ms": 0.355971405,
+    "median_gu_ms": 0.273232914,
+    "median_down_ms": 0.082440433,
+    "median_cpu_mhz_estimate": 4020.10375419642,
+    "range_ms": [
+      0.351319871,
+      0.43927022
+    ]
+  },
+  {
+    "condition": "normal",
+    "mode": "ram",
+    "tokens": 1,
+    "n": 3,
+    "median_batch_ms": 0.619888368,
+    "median_gu_ms": 0.381704401,
+    "median_down_ms": 0.235520413,
+    "median_cpu_mhz_estimate": 4396.641683404513,
+    "range_ms": [
+      0.490116778,
+      0.747435725
+    ]
+  },
+  {
+    "condition": "normal",
+    "mode": "hot",
+    "tokens": 2,
+    "n": 3,
+    "median_batch_ms": 0.51215804,
+    "median_gu_ms": 0.374522738,
+    "median_down_ms": 0.134892267,
+    "median_cpu_mhz_estimate": 4062.417054235886,
+    "range_ms": [
+      0.424797877,
+      0.63147028
+    ]
+  },
+  {
+    "condition": "normal",
+    "mode": "ram",
+    "tokens": 2,
+    "n": 3,
+    "median_batch_ms": 0.678061582,
+    "median_gu_ms": 0.447011051,
+    "median_down_ms": 0.227716045,
+    "median_cpu_mhz_estimate": 4283.631078154538,
+    "range_ms": [
+      0.537893492,
+      0.87648104
+    ]
+  },
+  {
+    "condition": "normal",
+    "mode": "hot",
+    "tokens": 3,
+    "n": 3,
+    "median_batch_ms": 0.831746742,
+    "median_gu_ms": 0.585393568,
+    "median_down_ms": 0.239613113,
+    "median_cpu_mhz_estimate": 4142.629056594613,
+    "range_ms": [
+      0.48278111,
+      0.952991423
+    ]
+  },
+  {
+    "condition": "normal",
+    "mode": "ram",
+    "tokens": 3,
+    "n": 3,
+    "median_batch_ms": 0.863069773,
+    "median_gu_ms": 0.598975381,
+    "median_down_ms": 0.25652807,
+    "median_cpu_mhz_estimate": 4249.271879941485,
+    "range_ms": [
+      0.612021053,
+      1.0072
+    ]
+  },
+  {
+    "condition": "normal",
+    "mode": "read",
+    "n": 3,
+    "median_GB_s": 22.979675
+  },
+  {
+    "condition": "cap3400",
+    "mode": "hot",
+    "tokens": 1,
+    "n": 3,
+    "median_batch_ms": 0.48856849,
+    "median_gu_ms": 0.374699202,
+    "median_down_ms": 0.112067318,
+    "median_cpu_mhz_estimate": 3373.124039573616,
+    "range_ms": [
+      0.382577008,
+      0.549394268
+    ]
+  },
+  {
+    "condition": "cap3400",
+    "mode": "ram",
+    "tokens": 1,
+    "n": 3,
+    "median_batch_ms": 0.636927807,
+    "median_gu_ms": 0.425502271,
+    "median_down_ms": 0.209156527,
+    "median_cpu_mhz_estimate": 3375.7176984611406,
+    "range_ms": [
+      0.509480421,
+      0.681668015
+    ]
+  },
+  {
+    "condition": "cap3400",
+    "mode": "hot",
+    "tokens": 2,
+    "n": 3,
+    "median_batch_ms": 0.661463856,
+    "median_gu_ms": 0.484574136,
+    "median_down_ms": 0.173838719,
+    "median_cpu_mhz_estimate": 3374.1194493330854,
+    "range_ms": [
+      0.531534615,
+      0.785584341
+    ]
+  },
+  {
+    "condition": "cap3400",
+    "mode": "ram",
+    "tokens": 2,
+    "n": 3,
+    "median_batch_ms": 0.674818711,
+    "median_gu_ms": 0.47597199,
+    "median_down_ms": 0.200699598,
+    "median_cpu_mhz_estimate": 3375.10250732273,
+    "range_ms": [
+      0.634984889,
+      1.107151457
+    ]
+  },
+  {
+    "condition": "cap3400",
+    "mode": "hot",
+    "tokens": 3,
+    "n": 3,
+    "median_batch_ms": 0.866627787,
+    "median_gu_ms": 0.616086135,
+    "median_down_ms": 0.244085269,
+    "median_cpu_mhz_estimate": 3373.535021123407,
+    "range_ms": [
+      0.630935962,
+      0.972158328
+    ]
+  },
+  {
+    "condition": "cap3400",
+    "mode": "ram",
+    "tokens": 3,
+    "n": 3,
+    "median_batch_ms": 0.797180234,
+    "median_gu_ms": 0.55145619,
+    "median_down_ms": 0.241171626,
+    "median_cpu_mhz_estimate": 3374.940740050826,
+    "range_ms": [
+      0.769167598,
+      1.0002231
+    ]
+  },
+  {
+    "condition": "cap3400",
+    "mode": "read",
+    "n": 3,
+    "median_GB_s": 22.743076
+  }
+]

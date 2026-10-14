@@ -1,0 +1,344 @@
+{
+  "date": "2026-10-14",
+  "gpu_stage_profiling": false,
+  "runs": [
+    {
+      "target": 100000,
+      "decode_tok_s": 27.0,
+      "generated": 400,
+      "timing_ms_per_window": {
+        "windows": 196.0,
+        "avg_T": 2.56,
+        "tokens_per_window": 2.04,
+        "ms_per_window": 75.72,
+        "verify": 66.74,
+        "main_gpu_wait": 20.81,
+        "host_total": 43.35,
+        "planning": 3.09,
+        "act_quant": 0.26,
+        "job_build": 0.24,
+        "pool_run_and_worker": 39.43,
+        "stage": 0.22,
+        "commit": 0.25,
+        "draft": 6.48,
+        "worker_critical_wait": 6.05,
+        "cpu_ram_and_result_copy": 33.38
+      },
+      "time_share_pct": {
+        "host_total": 57.3,
+        "cpu_ram_and_result_copy": 44.1,
+        "worker_critical_wait": 8.0,
+        "main_gpu_wait": 27.5,
+        "draft": 8.6
+      },
+      "worker_elapsed_submit_gpu_ms_per_window": [
+        40.55,
+        8.67,
+        9.02
+      ],
+      "decode_samples": 15,
+      "cpu_memory": {
+        "cpu_busy_pct": {
+          "median": 87.8,
+          "min": 77.85,
+          "max": 93.78
+        },
+        "engine_cpu_pct": {
+          "median": 39.15,
+          "min": 31.03,
+          "max": 46.23
+        },
+        "worker_cpu_pct": {
+          "median": 5.54,
+          "min": 3.93,
+          "max": 6.55
+        },
+        "cpu_performance_pct": {
+          "median": 136.44,
+          "min": 134.51,
+          "max": 137.51
+        },
+        "page_reads_s": {
+          "median": 3.2,
+          "min": 0.0,
+          "max": 72.96
+        },
+        "disk_read_bytes_s": {
+          "median": 1611311.17,
+          "min": 354268.47,
+          "max": 7514813.79
+        },
+        "ram_free_gib": {
+          "median": 5.01,
+          "min": 4.93,
+          "max": 5.06
+        },
+        "commit_free_gib": {
+          "median": 1.55,
+          "min": 1.45,
+          "max": 1.65
+        },
+        "other_cpu_pct_estimate": {
+          "median": 44.42,
+          "min": 27.46,
+          "max": 53.14
+        }
+      },
+      "gpu": [
+        {
+          "busy_pct": {
+            "median": 98.0,
+            "min": 88.0,
+            "max": 99.0
+          },
+          "memory_controller_active_pct": {
+            "median": 24.0,
+            "min": 15.0,
+            "max": 33.0
+          },
+          "memory_mib": {
+            "median": 12981.0,
+            "min": 12974.0,
+            "max": 12993.0
+          },
+          "core_mhz": {
+            "median": 2655.0,
+            "min": 2647.0,
+            "max": 2662.0
+          },
+          "temp_c": {
+            "median": 49.0,
+            "min": 47.0,
+            "max": 50.0
+          },
+          "power_w": {
+            "median": 69.75,
+            "min": 57.29,
+            "max": 75.65
+          },
+          "pcie_tx_mib_s": {
+            "median": 412.38,
+            "min": 133.4,
+            "max": 1325.15
+          },
+          "pcie_rx_mib_s": {
+            "median": 2449.96,
+            "min": 464.4,
+            "max": 13315.55
+          }
+        },
+        {
+          "busy_pct": {
+            "median": 63.0,
+            "min": 54.0,
+            "max": 71.0
+          },
+          "memory_controller_active_pct": {
+            "median": 3.0,
+            "min": 1.0,
+            "max": 4.0
+          },
+          "memory_mib": {
+            "median": 6751.0,
+            "min": 6751.0,
+            "max": 6751.0
+          },
+          "core_mhz": {
+            "median": 1995.0,
+            "min": 1995.0,
+            "max": 1995.0
+          },
+          "temp_c": {
+            "median": 51.0,
+            "min": 50.0,
+            "max": 52.0
+          },
+          "power_w": {
+            "median": 68.61,
+            "min": 65.01,
+            "max": 69.82
+          },
+          "pcie_tx_mib_s": {
+            "median": 670.29,
+            "min": 165.32,
+            "max": 1418.26
+          },
+          "pcie_rx_mib_s": {
+            "median": 720.17,
+            "min": 1.19,
+            "max": 9243.3
+          }
+        }
+      ]
+    },
+    {
+      "target": 200000,
+      "decode_tok_s": 27.2,
+      "generated": 400,
+      "timing_ms_per_window": {
+        "windows": 166.0,
+        "avg_T": 3.08,
+        "tokens_per_window": 2.41,
+        "ms_per_window": 88.52,
+        "verify": 78.79,
+        "main_gpu_wait": 22.5,
+        "host_total": 54.09,
+        "planning": 3.39,
+        "act_quant": 0.42,
+        "job_build": 0.25,
+        "pool_run_and_worker": 49.87,
+        "stage": 0.05,
+        "commit": 0.26,
+        "draft": 6.98,
+        "worker_critical_wait": 6.51,
+        "cpu_ram_and_result_copy": 43.36
+      },
+      "time_share_pct": {
+        "host_total": 61.1,
+        "cpu_ram_and_result_copy": 49.0,
+        "worker_critical_wait": 7.4,
+        "main_gpu_wait": 25.4,
+        "draft": 7.9
+      },
+      "worker_elapsed_submit_gpu_ms_per_window": [
+        51.51,
+        10.92,
+        10.72
+      ],
+      "decode_samples": 15,
+      "cpu_memory": {
+        "cpu_busy_pct": {
+          "median": 87.19,
+          "min": 84.08,
+          "max": 91.44
+        },
+        "engine_cpu_pct": {
+          "median": 43.11,
+          "min": 33.35,
+          "max": 46.7
+        },
+        "worker_cpu_pct": {
+          "median": 5.24,
+          "min": 4.12,
+          "max": 5.82
+        },
+        "cpu_performance_pct": {
+          "median": 135.77,
+          "min": 135.08,
+          "max": 136.92
+        },
+        "page_reads_s": {
+          "median": 3.15,
+          "min": 1.03,
+          "max": 20.65
+        },
+        "disk_read_bytes_s": {
+          "median": 1016040.51,
+          "min": 352927.82,
+          "max": 2408569.18
+        },
+        "ram_free_gib": {
+          "median": 5.3,
+          "min": 5.24,
+          "max": 5.36
+        },
+        "commit_free_gib": {
+          "median": 1.93,
+          "min": 1.84,
+          "max": 2.0
+        },
+        "other_cpu_pct_estimate": {
+          "median": 39.59,
+          "min": 31.83,
+          "max": 53.32
+        }
+      },
+      "gpu": [
+        {
+          "busy_pct": {
+            "median": 98.0,
+            "min": 95.0,
+            "max": 99.0
+          },
+          "memory_controller_active_pct": {
+            "median": 19.0,
+            "min": 13.0,
+            "max": 37.0
+          },
+          "memory_mib": {
+            "median": 12978.0,
+            "min": 12961.0,
+            "max": 12994.0
+          },
+          "core_mhz": {
+            "median": 2640.0,
+            "min": 2632.0,
+            "max": 2647.0
+          },
+          "temp_c": {
+            "median": 52.0,
+            "min": 51.0,
+            "max": 55.0
+          },
+          "power_w": {
+            "median": 68.55,
+            "min": 60.82,
+            "max": 76.03
+          },
+          "pcie_tx_mib_s": {
+            "median": 462.32,
+            "min": 108.14,
+            "max": 1318.62
+          },
+          "pcie_rx_mib_s": {
+            "median": 2714.95,
+            "min": 856.4,
+            "max": 4865.41
+          }
+        },
+        {
+          "busy_pct": {
+            "median": 63.0,
+            "min": 53.0,
+            "max": 73.0
+          },
+          "memory_controller_active_pct": {
+            "median": 3.0,
+            "min": 2.0,
+            "max": 4.0
+          },
+          "memory_mib": {
+            "median": 6751.0,
+            "min": 6751.0,
+            "max": 6751.0
+          },
+          "core_mhz": {
+            "median": 1980.0,
+            "min": 1980.0,
+            "max": 1980.0
+          },
+          "temp_c": {
+            "median": 55.0,
+            "min": 55.0,
+            "max": 55.0
+          },
+          "power_w": {
+            "median": 69.44,
+            "min": 67.28,
+            "max": 70.5
+          },
+          "pcie_tx_mib_s": {
+            "median": 709.58,
+            "min": 179.1,
+            "max": 1287.56
+          },
+          "pcie_rx_mib_s": {
+            "median": 3907.73,
+            "min": 1.29,
+            "max": 9547.61
+          }
+        }
+      ]
+    }
+  ]
+}

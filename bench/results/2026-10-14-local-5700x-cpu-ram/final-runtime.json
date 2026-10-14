@@ -1,0 +1,11 @@
+{
+  "config_unchanged": true,
+  "original_power_plan_restored": true,
+  "temporary_power_plan_removed": true,
+  "private_test_processes_remaining": [],
+  "installed_engine_sha256": "221599d718282d953caa5fab5fc1d066003186af04ca6ea22ef9cd5bf538e4d2",
+  "kernel_library_unchanged": true,
+  "measured_binary_preserved": ".panel/cpu_ram_bench_measured.exe",
+  "json_files_validated": 25,
+  "markdown_links_validated": 36
+}

@@ -1,0 +1,5 @@
+{
+  "minp": 0.5,
+  "pool_workers": 7,
+  "host_core": "last"
+}

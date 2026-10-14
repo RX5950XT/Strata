@@ -1,0 +1,169 @@
+{
+  "candidate_auto": {
+    "slots": 1780,
+    "fresh": {
+      "100000": {
+        "label": "full-retained-auto-100000-fresh",
+        "setting": "full-retained-auto",
+        "minp": 0.5,
+        "start": 245638.6301617,
+        "first": 245732.9336231,
+        "end": 245745.5201669,
+        "usage": {
+          "prompt_tokens": 100013,
+          "completion_tokens": 400,
+          "total_tokens": 100413,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          }
+        },
+        "answer_sha256": "fc09f1e71e1e69ca8902f65f2c90e98280b633dcb2cd289e77feff5b9367a843",
+        "engine_prompt_tokens": 100013,
+        "engine_prompt_ms": 94023.0,
+        "engine_prefill_tok_s": 1063.7,
+        "engine_generated_tokens": 400,
+        "engine_decode_ms": 12653.0,
+        "engine_decode_tok_s": 31.6,
+        "mtp_acceptance": 0.702,
+        "reused_tokens": 0,
+        "cache_hit_pct": 52.0
+      },
+      "200000": {
+        "label": "full-retained-auto-200000-fresh",
+        "setting": "full-retained-auto",
+        "minp": 0.5,
+        "start": 245745.7801978,
+        "first": 245935.8415427,
+        "end": 245947.7137515,
+        "usage": {
+          "prompt_tokens": 200013,
+          "completion_tokens": 400,
+          "total_tokens": 200413,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          }
+        },
+        "answer_sha256": "0e3f012e0393ca7076dbde65202a6af42e00aee8b8f409e3bef15d79b125b701",
+        "engine_prompt_tokens": 200013,
+        "engine_prompt_ms": 189539.0,
+        "engine_prefill_tok_s": 1055.3,
+        "engine_generated_tokens": 400,
+        "engine_decode_ms": 11907.0,
+        "engine_decode_tok_s": 33.6,
+        "mtp_acceptance": 0.616,
+        "reused_tokens": 0,
+        "cache_hit_pct": 51.1
+      }
+    },
+    "rates": {
+      "100000": [],
+      "200000": []
+    },
+    "median": {}
+  },
+  "original_auto_recheck": {
+    "slots": 1780,
+    "fresh": {
+      "100000": {
+        "label": "full-original-auto-recheck-100000-fresh",
+        "setting": "full-original-auto-recheck",
+        "minp": 0.5,
+        "start": 246445.8544912,
+        "first": 246541.0275048,
+        "end": 246551.8406006,
+        "usage": {
+          "prompt_tokens": 100013,
+          "completion_tokens": 400,
+          "total_tokens": 100413,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          }
+        },
+        "answer_sha256": "6a8d2155d35c1be1cae45cbcef720438ac56d401bcec33214f53a3e600990b6f",
+        "engine_prompt_tokens": 100013,
+        "engine_prompt_ms": 94923.0,
+        "engine_prefill_tok_s": 1053.6,
+        "engine_generated_tokens": 400,
+        "engine_decode_ms": 10876.0,
+        "engine_decode_tok_s": 36.8,
+        "mtp_acceptance": 0.74,
+        "reused_tokens": 0,
+        "cache_hit_pct": 52.5
+      },
+      "200000": {
+        "label": "full-original-auto-recheck-200000-fresh",
+        "setting": "full-original-auto-recheck",
+        "minp": 0.5,
+        "start": 246551.9936125,
+        "first": 246743.5333077,
+        "end": 246755.1254059,
+        "usage": {
+          "prompt_tokens": 200013,
+          "completion_tokens": 400,
+          "total_tokens": 200413,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          }
+        },
+        "answer_sha256": "fc72d9c8300a2eba3d96604135fd6818728e0d71ffb9bcd1eb5a3fe03d0b2324",
+        "engine_prompt_tokens": 200013,
+        "engine_prompt_ms": 191210.0,
+        "engine_prefill_tok_s": 1046.0,
+        "engine_generated_tokens": 400,
+        "engine_decode_ms": 11644.0,
+        "engine_decode_tok_s": 34.4,
+        "mtp_acceptance": 0.68,
+        "reused_tokens": 0,
+        "cache_hit_pct": 53.8
+      }
+    },
+    "rates": {
+      "100000": [],
+      "200000": []
+    },
+    "median": {}
+  },
+  "auto_fresh_ratios": {
+    "100000": 0.8586956521739132,
+    "200000": 0.9767441860465117
+  },
+  "same_auto_slots": true,
+  "retained_args": [
+    "--pack",
+    "D:\\Workspace\\Personal_Project\\Strata\\packs\\orca-iq3_xxs",
+    "--native",
+    "D:\\Workspace\\Personal_Project\\Strata\\models\\orca-IQ3_XXS\\Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+    "--ple-gguf",
+    "D:\\Workspace\\Personal_Project\\Strata\\models\\orca-IQ3_XXS\\Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+    "--expert-profile",
+    "D:\\Workspace\\Personal_Project\\Strata\\data\\expert-profile.bin",
+    "--expert-cache",
+    "auto",
+    "--spec",
+    "4",
+    "--spec-min-p",
+    "0.5",
+    "--mtp",
+    "D:\\Workspace\\Personal_Project\\Strata\\mtp\\rt",
+    "--kv",
+    "int8",
+    "--vision",
+    "--vram-reserve-mib",
+    "700",
+    "--prefill",
+    "8192",
+    "--mtp-window",
+    "65536",
+    "--pcie-frac",
+    "0.40",
+    "--max-context",
+    "204800",
+    "--expert-gpu",
+    "1",
+    "--expert-gpu-reserve-mib",
+    "700"
+  ],
+  "retained_host_core": "first",
+  "reason": "No repeatable gain in both long contexts with normal auto cache",
+  "health": "ok"
+}

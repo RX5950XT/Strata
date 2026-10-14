@@ -1,0 +1,74 @@
+
+AMDuProfPcm Report
+
+Processor Name:,AMD Ryzen 7 5700X 8-Core Processor             
+System:,Family(0x19) Model(0x21) Stepping(0x2)
+Number of Sockets :,1
+Number of Core Complexes(CCX) :,1
+Number of Cores :,8
+Number of Threads :,16
+SMT Enabled in HW:,True
+
+CPU Topology:
+Socket, CCX, Core(s)
+0,0, 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
+
+Core P0 state frequency (MHz):,3400.000000
+Multiplex interval (ms):,100
+Data Collection Driver:,MSR Driver
+Version:,5.3.521.0 (Public)
+
+Hypervisor Info:
+Hypervisor Enabled:,True
+Hypervisor Supported:,True
+Hypervisor Vendor:,Microsoft Hyper-V
+Root/Host Partition:,1
+Command:,"AMDuProfPcm -r -m ipc,dc,l2 -a -d 3 -u 1 -C -P 6 -o D:\Workspace\Personal_Project\Strata\bench\results\2026-10-14-local-5700x-cpu-ram\r0-normal-read-c8-t1.csv"
+
+Abbreviation :
+IPC    : Instructions Per CPU Cycle
+CPI    : CPU Cycles Per Instructions
+pti    : Per Thousand Instructions
+ptc    : Per Thousand CPU Cycles
+pto    : Per Thousand Operations
+
+Profile Time: 2026/10/14 10:04:24:053
+CORE METRICS
+Metric,System (Aggregated)
+Retired Instructions,34048297703.000000
+Retired Macro Ops,35230436983.000000
+Cycles Not in Halt,43714121437.000000
+Utilization (%),52.191269
+System time (%),0.000000
+User time (%),38.797461
+System instructions (%),0.000000
+User instructions (%),100.000000
+Eff Freq (MHz),4457.962939
+IPC (Sys + User),0.798239
+IPC (Sys),0.000000
+IPC (User),0.798239
+CPI (Sys + User),1.252758
+CPI (Sys),0.000000
+CPI (User),1.252758
+Giga Instructions Per Sec,11.528966
+Locked Instructions (pti),0.000000
+Retired Branches (pti),202.803779
+Retired Branches Mispredicted (pti),5.410761
+All Data Cache (DC) Fills (pti),18.246325
+DC Fills From Same CCX (pti),15.126248
+DC Fills From different CCX (pti),0.000000
+DC Fills From Memory (pti),3.120077
+L2 Access (pti),47.060349
+L2 Access from IC Miss (pti),18.984029
+L2 Access from DC Miss (pti),18.824990
+L2 Access from L2 HWPF (pti),8.489961
+L2 Miss (pti),23.476531
+L2 Miss from IC Miss (pti),10.489518
+L2 Miss from DC Miss (pti),6.717158
+L2 Miss from L2 HWPF (pti),6.269855
+L2 Hit (pti),21.296963
+L2 Hit from IC Miss (pti),8.218919
+L2 Hit from DC Miss (pti),10.857186
+L2 Hit from L2 HWPF (pti),2.220106
+
+
