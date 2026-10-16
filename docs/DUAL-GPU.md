@@ -160,6 +160,25 @@
 
 後續 CPU／RAM 分離實測（2026-10-14）：直接連結既有 CPU kernels，讓四個相同 orca experts 反覆留在 8.70 MB CPU 快取，或從 557 MB 工作集讀 RAM；輸出逐位元相同。同一程序內快速配對後，移除大部分 RAM 讀取只省約 21–27% 的 pool 時間，gate/up 仍是最大階段，顯示 CPU 側處理為主、RAM 供料次之。GPU DMA 占用供料時，RAM 組又比快取組受影響更多，因此記憶體競爭也確實存在。這是 CPU expert 路徑的判定，不能當成整段 decode 的純算術百分比。[完整對照、原始數據與還原紀錄](../bench/results/2026-10-14-local-5700x-cpu-ram/README.md)。
 
+## 併入上游 0.1.44.1（2026-10-17）
+
+上游 315 個 commit：0.1.44（Qwen3.6、NVFP4、Mac、Intel、Unsloth 新尺寸、pin by need 等）與 0.1.44.1（舊 CPU 的修正）。合併時：
+
+- 上游的「pin by need」（`STRATA_PIN_BY_NEED=1`，預設關）會把 arena 改成按頁對齊的排列。雙卡的共用 section 只有一種排列（工作行程照原本的排列讀），所以有 `share` 時不走 pin by need，和上游對 shared arena file 的處理一樣。
+- worker 列（kind -3）在上游新加的 PCIe 至少一筆（`STRATA_PCIE_MIN1`）與尾端跳過（-2）邏輯裡都會略過。
+- `/health` 保留「引擎停了回 503」，也加上上游的 `image_generation`；`images` 改用上游的 `_vision_down()`（elastic 編碼器在兩張圖之間停著是正常的）。
+
+同一段時間交錯跑（`bench/expert_gpu_smoke.py`，Qwen IQ3_XXS、8K context、200 token greedy）：
+
+| | 0.1.43 合併版 | 0.1.44.1 合併版 |
+| --- | --- | --- |
+| 單卡（tok/s） | 30.4 | 33.4 |
+| 雙卡（tok/s） | 54.2、48.6、48.7、34.9 | 49.7、50.9、52.2、46.8、36.7 |
+
+- 9 次的輸出 200/200 token 全部一樣（新舊、單雙卡都一樣）。
+- 雙卡差異在這台機器的噪音內（±15%；最後一組兩邊同時掉到 35 左右，是背景負載）：沒變快，也沒變慢。單卡只量了一組。
+- 經 `serve/server.py`（orca IQ3_XXS 雙卡、200K、看圖開）：中文 121 token 40.7 tok/s、程式碼 400 token 34.2 tok/s，看圖答對，Anthropic 端點有回應。
+
 ## 為什麼接在 pool hook
 
 每一層的 CPU 交接流程本來就長這樣：GPU0 用 doorbell 把 `x` 和 miss 清單寫進 mapped pinned 記憶體，host 執行緒呼叫 `pool(...)` 算完 miss，把結果寫進 `y_miss`，最後設定 `flag`，GPU0 才接著往下跑（`src/core/session.cpp:915`、`:678`；`src/core/verify.cpp` 的 verify window 也是同一種形狀，走 `drive_pool_multi`）。
