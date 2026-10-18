@@ -118,6 +118,7 @@ def install(ram, found, argv, answers=None, extra=(), avx512=False, configs=()):
             mock.patch.object(setup, "verify_sha256", lambda *a: None),
             mock.patch.object(setup, "run", lambda *a, **k: None),
             mock.patch.object(setup, "mtp_corrupt", lambda *a, **k: False),
+            mock.patch.object(setup.os, "cpu_count", lambda: 12),   # the CPU image encoder's threads: the same on every PC
             mock.patch.object(setup, "refresh_draft_vocab", lambda *a, **k: None),
             mock.patch.object(setup, "write_run_script", lambda tag, cfg, port, *_: t / f"run-{tag}.bat"),
             mock.patch.object(setup, "saved_calibration", lambda cfg: None),
