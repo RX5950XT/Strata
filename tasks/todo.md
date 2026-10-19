@@ -1,3 +1,14 @@
+# HIP IQ2/IQ3 正負號技巧（借鑑 llama.cpp）＋ 上游檢查
+
+- [x] 上游 Niko1221/Strata 最新 477ac13c（10/16）已合併，無新更新。
+- [x] iq_kernels.cu：32 處 `__vcmpne4`/`__vsub4` 改經 `sign_mask`/`apply_sign_mask`；CUDA 與 HIP 預設為巨集展開成原碼。
+- [x] HIP 新寫法改為 opt-in（`-DSTRATA_HIP_SWAR_SIGNS=1`）：靜態加權 VALU −25%，但 17–19 個 kernel occupancy 下降，無 AMD 卡無法實測。
+- [x] 驗證：CUDA SASS（sm_86/sm_120）與 HEAD 逐位元相同；HIP 預設 gfx1100/gfx1201 組語相同；公式 48,020 例 0 錯。
+- [x] 修 tools/strata_bench.py 自行啟動 server 時 `port` 未定義（上游 #2330 引入）。
+- [x] NVIDIA A/B 測速（tools/strata_bench.py，iq3_xxs dual config，old/new 交替 2 輪，各 3 runs 中位數）：decode 34.6/28.6 vs 31.1/31.5、4K prompt 1090/1068 vs 1077/1083、16K 1381/1370 vs 1370/1366 tok/s——落在雜訊內，符合 SASS 相同的預期。
+
+Review：prefill `moe_fused_iq.cu` 的同類修改與 `v_perm` 廣播在 gfx1100/gfx1201 無效果，已撤回。WSL 已安裝 ROCm 7.2.4 編譯器（hipcc、rocm-llvm、hip-dev）供 HIP 編譯檢查。
+
 # CPU／RAM 瓶頸實測
 
 - [x] 使用實際 orca IQ3_XXS expert 與既有 CPU kernel，比較 CPU 快取／RAM 讀取。

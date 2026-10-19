@@ -213,6 +213,22 @@ Each benchmark run reports the GPU-event median of seven runs after two warmups,
 `--bench` this path, `--bench-default` gfx1151's default kernels (`STRATA_GDN_PP=2`, `STRATA_GDN_NOY=1`). The switch is read
 once per process, so the two are separate runs. It times one layer's recurrence and norm, not a whole prompt.
 
+## Opt-in IQ2/IQ3 grid signs without byte compares (build flag, not measured on a card)
+
+RDNA has no byte-wise compare or subtract, so the `__vcmpne4` / `__vsub4` pair that puts the signs on each 4 bytes of
+an IQ2_XXS, IQ2_XS, IQ2_S, IQ3_XXS or IQ3_S codebook entry is emulated with ordinary 32-bit operations.
+`-DCMAKE_HIP_FLAGS=-DSTRATA_HIP_SWAR_SIGNS=1` replaces the pair with llama.cpp's shorter form (its
+`ggml_cuda_apply_signs`, here without the multiply): the same bytes, because no codebook byte is 0 (all five grids
+checked, and 48,020 sign/byte cases against a byte-by-byte reference). Without the flag the HIP code is unchanged
+(gfx1100 and gfx1201 assembly identical), and the CUDA build is unchanged with or without it (identical SASS on sm_86
+and sm_120).
+
+What is known, from the compiler only (ROCm 7.2.4 clang, gfx1100 and gfx1201, `src/kernels/cuda/iq_kernels.cu`):
+the 112 kernels it changes run about 25% fewer vector ALU instructions (a 32-bit multiply counted as 4), but 17-19
+of them need more registers, so fewer waves fit: `native_gu_multi` from 16 to 10-12 and `expdec_gu` by 1-2. Which
+effect wins was not measured; llama.cpp's own change measured +1.2% decode on an RX 9070 XT, and some IQ3_S shapes
+5-15% slower. Compare decode with and without the flag on your card before keeping it.
+
 ## Model and serving configuration
 
 Prepare a supported model pack and its MTP runtime using the existing tools.

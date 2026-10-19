@@ -46,6 +46,22 @@ __device__ __forceinline__ uint32_t unpack_ksigns(const uint8_t v) {
     const uint32_t s = v ^ p << 7;
     return s * 0x01010101;
 }
+// The IQ2/IQ3 grid signs: sign_mask(t) for t holding 0 or one bit per byte, apply_sign_mask(g, m) is g with its bytes
+// negated where t had a bit.  Opt-in on HIP (-DSTRATA_HIP_SWAR_SIGNS=1), which has no byte-SIMD compare or subtract:
+// m is 0x80 in the bytes to negate, m | (m - c) is 0xFF there, and (g ^ 0xFF) + 1 = -g carries into no other byte
+// because no byte of the IQ2/IQ3 grids is 0 (llama.cpp's ggml_cuda_apply_signs, without its multiply).  Not measured
+// on a card: ~25% fewer weighted VALU in the 112 kernels it changes, but more VGPRs, so native_gu_multi drops from 16
+// to 10-12 waves and expdec_gu by 1-2 (ROCm 7.2.4 clang, gfx1100 / gfx1201).  Without it the macros are the old code.
+#if defined(__HIPCC__) && defined(STRATA_HIP_SWAR_SIGNS)
+__device__ __forceinline__ int sign_mask(const uint32_t t) { return (int) ((t + 0x7F7F7F7Fu) & 0x80808080u); }
+__device__ __forceinline__ int apply_sign_mask(const uint32_t g, const int m) {
+    const uint32_t h = (uint32_t) m, c = h >> 7;
+    return (int) ((g ^ (h | (h - c))) + c);
+}
+#else
+#define sign_mask(t) __vcmpne4(t, 0)
+#define apply_sign_mask(g, m) __vsub4(g ^ m, m)
+#endif
 __device__ __forceinline__ int2 get_int_from_table_16(const int& q4, const int8_t* table) {
 #if defined(STRATA_HIP_GFX906)
     // AMD: llama.cpp's HIP lookup (vecdotq.cuh) - v_perm_b32 takes 3-bit byte indices, so the low and high halves
@@ -109,12 +125,12 @@ __device__ __forceinline__ float vec_dot_iq2_xxs_q8_1(const void* __restrict__ v
     for (int k0 = 0; k0 < 8; k0 += 2) {
         const uint2 grid_pos = ((const uint2*) iq2xxs_grid)[aux8[k0 / 2]];
         const uint32_t signs = unpack_ksigns(aux32 >> (7 * k0 / 2));
-        const int signs0 = __vcmpne4(signs & 0x08040201, 0);
-        const int grid0 = __vsub4(grid_pos.x ^ signs0, signs0);
+        const int signs0 = sign_mask(signs & 0x08040201);
+        const int grid0 = apply_sign_mask(grid_pos.x, signs0);
         const int u0 = get_int_b4(bq8_1[iqs / 2].qs, k0 + 0);
         sumi = ggml_cuda_dp4a(grid0, u0, sumi);
-        const int signs1 = __vcmpne4(signs & 0x80402010, 0);
-        const int grid1 = __vsub4(grid_pos.y ^ signs1, signs1);
+        const int signs1 = sign_mask(signs & 0x80402010);
+        const int grid1 = apply_sign_mask(grid_pos.y, signs1);
         const int u1 = get_int_b4(bq8_1[iqs / 2].qs, k0 + 1);
         sumi = ggml_cuda_dp4a(grid1, u1, sumi);
     }
@@ -136,11 +152,11 @@ __device__ __forceinline__ float vec_dot_iq2_xs_q8_1(const void* __restrict__ vb
     for (int l0 = 0; l0 < 8; l0 += 2) {
         const uint2 grid_pos = ((const uint2*) iq2xs_grid)[q2[l0 / 2] & 0x1FF];
         const uint32_t signs = unpack_ksigns(q2[l0 / 2] >> 9);
-        const int signs0 = __vcmpne4(signs & 0x08040201, 0);
-        const int grid_l = __vsub4(grid_pos.x ^ signs0, signs0);
+        const int signs0 = sign_mask(signs & 0x08040201);
+        const int grid_l = apply_sign_mask(grid_pos.x, signs0);
         const int u0 = get_int_b4(bq8_1[iqs / 2].qs, l0 + 0);
-        const int signs1 = __vcmpne4(signs & 0x80402010, 0);
-        const int grid_h = __vsub4(grid_pos.y ^ signs1, signs1);
+        const int signs1 = sign_mask(signs & 0x80402010);
+        const int grid_h = apply_sign_mask(grid_pos.y, signs1);
         const int u1 = get_int_b4(bq8_1[iqs / 2].qs, l0 + 1);
         if (l0 < 4) {
             sumi0 = ggml_cuda_dp4a(grid_l, u0, sumi0);
@@ -169,10 +185,10 @@ __device__ __forceinline__ float vec_dot_iq2_s_q8_1(const void* __restrict__ vbq
 #pragma unroll
     for (int l0 = 0; l0 < 8; l0 += 2) {
         const int* grid_pos = (const int*) (iq2s_grid + (qs[l0 / 2] | ((qh << (8 - l0)) & 0x300)));
-        const int signs0 = __vcmpne4(((signs_packed_8[l0 / 2] & 0x03) << 7) | ((signs_packed_8[l0 / 2] & 0x0C) << 21), 0x00000000);
-        const int signs1 = __vcmpne4(((signs_packed_8[l0 / 2] & 0x30) << 3) | ((signs_packed_8[l0 / 2] & 0xC0) << 17), 0x00000000);
-        const int grid_l = __vsub4(grid_pos[0] ^ signs0, signs0);
-        const int grid_h = __vsub4(grid_pos[1] ^ signs1, signs1);
+        const int signs0 = sign_mask(((signs_packed_8[l0 / 2] & 0x03) << 7) | ((signs_packed_8[l0 / 2] & 0x0C) << 21));
+        const int signs1 = sign_mask(((signs_packed_8[l0 / 2] & 0x30) << 3) | ((signs_packed_8[l0 / 2] & 0xC0) << 17));
+        const int grid_l = apply_sign_mask(grid_pos[0], signs0);
+        const int grid_h = apply_sign_mask(grid_pos[1], signs1);
         const int u0 = get_int_b4(bq8_1[iqs / 2].qs, l0 + 0);
         const int u1 = get_int_b4(bq8_1[iqs / 2].qs, l0 + 1);
         if (l0 < 4) {
@@ -199,11 +215,11 @@ __device__ __forceinline__ float vec_dot_iq3_xxs_q8_1(const void* __restrict__ v
     for (int l0 = 0; l0 < 8; l0 += 2) {
         const int2 grid_pos = make_int2(iq3xxs_grid[q3[l0 + 0]], iq3xxs_grid[q3[l0 + 1]]);
         const uint32_t signs = unpack_ksigns(aux32 >> (7 * l0 / 2));
-        const int signs0 = __vcmpne4(signs & 0x08040201, 0);
-        const int grid_l = __vsub4(grid_pos.x ^ signs0, signs0);
+        const int signs0 = sign_mask(signs & 0x08040201);
+        const int grid_l = apply_sign_mask(grid_pos.x, signs0);
         const int u0 = get_int_b4(bq8_1[iqs / 2].qs, l0 + 0);
-        const int signs1 = __vcmpne4(signs & 0x80402010, 0);
-        const int grid_h = __vsub4(grid_pos.y ^ signs1, signs1);
+        const int signs1 = sign_mask(signs & 0x80402010);
+        const int grid_h = apply_sign_mask(grid_pos.y, signs1);
         const int u1 = get_int_b4(bq8_1[iqs / 2].qs, l0 + 1);
         sumi = ggml_cuda_dp4a(grid_l, u0, sumi);
         sumi = ggml_cuda_dp4a(grid_h, u1, sumi);
@@ -227,10 +243,10 @@ __device__ __forceinline__ float vec_dot_iq3_s_q8_1(const void* __restrict__ vbq
     for (int l0 = 0; l0 < 8; l0 += 2) {
         const int2 grid_pos = make_int2(iq3s_grid[qs[l0 + 0] | ((qh << (8 - l0)) & 0x100)],
                                         iq3s_grid[qs[l0 + 1] | ((qh << (7 - l0)) & 0x100)]);
-        const int signs0 = __vcmpne4(((signs_packed_8[l0 / 2] & 0x03) << 7) | ((signs_packed_8[l0 / 2] & 0x0C) << 21), 0x00000000);
-        const int signs1 = __vcmpne4(((signs_packed_8[l0 / 2] & 0x30) << 3) | ((signs_packed_8[l0 / 2] & 0xC0) << 17), 0x00000000);
-        const int grid_l = __vsub4(grid_pos.x ^ signs0, signs0);
-        const int grid_h = __vsub4(grid_pos.y ^ signs1, signs1);
+        const int signs0 = sign_mask(((signs_packed_8[l0 / 2] & 0x03) << 7) | ((signs_packed_8[l0 / 2] & 0x0C) << 21));
+        const int signs1 = sign_mask(((signs_packed_8[l0 / 2] & 0x30) << 3) | ((signs_packed_8[l0 / 2] & 0xC0) << 17));
+        const int grid_l = apply_sign_mask(grid_pos.x, signs0);
+        const int grid_h = apply_sign_mask(grid_pos.y, signs1);
         const int u0 = get_int_b4(bq8_1[iqs / 2].qs, l0 + 0);
         const int u1 = get_int_b4(bq8_1[iqs / 2].qs, l0 + 1);
         sumi = ggml_cuda_dp4a(grid_l, u0, sumi);
@@ -723,10 +739,10 @@ template<> struct Split<16> {   // IQ2_XXS
         for (int k0 = 0; k0 < 8; k0 += 2) {
             const uint2 grid_pos = grid_lut[aux8[k0 / 2]];
             const uint32_t signs = unpack_ksigns(aux32 >> (7 * k0 / 2));
-            const int signs0 = __vcmpne4(signs & 0x08040201, 0);
-            r.g[k0 + 0] = __vsub4(grid_pos.x ^ signs0, signs0);
-            const int signs1 = __vcmpne4(signs & 0x80402010, 0);
-            r.g[k0 + 1] = __vsub4(grid_pos.y ^ signs1, signs1);
+            const int signs0 = sign_mask(signs & 0x08040201);
+            r.g[k0 + 0] = apply_sign_mask(grid_pos.x, signs0);
+            const int signs1 = sign_mask(signs & 0x80402010);
+            r.g[k0 + 1] = apply_sign_mask(grid_pos.y, signs1);
         }
         r.ls = aux32 >> 27 | 1;
         r.dw = __half2float(bq2->d);
@@ -792,10 +808,10 @@ template<> struct Split<17> : SplitLs2 {   // IQ2_XS
         for (int l0 = 0; l0 < 8; l0 += 2) {
             const uint2 grid_pos = grid_lut[q2[l0 / 2] & 0x1FF];
             const uint32_t signs = unpack_ksigns(q2[l0 / 2] >> 9);
-            const int signs0 = __vcmpne4(signs & 0x08040201, 0);
-            r.g[l0 + 0] = __vsub4(grid_pos.x ^ signs0, signs0);
-            const int signs1 = __vcmpne4(signs & 0x80402010, 0);
-            r.g[l0 + 1] = __vsub4(grid_pos.y ^ signs1, signs1);
+            const int signs0 = sign_mask(signs & 0x08040201);
+            r.g[l0 + 0] = apply_sign_mask(grid_pos.x, signs0);
+            const int signs1 = sign_mask(signs & 0x80402010);
+            r.g[l0 + 1] = apply_sign_mask(grid_pos.y, signs1);
         }
         r.dw = __half2float(bq2->d);
         return r;
@@ -820,10 +836,10 @@ template<> struct Split<22> : SplitLs2 {   // IQ2_S
 #pragma unroll
         for (int l0 = 0; l0 < 8; l0 += 2) {
             const int* grid_pos = (const int*) (grid_lut + (qs[l0 / 2] | ((qh << (8 - l0)) & 0x300)));
-            const int signs0 = __vcmpne4(((signs_packed_8[l0 / 2] & 0x03) << 7) | ((signs_packed_8[l0 / 2] & 0x0C) << 21), 0x00000000);
-            const int signs1 = __vcmpne4(((signs_packed_8[l0 / 2] & 0x30) << 3) | ((signs_packed_8[l0 / 2] & 0xC0) << 17), 0x00000000);
-            r.g[l0 + 0] = __vsub4(grid_pos[0] ^ signs0, signs0);
-            r.g[l0 + 1] = __vsub4(grid_pos[1] ^ signs1, signs1);
+            const int signs0 = sign_mask(((signs_packed_8[l0 / 2] & 0x03) << 7) | ((signs_packed_8[l0 / 2] & 0x0C) << 21));
+            const int signs1 = sign_mask(((signs_packed_8[l0 / 2] & 0x30) << 3) | ((signs_packed_8[l0 / 2] & 0xC0) << 17));
+            r.g[l0 + 0] = apply_sign_mask(grid_pos[0], signs0);
+            r.g[l0 + 1] = apply_sign_mask(grid_pos[1], signs1);
         }
         r.dw = __half2float(bq2->d);
         return r;
@@ -846,10 +862,10 @@ template<> struct Split<18> {   // IQ3_XXS
         for (int l0 = 0; l0 < 8; l0 += 2) {
             const int2 grid_pos = make_int2(grid_lut[q3[l0 + 0]], grid_lut[q3[l0 + 1]]);
             const uint32_t signs = unpack_ksigns(aux32 >> (7 * l0 / 2));
-            const int signs0 = __vcmpne4(signs & 0x08040201, 0);
-            r.g[l0 + 0] = __vsub4(grid_pos.x ^ signs0, signs0);
-            const int signs1 = __vcmpne4(signs & 0x80402010, 0);
-            r.g[l0 + 1] = __vsub4(grid_pos.y ^ signs1, signs1);
+            const int signs0 = sign_mask(signs & 0x08040201);
+            r.g[l0 + 0] = apply_sign_mask(grid_pos.x, signs0);
+            const int signs1 = sign_mask(signs & 0x80402010);
+            r.g[l0 + 1] = apply_sign_mask(grid_pos.y, signs1);
         }
         r.ls = aux32 >> 28;
         r.dw = __half2float(bq3->d);
@@ -891,10 +907,10 @@ template<> struct Split<21> {   // IQ3_S
         for (int l0 = 0; l0 < 8; l0 += 2) {
             const int2 grid_pos = make_int2(grid_lut[qs[l0 + 0] | ((qh << (8 - l0)) & 0x100)],
                                             grid_lut[qs[l0 + 1] | ((qh << (7 - l0)) & 0x100)]);
-            const int signs0 = __vcmpne4(((signs_packed_8[l0 / 2] & 0x03) << 7) | ((signs_packed_8[l0 / 2] & 0x0C) << 21), 0x00000000);
-            const int signs1 = __vcmpne4(((signs_packed_8[l0 / 2] & 0x30) << 3) | ((signs_packed_8[l0 / 2] & 0xC0) << 17), 0x00000000);
-            r.g[l0 + 0] = __vsub4(grid_pos.x ^ signs0, signs0);
-            r.g[l0 + 1] = __vsub4(grid_pos.y ^ signs1, signs1);
+            const int signs0 = sign_mask(((signs_packed_8[l0 / 2] & 0x03) << 7) | ((signs_packed_8[l0 / 2] & 0x0C) << 21));
+            const int signs1 = sign_mask(((signs_packed_8[l0 / 2] & 0x30) << 3) | ((signs_packed_8[l0 / 2] & 0xC0) << 17));
+            r.g[l0 + 0] = apply_sign_mask(grid_pos.x, signs0);
+            r.g[l0 + 1] = apply_sign_mask(grid_pos.y, signs1);
         }
         r.ls = 1 + 2 * ((bq3->scales[iqs / 4] >> ((iqs << 1) & 0x04)) & 0x0F);
         r.dw = __half2float(bq3->d);
@@ -2647,10 +2663,10 @@ template<bool NT> struct S26Split<21, NT> {   // IQ3_S: Split<21>::load with the
         for (int l0 = 0; l0 < 8; l0 += 2) {
             const int2 grid_pos = make_int2(iq3s_grid[qs[l0 + 0] | ((qh << (8 - l0)) & 0x100)],
                                             iq3s_grid[qs[l0 + 1] | ((qh << (7 - l0)) & 0x100)]);
-            const int signs0 = __vcmpne4(((signs_packed_8[l0 / 2] & 0x03) << 7) | ((signs_packed_8[l0 / 2] & 0x0C) << 21), 0x00000000);
-            const int signs1 = __vcmpne4(((signs_packed_8[l0 / 2] & 0x30) << 3) | ((signs_packed_8[l0 / 2] & 0xC0) << 17), 0x00000000);
-            r.g[l0 + 0] = __vsub4(grid_pos.x ^ signs0, signs0);
-            r.g[l0 + 1] = __vsub4(grid_pos.y ^ signs1, signs1);
+            const int signs0 = sign_mask(((signs_packed_8[l0 / 2] & 0x03) << 7) | ((signs_packed_8[l0 / 2] & 0x0C) << 21));
+            const int signs1 = sign_mask(((signs_packed_8[l0 / 2] & 0x30) << 3) | ((signs_packed_8[l0 / 2] & 0xC0) << 17));
+            r.g[l0 + 0] = apply_sign_mask(grid_pos.x, signs0);
+            r.g[l0 + 1] = apply_sign_mask(grid_pos.y, signs1);
         }
         r.ls = 1 + 2 * ((ld8i<NT>(bq3->scales + iqs / 4) >> ((iqs << 1) & 0x04)) & 0x0F);
         r.dw = ldhalf<NT>(&bq3->d);
@@ -2688,10 +2704,10 @@ struct S26IQ3S {   // Split<21>::load with the grid from `grid` (LT) or iq3s_gri
         for (int l0 = 0; l0 < 8; l0 += 2) {
             const int i0 = qs[l0 + 0] | ((qh << (8 - l0)) & 0x100), i1 = qs[l0 + 1] | ((qh << (7 - l0)) & 0x100);
             const int2 grid_pos = LT ? make_int2(grid[i0], grid[i1]) : make_int2(iq3s_grid[i0], iq3s_grid[i1]);
-            const int signs0 = __vcmpne4(((signs_packed_8[l0 / 2] & 0x03) << 7) | ((signs_packed_8[l0 / 2] & 0x0C) << 21), 0x00000000);
-            const int signs1 = __vcmpne4(((signs_packed_8[l0 / 2] & 0x30) << 3) | ((signs_packed_8[l0 / 2] & 0xC0) << 17), 0x00000000);
-            r.g[l0 + 0] = __vsub4(grid_pos.x ^ signs0, signs0);
-            r.g[l0 + 1] = __vsub4(grid_pos.y ^ signs1, signs1);
+            const int signs0 = sign_mask(((signs_packed_8[l0 / 2] & 0x03) << 7) | ((signs_packed_8[l0 / 2] & 0x0C) << 21));
+            const int signs1 = sign_mask(((signs_packed_8[l0 / 2] & 0x30) << 3) | ((signs_packed_8[l0 / 2] & 0xC0) << 17));
+            r.g[l0 + 0] = apply_sign_mask(grid_pos.x, signs0);
+            r.g[l0 + 1] = apply_sign_mask(grid_pos.y, signs1);
         }
         r.ls = 1 + 2 * ((bq3->scales[iqs / 4] >> ((iqs << 1) & 0x04)) & 0x0F);
         r.dw = __half2float(bq3->d);
@@ -3787,10 +3803,10 @@ template<int SG> struct DotG<22, SG> { __device__ static __forceinline__ float f
             acc = ggml_cuda_dp4a(grid_pos[1] ^ m1, u1, acc);
             acc -= ggml_cuda_dp4a(m1, u1, ggml_cuda_dp4a(m0, u0, 0));
         } else {
-            const int signs0 = __vcmpne4(((signs_packed_8[l0 / 2] & 0x03) << 7) | ((signs_packed_8[l0 / 2] & 0x0C) << 21), 0x00000000);
-            const int signs1 = __vcmpne4(((signs_packed_8[l0 / 2] & 0x30) << 3) | ((signs_packed_8[l0 / 2] & 0xC0) << 17), 0x00000000);
-            const int grid_l = __vsub4(grid_pos[0] ^ signs0, signs0);
-            const int grid_h = __vsub4(grid_pos[1] ^ signs1, signs1);
+            const int signs0 = sign_mask(((signs_packed_8[l0 / 2] & 0x03) << 7) | ((signs_packed_8[l0 / 2] & 0x0C) << 21));
+            const int signs1 = sign_mask(((signs_packed_8[l0 / 2] & 0x30) << 3) | ((signs_packed_8[l0 / 2] & 0xC0) << 17));
+            const int grid_l = apply_sign_mask(grid_pos[0], signs0);
+            const int grid_h = apply_sign_mask(grid_pos[1], signs1);
             acc = ggml_cuda_dp4a(grid_l, u0, acc);
             acc = ggml_cuda_dp4a(grid_h, u1, acc);
         }
@@ -3818,10 +3834,10 @@ template<int SG> struct DotG<18, SG> { __device__ static __forceinline__ float f
             sumi = ggml_cuda_dp4a(grid_pos.y ^ m1, u1, sumi);
             sumi -= ggml_cuda_dp4a(m1, u1, ggml_cuda_dp4a(m0, u0, 0));
         } else {
-            const int signs0 = __vcmpne4(signs & 0x08040201, 0);
-            const int grid_l = __vsub4(grid_pos.x ^ signs0, signs0);
-            const int signs1 = __vcmpne4(signs & 0x80402010, 0);
-            const int grid_h = __vsub4(grid_pos.y ^ signs1, signs1);
+            const int signs0 = sign_mask(signs & 0x08040201);
+            const int grid_l = apply_sign_mask(grid_pos.x, signs0);
+            const int signs1 = sign_mask(signs & 0x80402010);
+            const int grid_h = apply_sign_mask(grid_pos.y, signs1);
             sumi = ggml_cuda_dp4a(grid_l, u0, sumi);
             sumi = ggml_cuda_dp4a(grid_h, u1, sumi);
         }
@@ -3852,10 +3868,10 @@ template<int SG> struct DotG<21, SG> { __device__ static __forceinline__ float f
             sumi = ggml_cuda_dp4a(grid_pos.y ^ m1, u1, sumi);
             sumi -= ggml_cuda_dp4a(m1, u1, ggml_cuda_dp4a(m0, u0, 0));
         } else {
-            const int signs0 = __vcmpne4(((signs_packed_8[l0 / 2] & 0x03) << 7) | ((signs_packed_8[l0 / 2] & 0x0C) << 21), 0x00000000);
-            const int signs1 = __vcmpne4(((signs_packed_8[l0 / 2] & 0x30) << 3) | ((signs_packed_8[l0 / 2] & 0xC0) << 17), 0x00000000);
-            const int grid_l = __vsub4(grid_pos.x ^ signs0, signs0);
-            const int grid_h = __vsub4(grid_pos.y ^ signs1, signs1);
+            const int signs0 = sign_mask(((signs_packed_8[l0 / 2] & 0x03) << 7) | ((signs_packed_8[l0 / 2] & 0x0C) << 21));
+            const int signs1 = sign_mask(((signs_packed_8[l0 / 2] & 0x30) << 3) | ((signs_packed_8[l0 / 2] & 0xC0) << 17));
+            const int grid_l = apply_sign_mask(grid_pos.x, signs0);
+            const int grid_h = apply_sign_mask(grid_pos.y, signs1);
             sumi = ggml_cuda_dp4a(grid_l, u0, sumi);
             sumi = ggml_cuda_dp4a(grid_h, u1, sumi);
         }
@@ -3886,10 +3902,10 @@ template<int SG> struct DotG<16, SG> { __device__ static __forceinline__ float f
             sumi -= ggml_cuda_dp4a(m1, u1, ggml_cuda_dp4a(m0, u0, 0));
         } else {
             const uint32_t signs = unpack_ksigns(aux32 >> (7 * k0 / 2));
-            const int signs0 = __vcmpne4(signs & 0x08040201, 0);
-            const int signs1 = __vcmpne4(signs & 0x80402010, 0);
-            sumi = ggml_cuda_dp4a((int) __vsub4(grid_pos.x ^ signs0, signs0), u0, sumi);
-            sumi = ggml_cuda_dp4a((int) __vsub4(grid_pos.y ^ signs1, signs1), u1, sumi);
+            const int signs0 = sign_mask(signs & 0x08040201);
+            const int signs1 = sign_mask(signs & 0x80402010);
+            sumi = ggml_cuda_dp4a((int) apply_sign_mask(grid_pos.x, signs0), u0, sumi);
+            sumi = ggml_cuda_dp4a((int) apply_sign_mask(grid_pos.y, signs1), u1, sumi);
         }
     }
     const int ls = aux32 >> 27 | 1;
