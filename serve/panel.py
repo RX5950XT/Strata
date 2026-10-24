@@ -136,7 +136,8 @@ def model_info(model_id: str, path: Path, cfg: dict[str, Any]) -> dict[str, Any]
     quant = next((p for p in model_id.split("-") if re.fullmatch(r"i?q\d\w*", p)), None)
     return {
         "id": model_id,
-        "label": ("去審查版" if "uncensored" in name else "原版") + f" · {quant.upper() if quant else model_id}"
+        "label": (cfg.get("label") or ("去審查版" if "uncensored" in name else "原版"))
+                 + f" · {quant.upper() if quant else model_id}"
                  + (f" · {ctx_label(ctx)}" if ctx else ""),
         "ctx_label": ctx_label(ctx) if ctx else None,
         "model_id": name,
