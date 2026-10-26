@@ -1,3 +1,11 @@
+# 上游 0.2.6 合併＋DeepSeek V4.1 去拒答版上 Colab G4
+
+- [x] 合併上游 0.1.45 → 0.2.6（1,758 個 commit：桌面 App、`strata launch`、引擎改首次啟動下載、DeepSeek V4.1-Flash 獨立引擎、Qwen3.6、Gyro、Intel Arc、DFlash2）。13 檔衝突保留 fork 的雙卡 worker、orca、configs/ 路徑、NO_WINDOW、STRATA_HIP_SWAR_SIGNS。
+- [x] 驗證：build-dual 編譯成功；setup 測試 menu／choices／golden 通過（golden 依上游「預設開圖片」重錄）；serve 1035 個測試 1 個錯（test_winjob，合併前在本機也錯）；SC117 雙卡 32K 一輪 A/B 解碼 38.6→43.5、29.3→34.1 tok/s，開頭輸出相同。engine-local 已換新，舊 exe 在該 session scratchpad old/。未 push。
+- [x] Colab G4 部署 Abiray IQ2_XXS＋DSpark（MTP）＋視覺塔，context 204,800；MTP 開約 93 tok/s、關約 64；其他載入參數無差。細節：bench/results/2026-10-26-colab-g4-ds41/。
+- [x] 整套 241 GiB 放 Google Drive `Strata-DS41/`；WSL `ds4-up` 一鍵開新 G4 從 Drive 拉回並啟動。
+- [ ] `ds4-up` 尚未在新機器實跑；200K 請求未完成；HTTP server 尚未把圖片送給 DeepSeek 引擎。
+
 # HIP IQ2/IQ3 正負號技巧（借鑑 llama.cpp）＋ 上游檢查
 
 - [x] 上游 Niko1221/Strata 最新 477ac13c（10/16）已合併，無新更新。

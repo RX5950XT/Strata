@@ -1,0 +1,8 @@
+#!/bin/bash
+# ds4-up [session]: a new Colab G4 that pulls the DeepSeek set from Google Drive and serves it (Drive is connected through rclone, no prompt)
+S=${1:-ds4}
+colab new -s $S --gpu G4 || exit 1
+colab upload -s $S ~/.config/rclone-gdrive.conf /content/rclone.conf
+colab upload -s $S ~/from_drive.sh /content/from_drive.sh
+echo 'import subprocess; subprocess.run("mkdir -p /root/.config/rclone && mv /content/rclone.conf /root/.config/rclone/rclone.conf && setsid nohup bash /content/from_drive.sh > /content/from_drive.log 2>&1 < /dev/null &", shell=True)' | colab exec -s $S
+echo "pulling from Drive on session $S: colab exec -s $S, then tail /content/from_drive.log and /content/logs/server.out"
