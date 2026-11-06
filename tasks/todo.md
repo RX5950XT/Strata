@@ -1,3 +1,11 @@
+# 上游 0.2.11 合併
+
+- [x] 合併 upstream/main（0.2.6 → 0.2.11，引擎 0.1.57），10 檔衝突，保留雙卡 worker。分支 `merge/upstream-0.2.11`，未 push。
+- [x] 修上游「看圖要用時才啟動」誤判第二張卡的看圖模組（主卡 cache 少 1000 格、prompt 區塊減半）。
+- [x] 舊新交錯 A/B：雙卡解碼與讀 prompt 都沒變慢，數字在 docs/DUAL-GPU.md。
+- [x] engine-local 換成 0.1.57，舊版留在 `engine-local/strata-0.1.51.exe`。
+- [ ] HIP／SYCL／Metal 未編譯驗證；未做長時間穩定性測試。
+
 # 上游 0.2.6 合併＋DeepSeek V4.1 去拒答版上 Colab G4
 
 - [x] 合併上游 0.1.45 → 0.2.6（1,758 個 commit：桌面 App、`strata launch`、引擎改首次啟動下載、DeepSeek V4.1-Flash 獨立引擎、Qwen3.6、Gyro、Intel Arc、DFlash2）。13 檔衝突保留 fork 的雙卡 worker、orca、configs/ 路徑、NO_WINDOW、STRATA_HIP_SWAR_SIGNS。

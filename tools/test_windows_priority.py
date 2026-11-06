@@ -9,7 +9,7 @@ import tempfile
 
 def main():
     source = (pathlib.Path(__file__).resolve().parents[1] / "src/program/generate.cpp").read_text()
-    entry = source.split("int main(int argc, char** argv) {", 1)[1]
+    entry = source.split("int main(int argc, char** argv) {", 1)[1].split("#endif", 1)[1]   # (the #if around main itself)
     code, dispatch = entry.split("#endif", 1)
     assert code.startswith("\n#ifdef _WIN32")
     assert dispatch.lstrip().startswith('if (argc > 1 && std::string(argv[1]) == "--expert-gpu-worker")')

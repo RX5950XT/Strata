@@ -179,6 +179,30 @@
 - 雙卡差異在這台機器的噪音內（±15%；最後一組兩邊同時掉到 35 左右，是背景負載）：沒變快，也沒變慢。單卡只量了一組。
 - 經 `serve/server.py`（orca IQ3_XXS 雙卡、200K、看圖開）：中文 121 token 40.7 tok/s、程式碼 400 token 34.2 tok/s，看圖答對，Anthropic 端點有回應。
 
+## 併入上游 0.2.11（2026-11-06）
+
+從 0.2.6 合併到 0.2.11（引擎 0.1.57），一般 merge，10 個檔案有衝突，雙卡 worker、`recoverable` 的 kernel 參數、`configs/` 路徑和 `NO_WINDOW` 都留著。要注意的地方：
+
+- 上游新增「看圖模組要用時才啟動」，條件是看圖模組和模型在同一張卡，還把主卡保留量從 700 提到 2048 MiB。這個 fork 的看圖模組放在第二張卡，條件卻成立了：主卡 cache 從約 3300 掉到 2341 格，prompt 區塊從 8192 變 4096，讀 64K prompt 從約 1360 掉到約 1005 tok/s，第二張卡也沒有空間給看圖模組。現在 `vision.gpu_uuid` 或 `--expert-gpu` 存在時就不走這條路（`serve/server.py` 的 `vision_on_demand_by_default`），看圖模組照舊跟著模型一起啟動。
+- 上游的 `--lookup-max-t` 預設變 12，引擎拆分後只看到一張卡，所以這裡也會打開。超過 8 個 token 的視窗會拆成兩組，每組最多 8 列，符合 worker 的 `kMaxTok`。
+- `--pcie-frac 0.40` 和 `--prefill 8192` 是設定檔明寫的，所以上游新的 PCIe 比例自動調整和 32768 區塊上限都不會影響這份設定。
+
+同一台機器，經 `serve/server.py`，SC117 IQ3_XXS，204800 context，看圖開，greedy，舊新交錯，每次都重開 server。第一輪舊版是冷啟動（23 tok/s），已排除：
+
+| 雙卡（tok/s，中位數） | 0.2.6 合併版 | 0.2.11 合併版 |
+| --- | ---: | ---: |
+| 程式碼，最多 1200 token，6 次 | 47.9 | 47.8 |
+| 故事，最多 1200 token，6 次 | 42.9 | 44.5 |
+| 64K prompt 之後解碼，最多 500 token，6 次 | 39.9 | 43.1 |
+| 短題混合（程式碼、故事、中文），最多 400 token | 43.0（18 次） | 43.5（24 次） |
+| 讀 64K prompt，3 次 | 1327 | 1374 |
+| 讀 128K prompt，2 次 | 1302 | 1336 |
+| 128K prompt 之後解碼，最多 300 token，2 次 | 42.7 | 43.2 |
+
+每次之間差到約 ±10%，所以解碼只能說沒變慢，不算變快。單卡只是對照：短題混合 12 次 42.8 → 41.9，差距在雜訊內；固定 prompt 那組只有一對，又遇到背景負載，不採用。
+
+看圖（紅藍各半的圖，3.5 秒答對）、Anthropic 端點、工具呼叫實跑正常。沒有驗證 HIP、SYCL、Metal 的編譯，也沒有長時間穩定性測試。
+
 ## 為什麼接在 pool hook
 
 每一層的 CPU 交接流程本來就長這樣：GPU0 用 doorbell 把 `x` 和 miss 清單寫進 mapped pinned 記憶體，host 執行緒呼叫 `pool(...)` 算完 miss，把結果寫進 `y_miss`，最後設定 `flag`，GPU0 才接著往下跑（`src/core/session.cpp:915`、`:678`；`src/core/verify.cpp` 的 verify window 也是同一種形狀，走 `drive_pool_multi`）。
