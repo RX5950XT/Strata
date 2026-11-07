@@ -37,3 +37,12 @@ Review：prefill `moe_fused_iq.cu` 的同類修改與 `v_perm` 廣播在 gfx1100
 Review：同一程序內兩批共 384 個短段（正常／停用 boost 各半），正常組每個 token 數 48 對；移除大部分 RAM 讀取可省 21–27%，gate/up 仍為最大階段，定位 CPU 側處理為主，RAM 供料次之。DMA 對照證實供料競爭會增加 RAM 組耗時。完整 100k／200k 生成回合因輸出／路由不同，不作純時脈因果證據。正式 config 不變，原電源模式已還原，本次私有測試程序已關閉；完整紀錄在 bench/results/2026-10-14-local-5700x-cpu-ram/。
 
 更正：使用者確認 PBO 全程開啟。上述 boost 對照只變更 Windows 電源方案，沒有切換 BIOS PBO；開啟 PBO 不是新的改善，進一步調整 PBO 參數的增益未驗證。
+
+# 解碼速度還能擠多少（0.2.11）
+
+- [x] 量解碼時間分布：CPU 專家約 41%，等 GPU 約 36%，預測模型約 7%，調整約 5%。
+- [x] 交錯測 8 種設定，淘汰 `--spec-min-p`、`STRATA_ROUTE_TAIL_SKIP=6`。
+- [x] 關遊戲後補跑，再用交錯順序確認，加測 190K prompt。
+- [x] 設定檔改 `--kv-grow`、`--vram-reserve-mib 1036`，實跑確認能啟動並回答。
+
+Review：數字在 docs/DUAL-GPU.md「讓主卡別塞太滿」。開遊戲那幾批不算數。沒有重測單卡，也沒有長時間穩定性測試。
