@@ -1,3 +1,14 @@
+# 上游 0.2.19 合併＋Inkling-2-Mini 去拒答版（2026-11-22）
+
+- [x] 合併 upstream/main（0.2.11 → 0.2.19，引擎 0.1.65，2,545 個 commit）。上游搬目錄：`src/`→`engine/src/`、`serve/`、`setup.py`、`data/`→`terminal/`。分支 `merge/upstream-0.2.19`，未 push。
+- [x] fork 的資料仍在 repo 根目錄（configs/、models/、packs/、engine-local/、.panel/）；面板用 `REPO = terminal/..` 找它們，server 從 `terminal/` 跑。SC117 設定的 expert-profile 改指 `terminal/data/`。
+- [x] 雙卡主引擎用 `build-dual.bat`（`-S engine`，vendored ggml）重編，engine-local 換 0.1.65，舊版 `engine-local/strata-0.1.57.exe`。SC117 雙卡 A/B 一輪：解碼新 42–48、舊 42–50 tok/s，worker 正常。
+- [x] Inkling：跑官方 SQ-10＋OpenUncensored 的 20 個 `wo_ud`（`tools/inkling_uncensor_patch.py`），單卡 64K、fp8 KV、看圖、DSpark。數字與原因在 docs/INKLING-UNCENSORED.md。
+- [x] Abiray Q3_K_M GGUF：載入器加主線命名、EP 後端加 Q3_K／Q5_0／Q5_1、修 `d_dense_x_` 溢位；能跑但只有 EP 慢路徑（約 5 tok/s）。
+- [x] 面板支援 Inkling（DSpark、引擎內建看圖、從 server log 讀速度）；PANEL.bat 改 `terminal\serve\panel.py`。
+- [ ] setup.py 的 fork 雙卡設定流程（choose_expert_gpu、orca 家族設定）上游改到 strata_control/setup_config.py，沒移植：重跑 setup 不會自動產生 expert_gpu 設定，現有設定檔不受影響。
+- [ ] serve 測試 8 個在純上游一樣失敗（inkling_serve_e2e 2、server_script_mode、stop_closed_pipe 5）；未做 HIP/SYCL/Metal 編譯與長時間穩定性測試。
+
 # 上游 0.2.11 合併
 
 - [x] 合併 upstream/main（0.2.6 → 0.2.11，引擎 0.1.57），10 檔衝突，保留雙卡 worker。分支 `merge/upstream-0.2.11`，未 push。
