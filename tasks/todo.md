@@ -9,7 +9,8 @@
 - [x] 第三輪（11/23）：解碼／樹驗證注意力和 DSpark 草稿全域層改 tensor core（`ink_dec_tc.cuh`）、讀 prompt 兩張卡同時做（一段拆兩半交錯，`emit_two_lanes`，交接改兩組緩衝區）。200K 雙卡：prompt 129 秒、解碼投機 42.6／不投機 36.0 tok/s；投機在每個長度都贏，兩份設定拿掉 `--draft-max-pos`。上一版 exe：`strata-inkling-r2.exe`。
 - [x] 第四輪（11/23）：專家讀 prompt 改 128 列一塊（SF4 另一份 64 列清單）、注意力前混合 kernel 排程改相鄰、8 路相加 float4。KLD 不變；200K 雙卡 prompt 125.4 → 118.7 秒（同一天對照），156,703 token 真實長文 85.8 秒答對。上一版 exe：`strata-inkling-r3.exe`。
 - [x] HIP：WSL ROCm 7.2.4（補裝 hipblas/rocblas/hipblaslt-dev）gfx1100 編得過、`--help` 能跑；連結要 `-DCMAKE_EXE_LINKER_FLAGS=-no-pie`（上游 HIP 物件沒 -fPIC，跟這次改動無關）。SYCL：WSL 裝 oneAPI 2026.2，`build_inkling_sycl.sh jit` 原始碼全編過，連結缺 `quant::dequant_row`（上游腳本少編一個檔，跟這次無關）；SYCL 引擎沒用到改過的共用檔。
-- [ ] 還沒做：專家 INT8 只到峰值約 2 成（沒有 ncu 計數器權限，要管理員開）；後段卡在 3060 Ti 全域注意力（約峰值 7 成）；樹驗證的專家讀取沒動。
+- [x] 第五輪（11/23）：GPU 效能計數器登錄檔已開（`NVTweak\RmProfilingAdminOnly=0`，重開機後生效；之前用管理員跑 ncu）。讀 prompt 專家 activation 改 `cp.async` 預取（−3～−11%）；驗證專家 kernel 限制每 SM 3 個 block（255 → 168 暫存器，gate/up −16%、down −10%）。KLD 與輸出 token 完全相同（`INK_BENCH_TOKENS`）；雙卡 200K 117–121 秒，跟上一版一樣。HIP 編過，SYCL 沒用到這兩個檔。上一版 exe：`strata-inkling-r4.exe`。
+- [ ] 還沒做：後段卡在 3060 Ti 全域注意力（約峰值 7 成）；專家讀 prompt 仍只到 INT8 峰值約 2 成（權重沒對齊 16 位元組，要改檔案格式才能用 `cp.async`）。
 - [x] Abiray Q3_K_M GGUF：載入器加主線命名、EP 後端加 Q3_K／Q5_0／Q5_1、修 `d_dense_x_` 溢位；能跑但只有 EP 慢路徑（約 5 tok/s）。
 - [x] 面板支援 Inkling（DSpark、引擎內建看圖、從 server log 讀速度）；PANEL.bat 改 `terminal\serve\panel.py`。
 - [ ] setup.py 的 fork 雙卡設定流程（choose_expert_gpu、orca 家族設定）上游改到 strata_control/setup_config.py，沒移植：重跑 setup 不會自動產生 expert_gpu 設定，現有設定檔不受影響。

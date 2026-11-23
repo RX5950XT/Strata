@@ -183,6 +183,8 @@ static int cmd_bench(const std::string& model_path, const BackendOpts& bopts, in
     double t_dec0 = now_s();
     int total_gen = 0;
     int spec_steps = 0, spec_emit = 0;   // fork: tokens per spec step, printed below
+    uint64_t tok_hash = 1469598103934665603ull;   // fork: INK_BENCH_TOKENS=1 prints a hash of slot 0's tokens
+    auto hash_tok = [&](int32_t t) { tok_hash = (tok_hash ^ (uint32_t)t) * 1099511628211ull; };
     if (use_dspark && P == 1) {
         int cur_pos = prompt_len;
         while (total_gen < gen_len) {
@@ -195,6 +197,7 @@ static int cmd_bench(const std::string& model_path, const BackendOpts& bopts, in
                 if (n_emit < 0) { fprintf(stderr, "bench spec err: %s\n", err.c_str()); return 1; }
                 if (n_emit > 0) {
                     ++spec_steps; spec_emit += n_emit;
+                    for (int i = 0; i < n_emit; ++i) hash_tok(emitted[i]);
                     next_tok[0] = emitted[n_emit - 1];
                     cur_pos += n_emit;
                     total_gen += n_emit;
@@ -211,6 +214,7 @@ static int cmd_bench(const std::string& model_path, const BackendOpts& bopts, in
             int32_t best = 0;
             for (int i = 1; i < V; ++i) if (logits[i] > logits[best]) best = i;
             next_tok[0] = best;
+            hash_tok(best);
             ++total_gen;
         }
     } else {
@@ -227,11 +231,15 @@ static int cmd_bench(const std::string& model_path, const BackendOpts& bopts, in
                 int32_t best = 0;
                 for (int i = 1; i < V; ++i) if (lg[i] > lg[best]) best = i;
                 next_tok[s] = best;
+                if (s == 0) hash_tok(best);
                 ++total_gen;
             }
         }
     }
     double dec_s = now_s() - t_dec0;
+    const char* bench_tok_env = std::getenv("INK_BENCH_TOKENS");
+    if (bench_tok_env && bench_tok_env[0] == '1')
+        fprintf(stderr, "[bench] tokens hash %016llx\n", (unsigned long long)tok_hash);
     if (spec_steps > 0)
         fprintf(stderr, "[bench] spec steps %d, %.2f tokens/step, %d plain decode steps\n", spec_steps,
                 (double)spec_emit / spec_steps, total_gen - spec_emit);

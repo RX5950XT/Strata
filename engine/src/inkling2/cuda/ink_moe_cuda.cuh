@@ -1211,9 +1211,18 @@ __device__ __forceinline__ void sk_dn_paired2_4lane(
     }
 }
 
+#ifndef INK_SK_MINB_GU
+#define INK_SK_MINB_GU 3
+#endif
+#ifndef INK_SK_MINB_DN
+#define INK_SK_MINB_DN 3
+#endif
+// fork: the format switch inlines seven unpackers and nvcc used 255 registers for MAX_M=4 (2 blocks per SM); 3 blocks
+// per SM (168 registers) made tree-verify gate/up -14% and down -6%. 4 blocks (128) spilled; M=1 is left alone.
+#define INK_SK_MINB(m, n) (((m) == 4) ? (n) : 1)
 // Grid: (1152 / 32 = 36, max_act), Block: 128 (32 features/CTA, 4 lanes/feature -> 100% coalesced, 0 inner shuffles!)
 template <int MAX_M>
-__global__ void __launch_bounds__(128) k_ink_moe_gu_sk(
+__global__ void __launch_bounds__(128, INK_SK_MINB(MAX_M, INK_SK_MINB_GU)) k_ink_moe_gu_sk(
     const uint8_t* __restrict__ sec4_base,
     const InkExpertDev* __restrict__ experts,
     InkMoeTables tb,
@@ -1285,7 +1294,7 @@ __global__ void __launch_bounds__(128) k_ink_moe_gu_sk(
 }
 
 template <int MAX_M>
-__global__ void __launch_bounds__(128) k_ink_moe_dn_sk(
+__global__ void __launch_bounds__(128, INK_SK_MINB(MAX_M, INK_SK_MINB_DN)) k_ink_moe_dn_sk(
     const uint8_t* __restrict__ sec4_base,
     const InkExpertDev* __restrict__ experts,
     InkMoeTables tb,
@@ -1448,6 +1457,25 @@ inline bool ink_has_wmma_f16() {
     return cached != 0;
 }
 
+// fork: 16-byte async copy global -> shared (sm_80+), used to fetch the next k group's activations during the MMAs
+__device__ __forceinline__ void ink_cp16(void* sdst, const void* gsrc) {
+#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+    const unsigned d = (unsigned)__cvta_generic_to_shared(sdst);
+    asm volatile("cp.async.cg.shared.global [%0], [%1], 16;\n" :: "r"(d), "l"(gsrc));
+#endif
+}
+__device__ __forceinline__ void ink_cp_commit() {
+#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+    asm volatile("cp.async.commit_group;\n");
+#endif
+}
+template <int N>
+__device__ __forceinline__ void ink_cp_wait() {
+#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+    asm volatile("cp.async.wait_group %0;\n" :: "n"(N));
+#endif
+}
+
 // Persistent Coalesced 256-Thread INT8 Tensor Core S_K MoE Kernel (sm_80..sm_121: GU=true -> Gate+Up+SITU, GU=false -> Paired-2-Row Down)
 // All 256 threads cooperate (8 coalesced lanes/row x 32 rows/wave x 4 waves = 128 rows) with compile-time FMT dispatch!
 template <bool GU, int TR, int FMT>
@@ -1461,10 +1489,8 @@ __device__ __forceinline__ void ink_moe_sk_tc_kloop(
     const InkQ8_1_G64* __restrict__ act_sk,
     const int32_t* __restrict__ s_row,
     int8_t (&s_wq)[128][80],
-    int8_t (&s_aq)[TR][80],
+    int8_t (&s_aq)[2][TR][80],   // fork: two buffers, each row is one InkQ8_1_G64 (qs, then d and s at byte 64)
     float (&s_wsc)[128],
-    float (&s_ad)[TR],
-    float (&s_as)[TR],
     float (&acc)[(128 / (8 / (TR / 16))) / 16][2][4]) {
     constexpr int kWR      = 128;
     constexpr int NG       = GU ? (kInkHidden / 64) : (kInkInter / 64);
@@ -1482,7 +1508,22 @@ __device__ __forceinline__ void ink_moe_sk_tc_kloop(
     const int r_in_w = tid >> 3;  // 0..31 rows per wave
     const int lg     = tid & 7;   // 0..7 coalesced lanes per row (8 weights/lane = 64 weights/row!)
 
+    // fork: the activation rows of group xg+1 are copied (cp.async, 5 x 16 B per row) while group xg is decoded and
+    // multiplied; same bytes and the same arithmetic as loading them in place.
+    auto load_act = [&](int xg_, int buf) {
+        for (int c = tid; c < nrows * 5; c += 256) {
+            const int r = c / 5;
+            const int q = c - r * 5;
+            ink_cp16(&s_aq[buf][r][q * 16],
+                     reinterpret_cast<const uint8_t*>(act_sk + (size_t)s_row[r] * NG + xg_) + q * 16);
+        }
+        ink_cp_commit();
+    };
+    load_act(0, 0);
+
     for (int xg = 0; xg < NG; ++xg) {
+        const int buf = xg & 1;
+        if (xg + 1 < NG) load_act(xg + 1, buf ^ 1);
         // 1. ALL 256 threads unpack 128 weight rows x 64 weights in 4 coalesced waves of 32 rows!
 #pragma unroll
         for (int wave = 0; wave < 4; ++wave) {
@@ -1507,37 +1548,32 @@ __device__ __forceinline__ void ink_moe_sk_tc_kloop(
             d4[2 * lg + 1] = w1;
             if (lg == 0) s_wsc[row_s] = f16_to_f32(ld16_u(blk)) * ((float)blk[2 + sg] * (1.0f / 255.0f));
         }
-        // 2. Load TR activation blocks (2 threads per row -> <= 128 threads active)
-        if (tid < nrows * 2) {
-            const int r = tid >> 1;
-            const int h = tid & 1;
-            const InkQ8_1_G64& xb = act_sk[(size_t)s_row[r] * NG + xg];
-            const uint4* src = reinterpret_cast<const uint4*>(xb.qs + h * 32);
-            uint4* dst = reinterpret_cast<uint4*>(s_aq[r] + h * 32);
-            dst[0] = src[0]; dst[1] = src[1];
-            if (h == 0) { s_ad[r] = xb.d; s_as[r] = xb.s; }
-        }
+        // 2. this group's activations (copied during the previous group) must have landed
+        if (xg + 1 < NG) ink_cp_wait<1>(); else ink_cp_wait<0>();
         __syncthreads();
+        const int8_t (&aq)[TR][80] = s_aq[buf];
+#define INK_AD(r) (*reinterpret_cast<const float*>(aq[(r)] + 64))
+#define INK_AS(r) (*reinterpret_cast<const float*>(aq[(r)] + 68))
 
         // 3. Run 2x mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 (k=0..31 and k=32..63)!
         if (on0) {
-            const uint32_t b0_0 = *reinterpret_cast<const uint32_t*>(s_aq[nb0 + g] + 4 * tig);
-            const uint32_t b0_1 = *reinterpret_cast<const uint32_t*>(s_aq[nb0 + g] + 16 + 4 * tig);
-            const uint32_t b0_2 = *reinterpret_cast<const uint32_t*>(s_aq[nb0 + g] + 32 + 4 * tig);
-            const uint32_t b0_3 = *reinterpret_cast<const uint32_t*>(s_aq[nb0 + g] + 48 + 4 * tig);
+            const uint32_t b0_0 = *reinterpret_cast<const uint32_t*>(aq[nb0 + g] + 4 * tig);
+            const uint32_t b0_1 = *reinterpret_cast<const uint32_t*>(aq[nb0 + g] + 16 + 4 * tig);
+            const uint32_t b0_2 = *reinterpret_cast<const uint32_t*>(aq[nb0 + g] + 32 + 4 * tig);
+            const uint32_t b0_3 = *reinterpret_cast<const uint32_t*>(aq[nb0 + g] + 48 + 4 * tig);
             uint32_t b1_0 = 0, b1_1 = 0, b1_2 = 0, b1_3 = 0;
             if (on1) {
-                b1_0 = *reinterpret_cast<const uint32_t*>(s_aq[nb0 + 8 + g] + 4 * tig);
-                b1_1 = *reinterpret_cast<const uint32_t*>(s_aq[nb0 + 8 + g] + 16 + 4 * tig);
-                b1_2 = *reinterpret_cast<const uint32_t*>(s_aq[nb0 + 8 + g] + 32 + 4 * tig);
-                b1_3 = *reinterpret_cast<const uint32_t*>(s_aq[nb0 + 8 + g] + 48 + 4 * tig);
+                b1_0 = *reinterpret_cast<const uint32_t*>(aq[nb0 + 8 + g] + 4 * tig);
+                b1_1 = *reinterpret_cast<const uint32_t*>(aq[nb0 + 8 + g] + 16 + 4 * tig);
+                b1_2 = *reinterpret_cast<const uint32_t*>(aq[nb0 + 8 + g] + 32 + 4 * tig);
+                b1_3 = *reinterpret_cast<const uint32_t*>(aq[nb0 + 8 + g] + 48 + 4 * tig);
             }
-            const float xd00 = s_ad[nb0 + 2 * tig + 0], xs00 = s_as[nb0 + 2 * tig + 0];
-            const float xd01 = s_ad[nb0 + 2 * tig + 1], xs01 = s_as[nb0 + 2 * tig + 1];
-            const float xd10 = on1 ? s_ad[nb0 + 8 + 2 * tig + 0] : 0.0f;
-            const float xs10 = on1 ? s_as[nb0 + 8 + 2 * tig + 0] : 0.0f;
-            const float xd11 = on1 ? s_ad[nb0 + 8 + 2 * tig + 1] : 0.0f;
-            const float xs11 = on1 ? s_as[nb0 + 8 + 2 * tig + 1] : 0.0f;
+            const float xd00 = INK_AD(nb0 + 2 * tig + 0), xs00 = INK_AS(nb0 + 2 * tig + 0);
+            const float xd01 = INK_AD(nb0 + 2 * tig + 1), xs01 = INK_AS(nb0 + 2 * tig + 1);
+            const float xd10 = on1 ? INK_AD(nb0 + 8 + 2 * tig + 0) : 0.0f;
+            const float xs10 = on1 ? INK_AS(nb0 + 8 + 2 * tig + 0) : 0.0f;
+            const float xd11 = on1 ? INK_AD(nb0 + 8 + 2 * tig + 1) : 0.0f;
+            const float xs11 = on1 ? INK_AS(nb0 + 8 + 2 * tig + 1) : 0.0f;
 
 #pragma unroll
             for (int i = 0; i < NI; ++i) {
@@ -1587,6 +1623,8 @@ __device__ __forceinline__ void ink_moe_sk_tc_kloop(
                 }
             }
         }
+#undef INK_AD
+#undef INK_AS
         if (xg + 1 < NG) __syncthreads();
     }
 }
@@ -1611,10 +1649,8 @@ __global__ void __launch_bounds__(256) k_ink_moe_sk_tc(
     constexpr int ASTR     = 80;
 
     __shared__ alignas(16) int8_t  s_wq[kWR][WSTR];
-    __shared__ alignas(16) int8_t  s_aq[TR][ASTR];
+    __shared__ alignas(16) int8_t  s_aq[2][TR][ASTR];
     __shared__ float               s_wsc[kWR];
-    __shared__ float               s_ad[TR];
-    __shared__ float               s_as[TR];
     __shared__ int32_t             s_row[TR];
     __shared__ float               s_rw[TR];
 
@@ -1650,10 +1686,11 @@ __global__ void __launch_bounds__(256) k_ink_moe_sk_tc(
                 if constexpr (!GU) s_rw[tid] = topk_w[tb.pairs[row0 + tid]];
             } else {
                 s_row[tid] = -1;
-                s_ad[tid] = 0.0f; s_as[tid] = 0.0f;
                 if constexpr (!GU) s_rw[tid] = 0.0f;
-                uint32_t* z = reinterpret_cast<uint32_t*>(s_aq[tid]);
-                for (int k = 0; k < 16; ++k) z[k] = 0u;
+                for (int b = 0; b < 2; ++b) {   // qs, d and s of both buffers
+                    uint32_t* z = reinterpret_cast<uint32_t*>(s_aq[b][tid]);
+                    for (int k = 0; k < 18; ++k) z[k] = 0u;
+                }
             }
         }
         __syncthreads();
@@ -1663,13 +1700,13 @@ __global__ void __launch_bounds__(256) k_ink_moe_sk_tc(
         const bool on1 = nb0 + 8 < nrows;
 
         switch (fmt) {
-            case FMT_S2_K: ink_moe_sk_tc_kloop<GU, TR, FMT_S2_K>(body, ed.dn_off, fb, nrows, tid, wf, nb0, g, tig, on0, on1, act_sk, s_row, s_wq, s_aq, s_wsc, s_ad, s_as, acc); break;
-            case FMT_S3_K: ink_moe_sk_tc_kloop<GU, TR, FMT_S3_K>(body, ed.dn_off, fb, nrows, tid, wf, nb0, g, tig, on0, on1, act_sk, s_row, s_wq, s_aq, s_wsc, s_ad, s_as, acc); break;
-            case FMT_S4_K: ink_moe_sk_tc_kloop<GU, TR, FMT_S4_K>(body, ed.dn_off, fb, nrows, tid, wf, nb0, g, tig, on0, on1, act_sk, s_row, s_wq, s_aq, s_wsc, s_ad, s_as, acc); break;
-            case FMT_S5_K: ink_moe_sk_tc_kloop<GU, TR, FMT_S5_K>(body, ed.dn_off, fb, nrows, tid, wf, nb0, g, tig, on0, on1, act_sk, s_row, s_wq, s_aq, s_wsc, s_ad, s_as, acc); break;
-            case FMT_S6_K: ink_moe_sk_tc_kloop<GU, TR, FMT_S6_K>(body, ed.dn_off, fb, nrows, tid, wf, nb0, g, tig, on0, on1, act_sk, s_row, s_wq, s_aq, s_wsc, s_ad, s_as, acc); break;
-            case FMT_S8_K: ink_moe_sk_tc_kloop<GU, TR, FMT_S8_K>(body, ed.dn_off, fb, nrows, tid, wf, nb0, g, tig, on0, on1, act_sk, s_row, s_wq, s_aq, s_wsc, s_ad, s_as, acc); break;
-            case FMT_S1_5: ink_moe_sk_tc_kloop<GU, TR, FMT_S1_5>(body, ed.dn_off, fb, nrows, tid, wf, nb0, g, tig, on0, on1, act_sk, s_row, s_wq, s_aq, s_wsc, s_ad, s_as, acc); break;
+            case FMT_S2_K: ink_moe_sk_tc_kloop<GU, TR, FMT_S2_K>(body, ed.dn_off, fb, nrows, tid, wf, nb0, g, tig, on0, on1, act_sk, s_row, s_wq, s_aq, s_wsc, acc); break;
+            case FMT_S3_K: ink_moe_sk_tc_kloop<GU, TR, FMT_S3_K>(body, ed.dn_off, fb, nrows, tid, wf, nb0, g, tig, on0, on1, act_sk, s_row, s_wq, s_aq, s_wsc, acc); break;
+            case FMT_S4_K: ink_moe_sk_tc_kloop<GU, TR, FMT_S4_K>(body, ed.dn_off, fb, nrows, tid, wf, nb0, g, tig, on0, on1, act_sk, s_row, s_wq, s_aq, s_wsc, acc); break;
+            case FMT_S5_K: ink_moe_sk_tc_kloop<GU, TR, FMT_S5_K>(body, ed.dn_off, fb, nrows, tid, wf, nb0, g, tig, on0, on1, act_sk, s_row, s_wq, s_aq, s_wsc, acc); break;
+            case FMT_S6_K: ink_moe_sk_tc_kloop<GU, TR, FMT_S6_K>(body, ed.dn_off, fb, nrows, tid, wf, nb0, g, tig, on0, on1, act_sk, s_row, s_wq, s_aq, s_wsc, acc); break;
+            case FMT_S8_K: ink_moe_sk_tc_kloop<GU, TR, FMT_S8_K>(body, ed.dn_off, fb, nrows, tid, wf, nb0, g, tig, on0, on1, act_sk, s_row, s_wq, s_aq, s_wsc, acc); break;
+            case FMT_S1_5: ink_moe_sk_tc_kloop<GU, TR, FMT_S1_5>(body, ed.dn_off, fb, nrows, tid, wf, nb0, g, tig, on0, on1, act_sk, s_row, s_wq, s_aq, s_wsc, acc); break;
             default: break;
         }
 
