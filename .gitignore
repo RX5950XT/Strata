@@ -43,6 +43,7 @@ td.log
 /terminal/run-*.sh
 /run-*.sh
 /configs/
+/conversation-spill/
 /terminal/configs/
 /terminal/strata-*.json
 /strata-*.json
