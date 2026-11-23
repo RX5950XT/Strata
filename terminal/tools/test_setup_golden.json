@@ -834,7 +834,9 @@
     "int8",
     "--resident-budget-gib",
     "31",
-    "--vision"
+    "--vision",
+    "--vram-reserve-mib",
+    "700"
    ],
    "cwd": "<T>",
    "env": {

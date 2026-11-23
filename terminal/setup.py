@@ -7795,8 +7795,13 @@ CONFIGS = None                                 # a test may point it at a folder
 
 def configs_dir() -> Path:
     """strata-<model>.json (the installed models) and their engine logs.  Read from ROOT at call time, so a test that
-    points ROOT at a temporary folder never writes the real configs."""
-    return CONFIGS or ROOT / "configs"
+    points ROOT at a temporary folder never writes the real configs.  fork: this checkout keeps configs/ at the repo
+    root (next to PANEL.bat), where the control panel reads them, while setup itself runs from terminal/."""
+    if CONFIGS:
+        return CONFIGS
+    if ROOT.name == "terminal" and (ROOT.parent / "PANEL.bat").is_file():
+        return ROOT.parent / "configs"
+    return ROOT / "configs"
 
 
 def model_config_files(folder: Path) -> list:
@@ -8470,6 +8475,8 @@ def move_over_old_layout() -> list:
     START-HERE.bat / setup.sh move .venv before Python starts.  Returns the (old, new) pairs moved."""
     old = ROOT.parent
     if ROOT.name != "terminal" or not (old / "engine" / "CMakeLists.txt").is_file() or any(ROOT.glob("strata-*.json")):
+        return []
+    if (old / "PANEL.bat").is_file():                  # fork: configs/, models/, packs/, mtp/ stay at the repo root (configs_dir)
         return []
     pairs = []
     for pat in OLD_LAYOUT_FILES:
@@ -12087,7 +12094,7 @@ def main() -> int:
                       *(["--ple-gguf", str(ple)] if len(shards) <= 2 else [])]
     from strata_control import setup_config            # the seam: the lines that built the run config live in strata_control/setup_config.py
     _built = setup_config.config_for(setup_config.SetupInputs(
-        a=a, adopted=adopted, chosen=chosen, cuda_tk=cuda_tk, draft_vocab=draft_vocab, eng=eng, engine_ver=engine_ver, esp=esp, fam=fam, family=family, gpu=gpu, hip=hip, in_budget=in_budget, lib_dirs=lib_dirs, low_ram=low_ram, meta=meta, mmproj=mmproj, model=model, model_args=model_args, models_dir=models_dir, multi=multi, pack=pack, ple=ple, port=port, q4_split=q4_split, ram=ram, reader=reader, ready=ready, rope_scale=rope_scale, rt=rt, scaling=scaling, shards=shards, tag=tag, vision=vision, ctx=ctx, kv=kv, resident=resident, budget=budget, GGUFFile=GGUFFile), sys.modules[__name__])
+        a=a, adopted=adopted, chosen=chosen, cuda_tk=cuda_tk, draft_vocab=draft_vocab, eng=eng, engine_ver=engine_ver, esp=esp, fam=fam, family=family, gpu=gpu, hip=hip, in_budget=in_budget, lib_dirs=lib_dirs, low_ram=low_ram, meta=meta, mmproj=mmproj, model=model, model_args=model_args, models_dir=models_dir, multi=multi, pack=pack, ple=ple, port=port, q4_split=q4_split, ram=ram, reader=reader, ready=ready, rope_scale=rope_scale, rt=rt, scaling=scaling, shards=shards, tag=tag, vision=vision, ctx=ctx, kv=kv, resident=resident, budget=budget, GGUFFile=GGUFFile, use_expert=use_expert), sys.modules[__name__])
     cfg, cfg_path, cal, args, ctx, kv, resident = (_built.cfg, _built.cfg_path, _built.cal, _built.args, _built.ctx, _built.kv, _built.resident)
     write_setup_config(cfg_path, cfg, adopted if adopted is not None and adopted.name == cfg_path.name else None, explicit_args(a),
                        after_carry=(lambda c: uma_cache_guard(c, model, gpu)) if gpu.get("uma") else None)

@@ -162,7 +162,8 @@ class Setup(unittest.TestCase):
             qwen = Path(d) / "strata-iq3_s.json"
             qwen.write_text(json.dumps({"exe": "/x/strata", "args": ["--model", "/m/q.gguf"], "model_name": "q"}), encoding="utf-8")
             before = sha(path)
-            with mock.patch.object(setup, "home", return_value=Path(d)):
+            with mock.patch.object(setup, "home", return_value=Path(d)), \
+                    mock.patch.object(setup, "CONFIGS", Path(d) / "configs"):   # fork: not this checkout's configs/
                 self.assertEqual(setup.installed_configs(), [qwen])
                 self.assertEqual(setup.retired_configs(), [path])
                 qwen.unlink()

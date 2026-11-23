@@ -67,6 +67,7 @@ class SetupInputs:
     resident: Any = None
     budget: Any = None
     GGUFFile: Any = None
+    use_expert: bool = False                       # fork: the second card's expert cache (choose_expert_gpu)
 
 
 @dataclass
@@ -153,6 +154,7 @@ def config_for(inp: SetupInputs, lib) -> SetupConfig:
     resident = inp.resident
     budget = inp.budget
     GGUFFile = inp.GGUFFile
+    use_expert = inp.use_expert
     CONTROL = lib.CONTROL
     DISPLAY_RESERVE_MIB = lib.DISPLAY_RESERVE_MIB
     GFX1103_OPT_IN = lib.GFX1103_OPT_IN
@@ -177,7 +179,10 @@ def config_for(inp: SetupInputs, lib) -> SetupConfig:
     cpu_sockets = lib.cpu_sockets
     desktop_reserve_note = lib.desktop_reserve_note
     draft_layer = lib.draft_layer
+    configs_dir = lib.configs_dir
     engine_exe = lib.engine_exe
+    expert_setup = lib.expert_setup
+    fail = lib.fail
     gfx_arch_is = lib.gfx_arch_is
     gpu_compute_mode = lib.gpu_compute_mode
     gpu_drives_display = lib.gpu_drives_display
@@ -428,7 +433,7 @@ def config_for(inp: SetupInputs, lib) -> SetupConfig:
         args += ["--control-vector-scaled", f"{esp}:1.0", "--control-vector-layer-range", "4", "44",
                  "--cvec-mode", "project", "--cvec-dir", "per-layer"]
     cfg = {"exe": engine_exe(eng), "args": args, "cwd": str(ROOT), "tokenizer": str(pack / "tokenizer"),
-           "model_name": f"{fam['name']}-{model.lower()}", "log": str(home() / f"strata-{tag.lower()}.log"),
+           "model_name": f"{fam['name']}-{model.lower()}", "log": str(configs_dir() / f"strata-{tag.lower()}.log"),
            "lib_dirs": lib_dirs, "port": port}
     if cuda_tk == 12:                                  # the experimental CUDA 12 engine (engine-cuda12/)
         cfg["cuda"] = 12
@@ -556,11 +561,13 @@ def config_for(inp: SetupInputs, lib) -> SetupConfig:
             cfg["parallel"] = 1
             ok("parallel requests: one at a time (--parallel 1)")
     if vision != "none":
-        old_cfg = home() / f"strata-{tag.lower()}.json"
+        old_cfg = configs_dir() / f"strata-{tag.lower()}.json"
         vt = vision_tokens(a.vision_tokens, vision, old_cfg if old_cfg.is_file() else adopted)
         cfg["vision"] = {"exe": str(eng / VEXE), "mmproj": str(mmproj),     # the text model, opened vocab-only:
                          "model": str(ready_paths(model, models_dir)["dense"] if ready else shards[0]),
                          "gpu": vision == "gpu", "max_tokens": vt}
+        if vision == "gpu" and gpu.get("spare"):       # fork: the image encoder on the second card
+            cfg["vision"]["gpu_uuid"] = gpu["spare"].get("uuid")
         if reader is not None:                          # AMD: the HIP reader with the CPU reader behind it, or the CPU reader
             from strata_control import vision_reader as VR
             cfg["vision"] = VR.vision_section(reader, cfg["vision"])
@@ -568,9 +575,21 @@ def config_for(inp: SetupInputs, lib) -> SetupConfig:
             cfg["vision"]["threads"] = vision_threads()
     elif a.vision_tokens is not None:
         warn("--vision-tokens: images are off for this model, so it is not used")
+    try:                                               # fork: the second card's expert cache
+        extra_cfg, extra_args = expert_setup(gpu, use_expert, (cfg.get("vision") or {}).get("gpu_uuid"))
+    except ValueError as exc:
+        fail(str(exc))
+    if extra_cfg:                                      # the server pairs the main uuid with expert_gpu (main first) for the engine
+        if not gpu.get("uuid"):
+            fail("expert GPU was requested, but the main GPU has no uuid")
+        cfg["gpu"] = gpu["uuid"]
+        cfg.pop("gpu_roles", None)                     # roles number the cards; this config names both by uuid
+    cfg.update(extra_cfg)                              # absent when the second cache is off: the file stays as before
+    args += extra_args                                 # cfg["args"] is this same list, so the flags are written with it
     if a.images:                                       # only when given: else an earlier "images" is carried over
         cfg["images"] = setup_images(a, gpu, hip, Path(a.models_dir))
-    cfg_path = home() / f"strata-{tag.lower()}.json"
+    configs_dir().mkdir(parents=True, exist_ok=True)       # fork: configs/, where the panel reads them
+    cfg_path = configs_dir() / f"strata-{tag.lower()}.json"
     cal = setup_calibration(cfg, hip)                  # #566: Linux HIP too; the tuning is offered on NVIDIA only
     if cal is not None:
         sys.path.insert(0, str(ROOT / "tools"))

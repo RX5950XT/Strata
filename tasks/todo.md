@@ -13,8 +13,9 @@
 - [ ] 還沒做：後段卡在 3060 Ti 全域注意力（約峰值 7 成）；專家讀 prompt 仍只到 INT8 峰值約 2 成（權重沒對齊 16 位元組，要改檔案格式才能用 `cp.async`）。
 - [x] Abiray Q3_K_M GGUF：載入器加主線命名、EP 後端加 Q3_K／Q5_0／Q5_1、修 `d_dense_x_` 溢位；能跑但只有 EP 慢路徑（約 5 tok/s）。
 - [x] 面板支援 Inkling（DSpark、引擎內建看圖、從 server log 讀速度）；PANEL.bat 改 `terminal\serve\panel.py`。
-- [ ] setup.py 的 fork 雙卡設定流程（choose_expert_gpu、orca 家族設定）上游改到 strata_control/setup_config.py，沒移植：重跑 setup 不會自動產生 expert_gpu 設定，現有設定檔不受影響。
-- [ ] serve 測試 8 個在純上游一樣失敗（inkling_serve_e2e 2、server_script_mode、stop_closed_pipe 5）；未做 HIP/SYCL/Metal 編譯與長時間穩定性測試。
+- [x] setup 雙卡設定移植（11/23）：`config_for` 補回 `expert_setup`（主卡 uuid＋`expert_gpu`＋`--expert-gpu 1`，拿掉 `gpu_roles`）與看圖放第二張卡；`configs_dir()` 在這個 checkout 指到根目錄 `configs/`（setup 之前看不到已裝的模型、寫到 `terminal/`）。`move_over_old_layout` 遇到根目錄有 PANEL.bat 就不搬（它曾把 packs/、mtp/、engine/*.exe 搬進 terminal/，已搬回）。setup 測試 14 個檔由失敗轉通過，golden 補回 `--vram-reserve-mib 700`。
+- [x] 穩定性（11/23，經面板 API，短文與 30K～150K 字藏碼長文交替）：Inkling 雙卡 200K 跑 23 輪 0 錯（143K token 長文 76 秒）；SC117 雙卡 20 分鐘 21 輪 0 錯（137K token 約 90 秒），log 無錯，兩張卡 VRAM 沒有往上爬。SC117 是會思考的模型，答案可能在 `reasoning_content`，`max_tokens` 要給夠。
+- [ ] serve 測試 8 個在純上游一樣失敗（inkling_serve_e2e 2、server_script_mode、stop_closed_pipe 5）；未做 Metal 編譯。
 
 # 上游 0.2.11 合併
 
