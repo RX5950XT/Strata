@@ -12,7 +12,7 @@
 - [x] 第五輪（11/23）：GPU 效能計數器登錄檔已開（`NVTweak\RmProfilingAdminOnly=0`，重開機後生效；之前用管理員跑 ncu）。讀 prompt 專家 activation 改 `cp.async` 預取（−3～−11%）；驗證專家 kernel 限制每 SM 3 個 block（255 → 168 暫存器，gate/up −16%、down −10%）。KLD 與輸出 token 完全相同（`INK_BENCH_TOKENS`）；雙卡 200K 117–121 秒，跟上一版一樣。HIP 編過，SYCL 沒用到這兩個檔。上一版 exe：`strata-inkling-r4.exe`。
 - [x] 第六輪（11/24）：讀 prompt 專家把 S2_K／S3_K superblock 用 `cp.async` 整塊搬進 shared memory（不改檔案格式，−9%，單卡 8K 讀 prompt +5～10%、雙卡 64K −2～3%）；投機驗證 q8 投影每 block 16 列（−11%，整步約 −2%）。KLD 與輸出 token 完全相同。短文解碼已貼著這張卡讀 2–20 MB 的實際速度（只讀就 140–300 GB/s），「122 tok/s 上限」不成立。上一版 exe：`strata-inkling-r5.exe`。
 - [x] 第七輪（11/24）：跨請求 prompt 快取（讀到倒數第 1 個 token 存非位置狀態到主機記憶體，下一輪開頭相同就還原；39K 對話之後每輪 22 → 4 秒，對齊切段的測試輸出完全相同）；讀長文注意力 split-K（3060 Ti kernel −12～−18%，192K 115 → 108 秒）；解碼 F32 小矩陣一列一個 block、滑動視窗層改 tensor core kernel（每步 −1 ms，約 +3%）。HIP gfx1100 編過；SYCL 原始碼編過（連結缺 `quant::dequant_row` 是上游舊問題）。上一版 exe：`strata-inkling-r6.exe`。
-- [ ] 還沒做：3060 Ti 注意力已是 FA2 水準（峰值 7 成多），再快要 FP16 累加（精度變差）；解碼剩下約 1,400 個小 kernel／步，要整層合併。
+- [x] 第八輪（11/24，試過沒採用）：投機一步只等 CPU 一次（GPU 走樹＋依接受數挑 graph 餵 DSpark＋先算下一步草稿），輸出相同但不開 nsys 兩版都 190.0 tok/s，已撤回；小 kernel 在 graph 裡一個約 0.9 µs，全部消失也只省每步 1.7%，整層合併不做。3060 Ti 注意力再快要 FP16 累加（精度變差），不做。細節在 docs/INKLING-UNCENSORED.md 第 26 點。
 - [x] Abiray Q3_K_M GGUF：載入器加主線命名、EP 後端加 Q3_K／Q5_0／Q5_1、修 `d_dense_x_` 溢位；能跑但只有 EP 慢路徑（約 5 tok/s）。
 - [x] 面板支援 Inkling（DSpark、引擎內建看圖、從 server log 讀速度）；PANEL.bat 改 `terminal\serve\panel.py`。
 - [x] setup 雙卡設定移植（11/23）：`config_for` 補回 `expert_setup`（主卡 uuid＋`expert_gpu`＋`--expert-gpu 1`，拿掉 `gpu_roles`）與看圖放第二張卡；`configs_dir()` 在這個 checkout 指到根目錄 `configs/`（setup 之前看不到已裝的模型、寫到 `terminal/`）。`move_over_old_layout` 遇到根目錄有 PANEL.bat 就不搬（它曾把 packs/、mtp/、engine/*.exe 搬進 terminal/，已搬回）。setup 測試 14 個檔由失敗轉通過，golden 補回 `--vram-reserve-mib 700`。

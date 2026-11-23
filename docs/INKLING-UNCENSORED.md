@@ -211,6 +211,16 @@ python -I tools/inkling_uncensor_patch.py models/inkling2-strata/Inkling-2-Mini-
     2.11 → 1.58 ms（`INK_DEC_TC_SWA_OFF=1` 回舊路）。解碼路徑 KLD（fp8，主卡）0.005264 → 0.005155；
     同一個 exe 只改切段大小 KLD 就差 0.0005，所以 F32 那項 0.004686 → 0.004814 在雜訊內。
     雙卡 4K、生成 512 個 token、交錯三次：122.1–122.4 → 123.4–126.9 tok/s。
+26. 解碼剩下的空檔與小 kernel（11/24，試過、沒採用）：
+    - 主卡單卡、1K prompt、投機一步約 40 ms（bench 的合成 prompt 每步約 7 個 token）。nsys 量到 GPU 閒著約 2.2 ms：
+      0.6 ms 是 graph 內 kernel 之間的小空隙，1.6 ms 是等 CPU 讀結果再送下一批。
+    - 試做「一步只等 CPU 一次」：樹驗證後由 GPU 自己走樹、提交、把接受的 token 餵進 DSpark（依接受數挑 8 種 graph 之一，
+      跟原本同樣的 kernel 和列數）、接著先算下一步的草稿。輸出 token 跟原版完全相同，nsys 下閒置 1.6 → 1.1 ms；
+      但不開 nsys 交錯量 6 次（各生成 2,048 個 token）兩版都是 190.0 tok/s，雙卡 16K 也一樣（18.4／18.3）。
+      nsys 本身讓每次 API 呼叫變慢，把這段空檔放大了。沒有變快，所以沒有留。
+    - 量一個很小的 kernel 在 graph 裡的成本：240 個串起來多 0.22 ms，一個約 0.9 µs（含它自己的工作）。
+      每步不到 5 µs 的 kernel 約 780 個，就算全部消失也只省約 0.7 ms（每步的 1.7%）；真的合併只能省一部分開銷，
+      量不出來（交錯量測的誤差約 ±1%），所以「整層合成一個 kernel」不做。
 
 量精度時注意：從 `build-inkling/` 直接跑的 exe 會載入 CUDA 13.4 的 cuBLAS，`engine-local/inkling/` 裡的用發行包附的；
 同一份原始碼兩邊 KLD 就差 0.0038。要比，先把 exe 放到 `engine-local/inkling/`。
@@ -260,6 +270,7 @@ python -I tools/inkling_uncensor_patch.py models/inkling2-strata/Inkling-2-Mini-
   投機每步約 2 個 token，驗證一步（約 4.4 個節點）的主卡時間約是單 token 的 1.8 倍（每個節點選的專家不同，要讀更多權重）。
 - 投機驗證的專家 kernel 佔單卡投機解碼 GPU 時間約 25%（第 17 點之後），gate/up 讀顯存約 7 成頻寬。
   同一個專家被超過 4 個節點選到時，權重會每 4 個 token 重讀一次（多半從 L1/L2 拿到）。
-- 短文解碼：大矩陣已貼著這張卡讀 2–20 MB 的實際速度（第 20 點）。剩下的時間散在每個 token 約 1,100 個小 kernel，
-  要再快得把整層合成一個 kernel，工程很大。投機解碼的專家驗證在 24 個不同專家時，用平均專家大小估算也已到約 305 GB/s（估算，沒逐個專家量）。
+- 短文解碼：大矩陣已貼著這張卡讀 2–20 MB 的實際速度（第 20 點）。小 kernel 和 CPU 往返加起來最多只佔每步約 2%，
+  試過一步只等 CPU 一次也沒變快（第 26 點）；時間主要在專家（gate/up、down）和 q8 投影這幾個大 kernel。
+  投機解碼的專家驗證在 24 個不同專家時，用平均專家大小估算也已到約 305 GB/s（估算，沒逐個專家量）。
 - 3060 Ti 只負責全域注意力。把專家也分過去，每層都要跨卡交接（每次約 0.13 ms，每個 token 48 次），解碼會更慢，所以沒做。
