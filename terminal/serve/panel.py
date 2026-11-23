@@ -71,7 +71,8 @@ def load_models() -> dict[str, dict[str, Any]]:
             continue
         if isinstance(cfg, dict) and isinstance(cfg.get("exe"), str) and isinstance(cfg.get("args"), list):
             models[path.stem.removeprefix("strata-")] = {"path": path, "cfg": cfg}
-    return models
+    # a config with "default": true is listed first, so it is the one the page shows when nothing is on
+    return dict(sorted(models.items(), key=lambda kv: kv[1]["cfg"].get("default") is not True))
 
 
 def ctx_label(ctx: int) -> str:
@@ -168,7 +169,7 @@ def model_info(model_id: str, path: Path, cfg: dict[str, Any]) -> dict[str, Any]
         "gpu_uuid": cfg.get("gpu"),
         "vision_uuid": vision.get("gpu_uuid"),
         "expert_uuid": expert_uuid_of(cfg),
-        "expert": expert_fact(cfg),
+        "expert": ("全域注意力（--kv-gpu）" if ink and "--kv-gpu" in args else expert_fact(cfg)),
         "ready": exe.is_file() and Path(arg(args, "--pack") or arg(args, "--native") or exe).exists(),
         "engine_log": cfg.get("log"),
         "engine_kind": "inkling" if ink else "strata",
