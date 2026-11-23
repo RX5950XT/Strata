@@ -182,6 +182,7 @@ static int cmd_bench(const std::string& model_path, const BackendOpts& bopts, in
 
     double t_dec0 = now_s();
     int total_gen = 0;
+    int spec_steps = 0, spec_emit = 0;   // fork: tokens per spec step, printed below
     if (use_dspark && P == 1) {
         int cur_pos = prompt_len;
         while (total_gen < gen_len) {
@@ -193,6 +194,7 @@ static int cmd_bench(const std::string& model_path, const BackendOpts& bopts, in
                     0, next_tok[0], cur_pos, rem, emitted, &drafted, err);
                 if (n_emit < 0) { fprintf(stderr, "bench spec err: %s\n", err.c_str()); return 1; }
                 if (n_emit > 0) {
+                    ++spec_steps; spec_emit += n_emit;
                     next_tok[0] = emitted[n_emit - 1];
                     cur_pos += n_emit;
                     total_gen += n_emit;
@@ -230,6 +232,9 @@ static int cmd_bench(const std::string& model_path, const BackendOpts& bopts, in
         }
     }
     double dec_s = now_s() - t_dec0;
+    if (spec_steps > 0)
+        fprintf(stderr, "[bench] spec steps %d, %.2f tokens/step, %d plain decode steps\n", spec_steps,
+                (double)spec_emit / spec_steps, total_gen - spec_emit);
     double ppts = (P * prompt_len) / std::max(pf_s, 1e-9);
     double tps_agg = total_gen / std::max(dec_s, 1e-9);
     printf("[bench] backend=%s format=%s parallel=%d gpus=%d kv=%s prompt=%d gen=%d | prefill=%.1f ppts (%.2fs) | decode=%.1f tps agg (%.1f tps/slot, %.2fs)\n",
@@ -272,10 +277,21 @@ static int cmd_kld_eval(const std::string& model_path, const std::string& ref_pa
 
     std::vector<float> got_lg(static_cast<size_t>(n_tok) * V);
     StepBatch batch;
-    for (int i = 0; i < n_tok; ++i) batch.push(0, i, ids[i], true);
+    // fork: INK_KLD_DECODE_FROM=N feeds tokens N.. one at a time (the decode attention path) instead of one prompt
+    const char* dec_env = std::getenv("INK_KLD_DECODE_FROM");
+    const int n_pf = dec_env ? std::max(1, std::min(n_tok, std::atoi(dec_env))) : n_tok;
+    for (int i = 0; i < n_pf; ++i) batch.push(0, i, ids[i], true);
     if (!backend->forward_batch(batch, got_lg.data(), nullptr, err)) {
         fprintf(stderr, "forward: %s\n", err.c_str());
         return 1;
+    }
+    for (int i = n_pf; i < n_tok; ++i) {
+        batch.clear();
+        batch.push(0, i, ids[i], true);
+        if (!backend->forward_batch(batch, got_lg.data() + static_cast<size_t>(i) * V, nullptr, err)) {
+            fprintf(stderr, "forward: %s\n", err.c_str());
+            return 1;
+        }
     }
 
     double kld_sum = 0.0, nll_sum = 0.0;

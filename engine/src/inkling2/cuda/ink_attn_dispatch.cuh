@@ -5,6 +5,7 @@
 #include "ink_cuda.cuh"
 #include "ink_attn.cuh"
 #include "ink_pf_flash.cuh"
+#include "ink_dec_tc.cuh"
 #include <cstring>
 
 namespace strata::ink {
@@ -41,7 +42,10 @@ inline int ink_flash_wide_splits() {
 inline void ink_flash_wide(const InkAttnBufs& b, const InkKvVisitDesc& kv, int mode, int M, int slot0, int p0_val) {
     const int nsp = ink_flash_wide_splits();
     static const bool dec16_off = std::getenv("INK_DEC16_OFF") != nullptr;   // A/B: the 32-lane kernel
-    if (!dec16_off) {
+    if (ink_dec_tc_ok(b.sm_cc, kv, M)) {
+        ink_dec_tc_launch(b.st, b.q, b.rel_table, b.sinks, kv, slot0, b.pos, mode == 2, b.tk, b.tv, b.anc,
+                          b.mq_pm, b.mq_pl, b.mq_po, M, nsp);
+    } else if (!dec16_off) {
         k_ink_flash_dec16<<<dim3(M, nsp, kInkKVHeads), 128, 0, b.st>>>(
             b.q, b.rel_table, b.sinks, kv, slot0, b.pos,
             (mode == 2) ? b.tk : nullptr, (mode == 2) ? b.tv : nullptr, (mode == 2) ? b.anc : nullptr,

@@ -11,7 +11,7 @@
   - `configs/strata-inkling-2-mini-uncensored-sq-10-112k.json`：只用主卡，上下文 112K（114,688），KV fp8，看圖與 DSpark 都開。
   - `configs/strata-inkling-2-mini-uncensored-sq-10.json`（預設）：兩張卡，上下文 200K（204,800）。全域注意力的 KV 放在 3060 Ti
     （`--kv-gpu 1`，設定用 `expert_gpu` 讓引擎看到兩張卡），一次讀 2,048 個 prompt token（`--chunk 2048`）。
-  - 兩份都在位置超過 40K 時停用投機解碼（`--draft-max-pos 40960`），112K 那份一次讀 1,024 個 prompt token。
+  - 兩份在任何長度都開投機解碼（DSpark），112K 那份一次讀 1,024 個 prompt token。
 - Abiray 的 `Inkling-2-Mini-Uncensored-Q3_K_M.gguf` 也能載入（見下），但只能走慢路徑，不實用。
 
 ## 為什麼不直接跑 Abiray 的 Q3_K_M GGUF
@@ -113,14 +113,32 @@ python -I tools/inkling_uncensor_patch.py models/inkling2-strata/Inkling-2-Mini-
 4. 全域 visit 的解碼注意力用 64 段 split-K，query 排在 grid 最快的那一維；每個 key 由 16 個 lane 讀（每 lane 8 bytes），
    一次 4 個 key 一起算再做一次 softmax 更新。跟原 kernel 的最大差異約 5e-6。128K 雙卡不投機 32.8 → 34.0 tok/s。
    把段數改成「剛好一波」（57 段）反而變慢（24.1 vs 25.6），所以維持 64。
-5. `--draft-max-pos N`：位置超過 N 就不做投機步驟。改完上面幾項之後，不投機變快很多，交叉點約 40K
-   （雙卡：32K 48.9 vs 47.9、64K 38.8 vs 42.3、128K 22.5 vs 34.1 tok/s，投機 vs 不投機；單卡：32K 54.4 vs 53.8、48K 50.2 vs 51.6、
-   64K 43.5 vs 49.5），兩份設定都用 40,960。
+5. `--draft-max-pos N`：位置超過 N 就不做投機步驟。第二輪時長文投機比較慢，設定用過 40,960；第三輪（下面 8、9）修好之後
+   投機在每個長度都比較快，設定已拿掉這個參數（參數還在，預設不限制）。
 6. 讀 prompt 一次送的 token 數（`--chunk`）：200K 雙卡用 2,048、112K 單卡用 1,024。112K 單卡用 2,048 會讓主卡顯存不夠
    （剩 0 MB，被挪到系統記憶體，讀 prompt 掉到 1,213 tok/s、解碼 9 tok/s），1,024 剩 460 MB。
 7. 除錯開關（環境變數）：`INK_VRAM_LOG`、`INK_BENCH_PROGRESS`、`INK_KLD_CHUNKS`、`INK_RA_PROF`、`INK_RA_CHECK`、`INK_MQ_OFF`、
    `INK_PF_FLASH_OFF`（關融合 kernel）、`INK_PF_FLASH_BF16`、`INK_PF_FLASH_CHECK`（兩條路都算再比）、`INK_SK_GEMV_OFF`、
-   `INK_ARGMAX_FULL_MAX`、`INK_ARGMAX_CHECK`、`INK_DEC16_OFF`、`INK_DEC_SPLITS`。
+   `INK_ARGMAX_FULL_MAX`、`INK_ARGMAX_CHECK`、`INK_DEC16_OFF`、`INK_DEC_SPLITS`、`INK_DEC_TC_OFF`、`INK_DSPARK_TC_OFF`、
+   `INK_LANES_OFF`、`INK_SPEC_PROF`（投機每一步各段的時間）、`INK_KLD_DECODE_FROM=N`（KLD 從第 N 個 token 起逐個解碼，量解碼路徑）。
+
+第三輪（同一天稍晚）：
+
+8. 全域 visit 的解碼和樹驗證注意力改用 tensor core（`ink_dec_tc.cuh`，sm_80 以上、fp8 KV、16 個 query 以內）。
+   原本每個 query 各自用 CUDA core 讀一遍 KV，樹驗證 12 個節點就讀 12 遍；現在一個 MMA 的 16 列放「query head × query」，
+   5 個 query 以內一個 warp 一次讀 KV 給全部用。K/V 直接從顯存進 MMA 的暫存器（不經 shared memory），FP8 用兩個位元運算變 FP16。
+   3060 Ti 上單獨量（200K、每個 visit）：單 token 2.17 → 1.19 ms（193 → 346 GB/s，峰值 448），樹驗證 12 節點 22.3 → 2.2 ms。
+   跟原 kernel 的輸出差約 1e-3（FP16 捨入）；逐 token 解碼的 KLD（`INK_KLD_DECODE_FROM=1024`，雙卡 fp8）新 0.005109、舊 0.005436。
+9. DSpark 草稿器的全域層注意力也改用同一個 kernel（FP16 KV 版）。原本每個 (query, head) 一個 block、每個 key 做一次 warp 加總，
+   長度越長越慢：64K 時草稿每步 14.6 ms（2K 時 5.9 ms），單獨量 200K 每次 27.7 ms → 2.5 ms（主卡）。這才是長文投機輸給不投機的原因。
+10. 讀 prompt 時兩張卡同時做（`ink_runner.cuh` 的 `emit_two_lanes`）：一段 2,048 token 拆成兩半，各由一條 CPU 執行緒送工作，
+    輪到誰才送（同一條 stream）。前半在 3060 Ti 算全域注意力時，主卡算後半到它自己的全域 visit，再交換。每個 visit 都是前半先做，
+    所以 SWA 環狀快取、ShortConv 狀態、第二張卡的 KV 順序都跟原本一樣。跨過全域 visit 還要用到的暫存（殘差、block、bank、taps 等）
+    用同一塊記憶體的不同列，不多佔顯存。交接改成兩組請求／回覆緩衝區、請求編號、第二張卡用自己的計數回覆（`ink_remote_attn.cuh`）。
+    KLD（雙卡、chunk 512）開 0.004413、關 0.004478；Top-1 96.05% vs 96.78%，跟不拆但 chunk 256 的 95.83% 同一級（切塊大小造成的差）。
+11. 試過不採用：3060 Ti 的 QKᵀ 改 FP16 累加（GeForce 上 tensor core 快一倍），200K 只快 1.7%（126 vs 128 秒），KLD fp8 KV
+    0.005471 → 0.005612，不值得。`--chunk 3072` 200K 讀 prompt 124.6 秒（2,048 是 129 秒），但主卡只剩 199 MB、峰值 15.45 GB，
+    超過約 14.2 GB 的安全線，維持 2,048。4,096 直接爆顯存（解碼 2.3 tok/s）。
 
 量精度時注意：從 `build-inkling/` 直接跑的 exe 會載入 CUDA 13.4 的 cuBLAS，`engine-local/inkling/` 裡的用發行包附的；
 同一份原始碼兩邊 KLD 就差 0.0038。要比，先把 exe 放到 `engine-local/inkling/`。
@@ -131,9 +149,12 @@ python -I tools/inkling_uncensor_patch.py models/inkling2-strata/Inkling-2-Mini-
 |---|---|---|---|
 | 原版引擎，單卡 200K（專家 24% 在主記憶體） | 678 秒 | 10.0 tok/s | 49.3 tok/s（1K） |
 | 兩張卡，第一版（cuBLAS 注意力） | 364 秒（平均 549 tok/s） | 22.8 tok/s | 106.5／39.3 tok/s |
-| 兩張卡，現在 | **185 秒**（平均 1,101 tok/s） | **26.3 tok/s** | 117／60 tok/s（單卡、2K prompt 量的） |
+| 兩張卡，第二輪 | 185 秒（平均 1,101 tok/s） | 26.3 tok/s | 117／60 tok/s（單卡、2K prompt 量的） |
+| 兩張卡，現在（第三輪） | **129 秒**（平均 1,550 tok/s） | **42.6 tok/s**（投機）／36.0（不投機） | 85–89 tok/s（雙卡、2K、投機） |
 
-讀 prompt 每 8K 的速度（兩張卡，現在）：開頭約 1,900、64K 1,330、131K 1,000、197K 795 tok/s。
+讀 prompt 每 8K 的速度（兩張卡，現在，含看圖模組）：64K 1,773、131K 1,561、197K 1,074 tok/s（第二輪 1,330、1,000、795）。
+長文解碼（雙卡，投機／不投機，tok/s）：32K 60.6／47.0、64K 53.3／42.3、128K 49.7／36.4、200K 42.6／36.0。
+單卡 112K 設定：32K 65.8／44.6、64K 53.3／40.7、100K 48.2／43.2。投機時 200K 每步平均 2.03 個 token（合成 prompt）。
 16K prompt（單卡）：1,408 → 2,207 tok/s。單卡 112K 設定：32K 讀 prompt 1,916 tok/s。
 
 透過 server（真實文字，repo 的文件，中間藏一句暗號）：
@@ -141,17 +162,22 @@ python -I tools/inkling_uncensor_patch.py models/inkling2-strata/Inkling-2-Mini-
 | 設定 | 長文 | 讀完並回答 | 暗號 |
 |---|---|---|---|
 | 200K 雙卡（第一版） | 178,435 token | 320 秒 | 答對 |
-| 200K 雙卡（現在） | 172,981 token | 152 秒 | 答對 |
+| 200K 雙卡（第二輪） | 172,981 token | 152 秒 | 答對 |
+| 200K 雙卡（第三輪） | 164,100 token | 104 秒 | 答對 |
 | 200K 雙卡（現在） | 60,271 token | 42 秒 | 答對 |
-| 112K 單卡（現在） | 101,986 token | 68 秒 | 答對 |
+| 112K 單卡（第二輪） | 101,986 token | 68 秒 | 答對 |
+| 112K 單卡（第三輪） | 99,177 token | 72.5 秒 | 答對 |
 
-短答（中文、英文程式題）：雙卡 54–76 tok/s、單卡 57–81 tok/s（含讀 prompt）。64K 以內單卡比雙卡快
-（64K 不投機：單卡 49.5、雙卡 42.3 tok/s），雙卡只在超過 112K 時才需要。
+第三輪 20 分鐘穩定性測試（雙卡、server，短文與 28K–143K 長文輪流）：21 輪 0 失敗、server log 0 個錯誤，
+143K 長文每次 85–90 秒（第二輪 117 秒）。
+
+短答（中文、英文程式題）：雙卡 54–76 tok/s、單卡 57–81 tok/s（第二輪，含讀 prompt；第三輪同一題 45–65，回答長度不同，
+同條件的 bench 新版 85–89、舊版 81）。開投機後 64K 單卡和雙卡一樣（都 53.3 tok/s），雙卡只在超過 112K 時才需要。
 
 ### 離極限還差多少
 
-- 200K 讀 prompt 185 秒，理論上 50–90 秒。剩下的時間約一半是注意力（在 3060 Ti 上，融合 kernel 約峰值的一半），
-  一半是專家和主幹的矩陣乘法（主卡）；兩張卡是輪流做，不是同時做。要同時做，得讓兩段 prompt 交錯在兩張卡上跑（沒做）。
-- 200K 解碼 26.3 tok/s，上限約 75。每個 token 約 38 ms：主卡的權重和小 kernel 約 17 ms（只吃到約一半頻寬）、
-  3060 Ti 讀 3.4 GB 的 KV 約 20 ms（約 4 成頻寬），加 8 次交接。
+- 200K 讀 prompt 129 秒。主卡單獨的工作約 105 秒（開頭沒有注意力時約 1,900 tok/s），3060 Ti 的注意力約 73 秒（融合 kernel
+  已到 FP32 累加 tensor core 峰值的約 7 成）；兩張卡同時做之後，前段卡在主卡、後段卡在 3060 Ti。再快要減少主卡的矩陣乘法時間。
+- 200K 解碼：不投機 36.0 tok/s（每個 token 約 28 ms，3060 Ti 的 KV 讀取約 10 ms，已到約 8 成頻寬），投機 42.6 tok/s。
+  投機每步約 2 個 token，驗證一步（約 4.4 個節點）的主卡時間約是單 token 的 1.8 倍（每個節點選的專家不同，要讀更多權重）。
 - 3060 Ti 只負責全域注意力。把專家也分過去，每層都要跨卡交接（每次約 0.13 ms，每個 token 48 次），解碼會更慢，所以沒做。

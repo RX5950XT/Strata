@@ -5,6 +5,9 @@
 #pragma once
 
 #include "ink_attn.cuh"
+#include <condition_variable>
+#include <mutex>
+#include <thread>
 #include "ink_attn_dispatch.cuh"
 #include "ink_remote_attn.cuh"
 #include "ink_cuda.cuh"
@@ -393,6 +396,29 @@ struct InkCudaRunner {
     // kv_desc[v] of those visits is then a small ring that only stages each new token's K/V row.
     int kv_gpu = -1;
     std::unique_ptr<InkRemoteAttn> ra;
+
+    // fork: with ra, a prompt chunk runs as two halves ("lanes") whose global visits alternate between the GPUs: while
+    // the second GPU computes lane 0's global attention, the main GPU runs lane 1 up to its own global visit, and so on.
+    // Each lane is emitted by its own host thread; a baton lets exactly one thread enqueue at a time (same stream), so
+    // stream order = lane 0 segment, lane 1 segment, ... and visit v of lane 1 always follows visit v of lane 0 (SWA ring,
+    // ShortConv history and the remote KV stay causal). Buffers that live across a global visit are bound per lane as
+    // row offsets of the full-size buffers; per-visit scratch is shared.
+    struct LaneBind {
+        float *cur, *prelude, *bank_out, *h_norm, *msgs;
+        float *blocks[8], *prelude_blocks[2], *bank[4], *taps[4];
+        int32_t *tok_ids, *pos;
+        uint8_t* is_img;
+        float* img_emb;
+    };
+    struct LaneBaton {
+        std::mutex mu;
+        std::condition_variable cv;
+        int turn = 0;
+        bool done[2] = {false, false};
+    };
+    LaneBind lane_binds[2]{};
+    LaneBaton* lane_baton = nullptr;
+    static int& lane_me() { static thread_local int id = -1; return id; }   // lane of this host thread, -1 = off
     // ShortConv state pool: [48 visits] x 4 states (k [1024], v [1024], attn [2304], mlp [2304]) -> 1 contiguous buffer!
     // Layout: visit -> [max_slots, 3, 6656] F32 (or 256 MB for 64 slots)
     float* d_sconv_pool[kInkVisits] = {};
@@ -1306,7 +1332,13 @@ struct InkCudaRunner {
                 cudaMemGetInfo(&vf, &vt);
                 if (vf > (480ull << 20)) ensure_pf_attn(0);
             }
-            if (ra && !is_swa) {
+            if (ra && !is_swa && lane_me() >= 0) {   // fork: two-lane prompt chunk (emit_two_lanes)
+                const int lane = lane_me();
+                ra->post(st, lane, visit, mode, M, slot0, p0_val, d_q, d_r, d_sinks, d_gate_attn, d_pos,
+                         nullptr, d_tree_anc, d_tree_dep, d_k, d_v, kv_desc[visit]);
+                lane_yield();
+                ra->wait(st, lane, M, d_attn_out);
+            } else if (ra && !is_swa) {
                 ra->post_and_wait(st, visit, mode, M, slot0, p0_val, d_q, d_r, d_sinks, d_gate_attn, d_pos,
                                   (mode == 1) ? d_slots : nullptr, d_tree_anc, d_tree_dep, d_k, d_v, kv_desc[visit], d_attn_out);
             } else {
@@ -1387,6 +1419,80 @@ struct InkCudaRunner {
             }
         }
         prof_mark_end(2);
+    }
+
+    LaneBind lane_get() const {
+        LaneBind b{};
+        b.cur = d_cur; b.prelude = d_prelude; b.bank_out = d_bank_out; b.h_norm = d_h_norm; b.msgs = d_msgs;
+        for (int i = 0; i < 8; ++i) b.blocks[i] = d_blocks[i];
+        for (int i = 0; i < 2; ++i) b.prelude_blocks[i] = d_prelude_blocks[i];
+        for (int i = 0; i < 4; ++i) { b.bank[i] = d_bank[i]; b.taps[i] = d_taps[i]; }
+        b.tok_ids = d_tok_ids; b.pos = d_pos; b.is_img = d_is_img; b.img_emb = d_img_emb;
+        return b;
+    }
+    void lane_set(const LaneBind& b) {
+        d_cur = b.cur; d_prelude = b.prelude; d_bank_out = b.bank_out; d_h_norm = b.h_norm; d_msgs = b.msgs;
+        for (int i = 0; i < 8; ++i) d_blocks[i] = b.blocks[i];
+        for (int i = 0; i < 2; ++i) d_prelude_blocks[i] = b.prelude_blocks[i];
+        for (int i = 0; i < 4; ++i) { d_bank[i] = b.bank[i]; d_taps[i] = b.taps[i]; }
+        d_tok_ids = b.tok_ids; d_pos = b.pos; d_is_img = b.is_img; d_img_emb = b.img_emb;
+    }
+    // lane `lane` = rows [lane * H, lane * H + H) of every lane buffer; d_msgs holds 4 messages per lane
+    static LaneBind lane_rows(const LaneBind& base, int lane, int H) {
+        const size_t o = (size_t)lane * H, oh = o * kInkHidden;
+        LaneBind b = base;
+        auto f = [&](float* x) { return x ? x + oh : x; };
+        b.cur = f(base.cur); b.prelude = f(base.prelude); b.bank_out = f(base.bank_out); b.h_norm = f(base.h_norm);
+        b.msgs = base.msgs ? base.msgs + 4 * oh : nullptr;
+        for (int i = 0; i < 8; ++i) b.blocks[i] = f(base.blocks[i]);
+        for (int i = 0; i < 2; ++i) b.prelude_blocks[i] = f(base.prelude_blocks[i]);
+        for (int i = 0; i < 4; ++i) { b.bank[i] = f(base.bank[i]); b.taps[i] = f(base.taps[i]); }
+        b.tok_ids = base.tok_ids + o; b.pos = base.pos + o;
+        b.is_img = base.is_img ? base.is_img + o : nullptr;
+        b.img_emb = f(base.img_emb);
+        return b;
+    }
+    // called by a lane right after posting a global visit: let the other lane enqueue its segment, then continue
+    void lane_yield() {
+        const int me = lane_me();
+        std::unique_lock<std::mutex> lk(lane_baton->mu);
+        if (!lane_baton->done[1 - me]) {
+            cudaStreamQuery(st);   // WDDM: submit what is queued so the request goes out now
+            lane_baton->turn = 1 - me;
+            lane_baton->cv.notify_all();
+            lane_baton->cv.wait(lk, [&] { return lane_baton->turn == me; });
+        }
+        lane_set(lane_binds[me]);
+    }
+    void lane_run(int lane, int H, int slot0, int p0, bool want_taps) {
+        lane_me() = lane;
+        {
+            std::unique_lock<std::mutex> lk(lane_baton->mu);
+            lane_baton->cv.wait(lk, [&] { return lane_baton->turn == lane; });
+        }
+        lane_set(lane_binds[lane]);
+        emit_48_visits(H, 0, slot0, p0 + lane * H, want_taps);
+        std::lock_guard<std::mutex> lk(lane_baton->mu);
+        lane_baton->done[lane] = true;
+        lane_baton->turn = 1 - lane;
+        lane_baton->cv.notify_all();
+        lane_me() = -1;
+    }
+    static bool lanes_on() { static const bool off = std::getenv("INK_LANES_OFF") != nullptr; return !off; }
+    // one prompt chunk of M rows as two lanes of M / 2 (rows already uploaded to d_tok_ids / d_pos / image buffers)
+    void emit_two_lanes(int M, int slot0, int p0, bool want_taps) {
+        const int H = M / 2;
+        const LaneBind base = lane_get();
+        lane_binds[0] = lane_rows(base, 0, H);
+        lane_binds[1] = lane_rows(base, 1, H);
+        LaneBaton baton;
+        lane_baton = &baton;
+        const int dev = m.primary_gpu;
+        std::thread t1([&] { cudaSetDevice(dev); lane_run(1, H, slot0, p0, want_taps); });
+        lane_run(0, H, slot0, p0, want_taps);
+        t1.join();
+        lane_baton = nullptr;
+        lane_set(base);
     }
 
     // ---- Full 48-Visit Body (Capturable inside a SINGLE CUDA Graph!) ----
@@ -1502,6 +1608,10 @@ struct InkCudaRunner {
             }
             INK_CK(cudaGraphLaunch(exec, st));
             if (m.hybrid.active && m.n_host_experts > 0) m.hybrid.step_promote(m.d_sec4, m.d_experts, st);
+            return;
+        }
+        if (ra && lanes_on() && M >= 256 && (M % 2) == 0 && !m.hybrid.active && max_passes_override == 0) {
+            emit_two_lanes(M, slot0, p0, want_taps);
             return;
         }
         emit_48_visits(M, 0, slot0, p0, want_taps);

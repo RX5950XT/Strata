@@ -2,6 +2,7 @@
 //
 // MIT License
 // Copyright (c) 2026 Niko1221 and the Strata contributors
+#include <chrono>
 #include "ink_backend.h"
 #include "ink_batch.h"
 #include "ink_manifest.h"
@@ -518,12 +519,21 @@ public:
         // 2. True W=4 Multi-Branch Sparse-MoE Bayes-Optimal Adaptive Beam Tree (M* in {3,4,5,6,8,10,12})!
         strata::ink::InkTreeSpec tr{};
         const int max_nodes = std::min(12, runner_->tree_cap);
+        // fork: INK_SPEC_PROF=1 prints the time of each part of a spec step (syncs the stream between parts)
+        static const bool prof = std::getenv("INK_SPEC_PROF") != nullptr;
+        static double pt[4] = {};
+        static int pn = 0, pm = 0, pe = 0;
+        auto tnow = [&] { if (prof) cudaStreamSynchronize(runner_->st); return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count(); };
+        const double t0 = tnow();
         dspark_->draft_beam_tree(anchor_tok, anchor_pos, /*beam_w=*/4, max_nodes, tr, /*adaptive_moe_ratio=*/4.2f);
+        const double t1 = tnow();
 
         // 3. Single CUDA-Graph 48-visit tree verify + exact GPU screened argmax (ZERO 6.4 MB logits D2H!)
         runner_->forward_tree_verify(tr, anchor_pos, 0, true);
+        const double t2 = tnow();
         int32_t target_next[strata::ink::kInkMaxTree] = {};
         runner_->head_argmax_exact(tr.M, target_next);
+        const double t3 = tnow();
 
         // 4. Exact greedy tree walk (clamped to min(max_emit, 8))
         const int emit_cap = std::min(max_emit, 8);
@@ -556,6 +566,15 @@ public:
         }
         dspark_->ingest_taps_from(runner_->d_taps_compact, anchor_pos, n_emit);
 
+        if (prof) {
+            const double t4 = tnow();
+            pt[0] += t1 - t0; pt[1] += t2 - t1; pt[2] += t3 - t2; pt[3] += t4 - t3; ++pn; pm += tr.M; pe += n_emit;
+            if (pn == 64) {
+                std::fprintf(stderr, "[spec-prof] pos %d: draft %.2f verify %.2f argmax %.2f commit %.2f ms/step, %.1f nodes, %.2f emitted\n",
+                             anchor_pos, pt[0] / pn, pt[1] / pn, pt[2] / pn, pt[3] / pn, (double)pm / pn, (double)pe / pn);
+                pt[0] = pt[1] = pt[2] = pt[3] = 0.0; pn = pm = pe = 0;
+            }
+        }
         tree_snap_ready_ = true;
         tree_snap_p0_ = anchor_pos;
         tree_snap_M_ = n_emit;

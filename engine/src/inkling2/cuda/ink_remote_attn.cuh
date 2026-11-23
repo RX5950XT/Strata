@@ -11,6 +11,9 @@
 //              runs the same ink_attention() code the main GPU would, copies the result down and acks.
 // Tree-verify K/V are kept in a stage buffer on the second GPU so accepted tokens are committed there too
 // (ink_commit_kv in ink_spec.cuh). Positions and tree shape travel with each request, so graph replays stay valid.
+// Two request/answer buffers: a prompt chunk can run as two halves whose global visits alternate on the two GPUs
+// (the main GPU computes one half while the second GPU does the other half's attention). Requests are numbered;
+// the host thread serves them in order and the second GPU acks with its own running count.
 #pragma once
 #include "ink_attn_dispatch.cuh"
 
@@ -26,12 +29,14 @@
 
 namespace strata::ink {
 
+struct InkRaReq { volatile int32_t visit, mode, M, slot0, p0, buf; };
 struct alignas(64) InkRaBell {
-    volatile uint32_t ring;
+    volatile uint32_t ring;          // number of the newest request
     uint32_t pad0[15];
-    volatile uint32_t ack;
+    volatile uint32_t ack;           // number of the newest finished request
     uint32_t pad1[15];
-    volatile int32_t visit, mode, M, slot0, p0, err;
+    InkRaReq req[2];                 // request n uses req[n & 1] (at most two are ever outstanding)
+    volatile int32_t err;
 };
 
 // Byte offsets inside the request buffer, fixed for max_batch tokens (copies use the first M rows of each part).
@@ -105,12 +110,13 @@ __global__ void __launch_bounds__(256) k_ra_pack(
     __threadfence_system();
 }
 
-__global__ void k_ra_ring(InkRaBell* bell, uint32_t* seq_dev, uint32_t* cur_seq, int visit, int mode, int M, int slot0, int p0) {
+__global__ void k_ra_ring(InkRaBell* bell, uint32_t* seq_dev, uint32_t* cur_seq, int buf, int visit, int mode, int M, int slot0, int p0) {
     if (threadIdx.x != 0 || blockIdx.x != 0) return;
-    bell->visit = visit; bell->mode = mode; bell->M = M; bell->slot0 = slot0; bell->p0 = p0;
-    __threadfence_system();
     const uint32_t s = ++(*seq_dev);
-    *cur_seq = s;
+    InkRaReq& r = bell->req[s & 1];
+    r.visit = visit; r.mode = mode; r.M = M; r.slot0 = slot0; r.p0 = p0; r.buf = buf;
+    __threadfence_system();
+    cur_seq[buf] = s;
     bell->ring = s;
     __threadfence_system();
 }
@@ -123,7 +129,7 @@ __global__ void __launch_bounds__(256) k_ra_wait_copy(const InkRaBell* bell, con
         const uint32_t want = *cur_seq;
         const long long t0 = clock64();
         int good = 1;
-        while (bell->ack != want) {
+        while ((int)(bell->ack - want) < 0) {
             if (clock64() - t0 > 60ll * 3000000000ll) { good = 0; break; }  // ~60 s: never hang the stream forever
         }
         __threadfence_system();
@@ -148,11 +154,12 @@ __global__ void k_ra_keep_warm(unsigned long long ns) {
         asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t));
     } while (t - t0 < ns);
 }
-// last node of every request: the answer is already in host memory (stream order), tell the main GPU
-__global__ void k_ra_ack(InkRaBell* bell) {
+// last node of every request: the answer is already in host memory (stream order), tell the main GPU.
+// Requests are served in order, so the running count on this GPU is the request's number.
+__global__ void k_ra_ack(InkRaBell* bell, uint32_t* count) {
     if (threadIdx.x == 0 && blockIdx.x == 0) {
         __threadfence_system();
-        bell->ack = bell->ring;
+        bell->ack = ++(*count);
         __threadfence_system();
     }
 }
@@ -189,12 +196,13 @@ struct InkRemoteAttn {
     InkRaBell* h_bell = nullptr;
     InkRaBell* d_bell = nullptr;       // main GPU view
     InkRaBell* d1_bell = nullptr;      // KV GPU view
-    uint8_t* h_req = nullptr;
-    uint8_t* d_req = nullptr;          // main GPU view
-    float* h_ans = nullptr;
-    float* d_ans = nullptr;            // main GPU view
-    uint32_t* d_seq = nullptr;         // main GPU
-    uint32_t* d_cur_seq = nullptr;     // main GPU
+    uint8_t* h_req[2] = {};
+    uint8_t* d_req[2] = {};            // main GPU view
+    float* h_ans[2] = {};
+    float* d_ans[2] = {};              // main GPU view
+    uint32_t* d_seq = nullptr;         // main GPU: requests posted
+    uint32_t* d_cur_seq = nullptr;     // main GPU: [2] number of the last request per buffer
+    uint32_t* d1_ack_count = nullptr;  // KV GPU: requests finished
 
     // KV GPU
     cudaStream_t st1 = nullptr;
@@ -239,13 +247,15 @@ struct InkRemoteAttn {
         INK_CK(cudaSetDevice(gpu_main));
         INK_CK(cudaHostAlloc(&h_bell, sizeof(InkRaBell), cudaHostAllocMapped | cudaHostAllocPortable));
         std::memset((void*)h_bell, 0, sizeof(InkRaBell));
-        INK_CK(cudaHostAlloc(&h_req, L.total, cudaHostAllocMapped | cudaHostAllocPortable));
-        INK_CK(cudaHostAlloc(&h_ans, (size_t)max_batch * kInkQDim * 4, cudaHostAllocMapped | cudaHostAllocPortable));
         INK_CK(cudaHostGetDevicePointer((void**)&d_bell, (void*)h_bell, 0));
-        INK_CK(cudaHostGetDevicePointer((void**)&d_req, h_req, 0));
-        INK_CK(cudaHostGetDevicePointer((void**)&d_ans, h_ans, 0));
+        for (int b = 0; b < 2; ++b) {
+            INK_CK(cudaHostAlloc(&h_req[b], L.total, cudaHostAllocMapped | cudaHostAllocPortable));
+            INK_CK(cudaHostAlloc(&h_ans[b], (size_t)max_batch * kInkQDim * 4, cudaHostAllocMapped | cudaHostAllocPortable));
+            INK_CK(cudaHostGetDevicePointer((void**)&d_req[b], h_req[b], 0));
+            INK_CK(cudaHostGetDevicePointer((void**)&d_ans[b], h_ans[b], 0));
+        }
         INK_CK(cudaMalloc(&d_seq, 4)); INK_CK(cudaMemset(d_seq, 0, 4));
-        INK_CK(cudaMalloc(&d_cur_seq, 4)); INK_CK(cudaMemset(d_cur_seq, 0, 4));
+        INK_CK(cudaMalloc(&d_cur_seq, 8)); INK_CK(cudaMemset(d_cur_seq, 0, 8));
 
         INK_CK(cudaSetDevice(gpu_kv));
         cudaDeviceProp prop{};
@@ -274,6 +284,8 @@ struct InkRemoteAttn {
             }
         }
         d1_desc_arr = d1alloc<InkKvVisitDesc>(kInkVisits);
+        d1_ack_count = d1alloc<uint32_t>(1);
+        INK_CK(cudaMemset(d1_ack_count, 0, 4));
         INK_CK(cudaMemcpy(d1_desc_arr, kv1, sizeof(kv1), cudaMemcpyHostToDevice));
         d1_stage_k = d1alloc<float>((size_t)kInkVisits * tree_cap * kInkKVDim);
         d1_stage_v = d1alloc<float>((size_t)kInkVisits * tree_cap * kInkKVDim);
@@ -312,16 +324,26 @@ struct InkRemoteAttn {
         worker = std::thread([this]() { serve(); });
     }
 
-    // Main GPU: enqueue (inside or outside graph capture) one remote attention for a global visit.
+    // Main GPU: enqueue (inside or outside graph capture) one remote attention for a global visit, in buffer buf.
+    void post(cudaStream_t st, int buf, int visit, int mode, int M, int slot0, int p0,
+              const float* q, const float* r, const float* sinks, const float* gate,
+              const int32_t* pos, const int32_t* slots, const uint8_t* anc, const uint8_t* dep,
+              const float* tk, const float* tv, const InkKvVisitDesc& ring) {
+        const InkRaLayout Lm = layout(M);
+        k_ra_pack<<<M, 256, 0, st>>>(d_req[buf], Lm, q, r, sinks, gate, pos, slots, slot0, anc, dep, tk, tv, ring, mode, M);
+        k_ra_ring<<<1, 32, 0, st>>>(d_bell, d_seq, d_cur_seq, buf, visit, mode, M, slot0, p0);
+    }
+    // Main GPU: wait for the last request posted in buffer buf and copy its answer into out [M, 3072]
+    void wait(cudaStream_t st, int buf, int M, float* out) {
+        const int nb = std::max(1, std::min(64, (M * kInkQDim / 4 + 255) / 256));
+        k_ra_wait_copy<<<nb, 256, 0, st>>>(d_bell, d_cur_seq + buf, d_ans[buf], out, M);
+    }
     void post_and_wait(cudaStream_t st, int visit, int mode, int M, int slot0, int p0,
                        const float* q, const float* r, const float* sinks, const float* gate,
                        const int32_t* pos, const int32_t* slots, const uint8_t* anc, const uint8_t* dep,
                        const float* tk, const float* tv, const InkKvVisitDesc& ring, float* out) {
-        const InkRaLayout Lm = layout(M);
-        k_ra_pack<<<M, 256, 0, st>>>(d_req, Lm, q, r, sinks, gate, pos, slots, slot0, anc, dep, tk, tv, ring, mode, M);
-        k_ra_ring<<<1, 32, 0, st>>>(d_bell, d_seq, d_cur_seq, visit, mode, M, slot0, p0);
-        const int nb = std::max(1, std::min(64, (M * kInkQDim / 4 + 255) / 256));
-        k_ra_wait_copy<<<nb, 256, 0, st>>>(d_bell, d_cur_seq, d_ans, out, M);
+        post(st, 0, visit, mode, M, slot0, p0, q, r, sinks, gate, pos, slots, anc, dep, tk, tv, ring);
+        wait(st, 0, M, out);
     }
 
     // KV GPU: commit tree-accepted K/V (host path) for the global visits. Called from the main thread when the
@@ -341,24 +363,26 @@ struct InkRemoteAttn {
         uint32_t seen = 0;
         auto last = std::chrono::steady_clock::now();
         while (!stop.load(std::memory_order_relaxed)) {
-            const uint32_t seq = h_bell->ring;
-            if (seq == seen) {
+            if (h_bell->ring == seen) {
                 const auto idle = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - last).count();
                 if (idle > 50) { std::this_thread::sleep_for(std::chrono::microseconds(50)); continue; }
                 warm();     // still busy (between requests): keep the clocks up
                 continue;   // hot spin while active: every microsecond here is on the critical path
             }
-            seen = seq;
+            const uint32_t seq = ++seen;    // serve every request in order (two may be waiting)
             const auto t_ring = std::chrono::steady_clock::now();
             std::atomic_thread_fence(std::memory_order_acquire);
-            const int visit = h_bell->visit, mode = h_bell->mode, M = h_bell->M, slot0 = h_bell->slot0, p0 = h_bell->p0;
+            const InkRaReq& rq = h_bell->req[seq & 1];
+            const int visit = rq.visit, mode = rq.mode, M = rq.M, slot0 = rq.slot0, p0 = rq.p0, buf = rq.buf & 1;
             {
                 std::lock_guard<std::mutex> lk(gpu1_mu);
-                const bool ok = launch(visit, mode, M, slot0, p0);
+                const bool ok = launch(buf, visit, mode, M, slot0, p0);
                 cudaStreamQuery(st1);   // WDDM batches submissions: push this request to the GPU now
-                if (!ok) {   // answer stays stale; ack so the main GPU never hangs
+                if (!ok) {   // answer stays stale; ack so the main GPU never hangs (and keep the GPU count in step)
                     h_bell->err = 1;
                     failed.store(1);
+                    cudaStreamSynchronize(st1);
+                    cudaMemcpy(d1_ack_count, &seq, 4, cudaMemcpyHostToDevice);
                     std::atomic_thread_fence(std::memory_order_release);
                     h_bell->ack = seq;
                 }
@@ -367,7 +391,7 @@ struct InkRemoteAttn {
             static const bool prof = std::getenv("INK_RA_PROF") != nullptr;
             if (prof) {
                 const auto t_sub = std::chrono::steady_clock::now();
-                while (h_bell->ack != seq) {}
+                while ((int)(h_bell->ack - seq) < 0) {}
                 const auto t_ack = std::chrono::steady_clock::now();
                 auto us = [](auto a, auto b) { return std::chrono::duration<double, std::micro>(b - a).count(); };
                 prof_gap += us(last, t_ring); prof_sub += us(t_ring, t_sub); prof_gpu += us(t_sub, t_ack); ++prof_n;
@@ -386,9 +410,9 @@ struct InkRemoteAttn {
     int prof_n = 0;
 
     // The whole request as stream work on the KV GPU, ending with the ack kernel (no host sync needed).
-    void enqueue(int visit, int mode, int M, int slot0, int p0) {
+    void enqueue(int buf, int visit, int mode, int M, int slot0, int p0) {
         const InkRaLayout Lm = layout(M);
-        cudaMemcpyAsync(d1_req, h_req, Lm.total, cudaMemcpyHostToDevice, st1);
+        cudaMemcpyAsync(d1_req, h_req[buf], Lm.total, cudaMemcpyHostToDevice, st1);
         InkAttnBufs b = b1;
         b.q = reinterpret_cast<float*>(d1_req + Lm.q);
         b.r = reinterpret_cast<float*>(d1_req + Lm.r);
@@ -420,8 +444,8 @@ struct InkRemoteAttn {
             static int shown = 0;
             if (M <= 16 && shown++ < 10) std::fprintf(stderr, "[ra-check] visit %d mode %d M %d: max |diff| %.3g (max |ref| %.3g)%c", visit, mode, M, md, mr, 10);
         }
-        cudaMemcpyAsync(h_ans, b.out, (size_t)M * kInkQDim * 4, cudaMemcpyDeviceToHost, st1);
-        k_ra_ack<<<1, 32, 0, st1>>>(d1_bell);
+        cudaMemcpyAsync(h_ans[buf], b.out, (size_t)M * kInkQDim * 4, cudaMemcpyDeviceToHost, st1);
+        k_ra_ack<<<1, 32, 0, st1>>>(d1_bell, d1_ack_count);
     }
 
     // 1 ms keep-warm kernel, relaunched once the previous one has finished
@@ -436,17 +460,17 @@ struct InkRemoteAttn {
         }
     }
 
-    bool launch(int visit, int mode, int M, int slot0, int p0) {
+    bool launch(int buf, int visit, int mode, int M, int slot0, int p0) {
         if (visit < 0 || visit >= kInkVisits || M <= 0 || M > max_batch || (!kv1[visit].k_f8 && !kv1[visit].k_f16)) return false;
         // prefill (tensor-core path, cuBLAS) runs eagerly; decode / tree / batched requests replay a cached graph
-        if ((mode == 0 && M >= 128) || check_on()) { enqueue(visit, mode, M, slot0, p0); return cudaGetLastError() == cudaSuccess; }
+        if ((mode == 0 && M >= 128) || check_on() || buf != 0) { enqueue(buf, visit, mode, M, slot0, p0); return cudaGetLastError() == cudaSuccess; }
         for (auto& g : graphs) {
             if (g.first.visit == visit && g.first.mode == mode && g.first.M == M) return cudaGraphLaunch(g.second, st1) == cudaSuccess;
         }
         cudaGraph_t gr = nullptr;
         cudaGraphExec_t ex = nullptr;
         if (cudaStreamBeginCapture(st1, cudaStreamCaptureModeThreadLocal) != cudaSuccess) return false;
-        enqueue(visit, mode, M, slot0, p0);
+        enqueue(buf, visit, mode, M, slot0, p0);
         if (cudaStreamEndCapture(st1, &gr) != cudaSuccess || cudaGraphInstantiate(&ex, gr, nullptr, nullptr, 0) != cudaSuccess) return false;
         cudaGraphDestroy(gr);
         graphs.push_back({GraphKey{visit, mode, M}, ex});
@@ -468,7 +492,8 @@ struct InkRemoteAttn {
         if (warm_done) cudaEventDestroy(warm_done);
         cudaSetDevice(gpu_main);
         cudaFree(d_seq); cudaFree(d_cur_seq);
-        cudaFreeHost((void*)h_bell); cudaFreeHost(h_req); cudaFreeHost(h_ans);
+        cudaFreeHost((void*)h_bell);
+        for (int b = 0; b < 2; ++b) { cudaFreeHost(h_req[b]); cudaFreeHost(h_ans[b]); }
         h_bell = nullptr;
     }
     ~InkRemoteAttn() { shutdown(); }

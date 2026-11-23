@@ -1023,6 +1023,12 @@ struct InkDSpark {
     // Working buffers for Block-8 forward
     float *d_cur = nullptr, *d_h = nullptr, *d_q = nullptr, *d_k = nullptr, *d_v = nullptr;
     float *d_qkv_fused = nullptr, *d_gu_fused = nullptr;
+    float *d_tc_pm = nullptr, *d_tc_pl = nullptr, *d_tc_po = nullptr;   // fork: tensor-core draft attention partials
+    // fork: the global draft layer's attention on tensor cores (sm_80+); INK_DSPARK_TC_OFF=1 keeps k_dspark_block_attn
+    bool dspark_tc_on() const {
+        static const bool off = std::getenv("INK_DSPARK_TC_OFF") != nullptr;
+        return !off && m.sm_cc >= 80;
+    }
     float *d_attn_out = nullptr, *d_proj = nullptr, *d_g = nullptr, *d_u = nullptr, *d_act = nullptr;
     float *d_ctx_tmp = nullptr, *d_kc_tmp = nullptr, *d_vc_tmp = nullptr, *d_kv_ctx_fused = nullptr;
     float *d_base_logits = nullptr;  // [7, V_unpadded] (slots 1..7)
@@ -1104,6 +1110,11 @@ struct InkDSpark {
         d_qkv_fused   = dalloc<float>(B * (kInkQDim + 2 * kInkKVDim));
         d_gu_fused    = dalloc<float>(B * (2 * kInkDsparkInter));
         d_attn_out    = dalloc<float>(B * kInkQDim);
+        if (dspark_tc_on()) {   // fork: split-K partials of the tensor-core draft attention (~6.3 MB)
+            d_tc_pm = dalloc<float>((size_t)B * kInkHeads * kInkMqSplits);
+            d_tc_pl = dalloc<float>((size_t)B * kInkHeads * kInkMqSplits);
+            d_tc_po = dalloc<float>((size_t)B * kInkHeads * kInkMqSplits * kInkHeadDim);
+        }
         d_proj        = dalloc<float>(B * kInkHidden);
         d_g           = dalloc<float>(B * kInkDsparkInter);
         d_u           = dalloc<float>(B * kInkDsparkInter);
@@ -1393,6 +1404,10 @@ struct InkDSpark {
                 d_q, (const float*)m.trunk_ptr(p + ".self_attn.q_norm.weight"), d_pos, m.man.c.dspark_rope_theta, B, kInkHeads);
             k_dspark_rmsnorm_rope<<<dim3(kInkKVHeads, B), 128, 0, r.st>>>(
                 d_k, (const float*)m.trunk_ptr(p + ".self_attn.k_norm.weight"), d_pos, m.man.c.dspark_rope_theta, B, kInkKVHeads);
+            if (d_tc_po && m.man.c.dspark_is_swa[il] == 0 && ctx_cap[il] == max_ctx) {
+                ink_dspark_attn_tc(r.st, d_q, d_k, d_v, d_ctx_k[il], d_ctx_v[il], ctx_cap[il], d_apos, B,
+                                   d_tc_pm, d_tc_pl, d_tc_po, d_attn_out);
+            } else
             k_dspark_block_attn<<<dim3(kInkHeads, B), 128, 0, r.st>>>(
                 d_q, d_k, d_v, d_ctx_k[il], d_ctx_v[il], d_apos,
                 m.man.c.dspark_is_swa[il] != 0, m.man.c.dspark_swa_win, ctx_cap[il], B, d_attn_out);
@@ -1676,7 +1691,7 @@ struct InkDSpark {
             if (d_ctx_v[il]) { cudaFree(d_ctx_v[il]); d_ctx_v[il] = nullptr; }
         }
         auto fr = [](auto*& p) { if (p) { cudaFree(p); p = nullptr; } };
-        fr(d_f_rnn); fr(d_cur); fr(d_h); fr(d_q); fr(d_k); fr(d_v); fr(d_qkv_fused); fr(d_gu_fused); fr(d_attn_out);
+        fr(d_f_rnn); fr(d_cur); fr(d_h); fr(d_q); fr(d_k); fr(d_v); fr(d_qkv_fused); fr(d_gu_fused); fr(d_attn_out); fr(d_tc_pm); fr(d_tc_pl); fr(d_tc_po);
         fr(d_proj); fr(d_g); fr(d_u); fr(d_act); fr(d_ctx_tmp); fr(d_kc_tmp); fr(d_vc_tmp); fr(d_kv_ctx_fused);
         fr(d_base_logits); fr(d_cand_ids); fr(d_cand_base); fr(d_top_tmp_ids); fr(d_top_tmp_vals); fr(d_h_q8); fr(d_h_sc); fr(d_cand_scores);
         fr(d_rnn_state); fr(d_rnn_joint); fr(d_rnn_proj); fr(d_rnn_lat);
