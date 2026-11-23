@@ -72,6 +72,11 @@ python -I tools/inkling_uncensor_patch.py models/inkling2-strata/Inkling-2-Mini-
 
 工具先確認第 0–3 層（沒改過）重新編碼後跟官方位元組完全相同，才寫檔；寫完更新 Section 1 的 SHA-256（`--selfcheck --verify-hash` 通過）。
 
+- 來源：官方檔 `strata-engine/Inkling-2-Mini-Strata` 的 `Inkling-2-Mini-SQ-10.strata`（commit `04996a1e`，SHA-256 `ac4d452a…5934`）；
+  去拒答權重固定抓 `OpenUncensored/Inkling-2-Mini-Uncensored` 的 commit `4e5f06d7`（只讀約 340 MB）。
+- 做出來的檔案 SHA-256 應為 `82cbd007fc7f08f7de33ae7912d36112af97b148effc2a9ed17306a5afa48a5e`。
+  2026-11-24 重做一次，跟正在用的檔案逐位元相同。
+
 ## 200K：物理極限與兩張卡（2026-11-23）
 
 ### 硬體實測（不是規格表）
@@ -239,6 +244,9 @@ python -I tools/inkling_uncensor_patch.py models/inkling2-strata/Inkling-2-Mini-
 讀 prompt 每 8K 的速度（兩張卡，第四輪，含看圖模組）：64K 2,242、131K 1,602、197K 1,087 tok/s（第三輪同一天 1,942、1,563、1,082）。
 雙卡 64K prompt：33.0 → 31.4 秒（只改專家 128 列，兩輪交錯）。
 長文解碼（雙卡，投機／不投機，tok/s）：32K 60.6／47.0、64K 53.3／42.3、128K 49.7／36.4、200K 42.6／36.0。
+11/24 第八輪後重量（雙卡預設設定、bench、生成 256 個 token，各一次）：讀 prompt 1K 1,943、4K 2,575、16K 2,638、32K 2,563、
+64K 2,564、128K 2,343、200K 1,911 tok/s（200K 共 104.7 秒）；不投機解碼 56.4、63.0、60.6、57.7、52.6、46.5、40.9 tok/s；
+投機 75.0、88.1、55.2、106.0、60.4、111.6、50.7 tok/s（每步 1.5–4.5 個 token，跟合成 prompt 的內容有關，起伏比長度大）。
 單卡 112K 設定：32K 65.8／44.6、64K 53.3／40.7、100K 48.2／43.2。投機時 200K 每步平均 2.03 個 token（合成 prompt）。
 16K prompt（單卡）：1,408 → 2,207 tok/s。單卡 112K 設定：32K 讀 prompt 1,916 tok/s。
 

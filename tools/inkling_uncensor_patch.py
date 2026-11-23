@@ -25,6 +25,7 @@ import numpy as np
 import zstandard
 
 REPO = "OpenUncensored/Inkling-2-Mini-Uncensored"
+REV = "4e5f06d72b5a70c9dcd5e8046aea576eb3ee8487"   # 2026-11-21; weights unchanged since 454b128 (later commits: model card)
 FILE = "model-00001-of-00001.safetensors"
 EDITED = range(4, 24)          # layers OpenUncensored edited (README: wo_ud on layers 4 to 23)
 CHECK = range(0, 4)            # unedited layers: our Q8_ROW bytes must equal the official ones
@@ -79,7 +80,7 @@ def main(argv: list[str]) -> int:
     tensors = {t["name"]: t for t in man["trunk_tensors"]}
     sec1 = next(e for e in entries if e[3] == 1)
 
-    url = f"https://huggingface.co/{REPO}/resolve/main/{FILE}"
+    url = f"https://huggingface.co/{REPO}/resolve/{REV}/{FILE}"
     n = struct.unpack("<Q", http_range(url, 0, 7))[0]
     st = json.loads(http_range(url, 8, 8 + n - 1))
     base = 8 + n
