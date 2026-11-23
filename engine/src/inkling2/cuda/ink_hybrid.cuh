@@ -1054,7 +1054,7 @@ inline void launch_ink_moe_hybrid(
     }
 
     // 3. Deterministic 8-slot weighted sum -> y_out [M, 2304]
-    dim3 rgrid((kInkHidden + 255) / 256, M);
+    dim3 rgrid((kInkHidden / 4 + 255) / 256, M);
     k_ink_moe_reduce8<<<rgrid, 256, 0, st>>>(ws.y_pair, y_out, M);
 }
 

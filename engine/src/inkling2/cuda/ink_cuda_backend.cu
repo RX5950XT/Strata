@@ -387,6 +387,16 @@ public:
                     strata::ink::ink_commit_kv(*runner_, path, p0, M, slot);
                     snap_p0_[slot] = p0;
                     snap_M_[slot] = M;
+                } else if (pf_prof_on() && M > 16) {
+                    // fork: INK_PF_PROF=1 times each prompt stage (syncs after every stage; use with INK_LANES_OFF)
+                    INK_CK(cudaStreamSynchronize(runner_->st));
+                    const auto t0 = std::chrono::steady_clock::now();
+                    runner_->prof_enabled = true;
+                    runner_->forward_seq(toks.data(), p0, M, slot, want_taps);
+                    runner_->prof_enabled = false;
+                    INK_CK(cudaStreamSynchronize(runner_->st));
+                    pf_prof_wall_ms_ += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+                    pf_prof_tok_ += M;
                 } else {
                     runner_->forward_seq(toks.data(), p0, M, slot, want_taps);
                 }
@@ -616,7 +626,19 @@ private:
         h_logits_pin_ = strata::ink::halloc_pinned<float>((size_t)h_logits_cap_ * V);
     }
 
+    static bool pf_prof_on() { static const bool on = std::getenv("INK_PF_PROF") != nullptr; return on; }
+    void pf_prof_print() const {
+        if (pf_prof_tok_ <= 0 || !runner_) return;
+        const double* ms = runner_->prof_ms;
+        double staged = 0;
+        for (int i = 0; i < 8; ++i) staged += ms[i];
+        std::fprintf(stderr, "[pf-prof] %ld tokens, %.0f ms wall | norm/mix %.0f, qkv %.0f, sconv/kv %.0f, attn %.0f, wo %.0f, "
+                             "moe %.0f, unembed %.0f, outside visits %.0f ms\n",
+                     pf_prof_tok_, pf_prof_wall_ms_, ms[0], ms[1], ms[2], ms[3], ms[4], ms[5], ms[7], pf_prof_wall_ms_ - staged);
+    }
+
     void cleanup() {
+        pf_prof_print();
         if (dspark_) { dspark_->free_all(); dspark_.reset(); }
         if (runner_) { runner_->free_all(); runner_.reset(); }
         if (d_sconv_snap_) { cudaFree(d_sconv_snap_); d_sconv_snap_ = nullptr; }
@@ -628,6 +650,8 @@ private:
     }
 
     bool initialized_ = false;
+    double pf_prof_wall_ms_ = 0.0;
+    long pf_prof_tok_ = 0;
     int gpu_id_ = 0;
     int max_slots_ = 1;
     int eff_max_ctx_ = 4096;

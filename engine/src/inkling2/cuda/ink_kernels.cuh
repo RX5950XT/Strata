@@ -528,7 +528,8 @@ __global__ void __launch_bounds__(256) k_ink_rms_norm_3x(
 }
 
 // FUSED 1-Launch Looped Pre-Attn Kernel: replaces attn_res_mix(d_msgs) + attn_res_mix(d_mixed) + ctrl_3x_cat_rms (-48 launches/step!)
-// Grid: dim3(M, 4), Block: 256 threads.
+// Grid: dim3(4, M), Block: 256 threads (fork: c is the fast index, so the 4 blocks of a token run together and their
+// repeated reads of the same bank/depth rows hit L2; it was dim3(M, 4), 2,048 blocks apart at a 2,048-token chunk).
 //   blockIdx.y in {0,1,2}: computes msg_c from bank (bst, msg_q[c]) AND src_c from depth states (stp, res_q[is_swa ? 0 : c]),
 //                          writes d_msgs[c], d_mixed[c], AND normalized [rms(src_c); rms(msg_c)] into cat3[c]!
 //   blockIdx.y == 3:       computes msg_3 (for MLP controller) from bank (bst, msg_q[3]) -> writes d_msgs[3]!
@@ -542,8 +543,8 @@ __global__ void __launch_bounds__(256) k_ink_attn_res_3x_cat_rms(
     float* __restrict__ msgs_out,    // [4, M, D]
     float* __restrict__ cat3_out,    // [3, M, 2*D] (only used when cat3_out != nullptr)
     int M, int D) {
-    const int m = blockIdx.x;
-    const int c = blockIdx.y;  // 0..3
+    const int m = blockIdx.y;
+    const int c = blockIdx.x;  // 0..3
     if (m >= M || c >= 4) return;
     const int tid = threadIdx.x;
     const int warp = tid >> 5;

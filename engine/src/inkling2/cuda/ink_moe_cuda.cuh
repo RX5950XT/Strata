@@ -74,6 +74,8 @@ struct InkMoeWorkspace {
     uint8_t* hsc_mx8  = nullptr;    // [P, 36]
     InkQ8_1_G64* xq_sk = nullptr;   // [M, 36]
     InkQ8_1_G64* hq_sk = nullptr;   // [P, 18]
+    int32_t* n_tiles2 = nullptr;    // fork: [1] tile count of the second list
+    int2*    tiles2   = nullptr;    // fork: [max_tiles] smaller tiles for SF4/MX8 experts on a 128-row-tile layer
     void*    raw_buf  = nullptr;
     size_t   raw_bytes = 0;
     int      cap_M    = 0;
@@ -112,6 +114,8 @@ struct InkMoeWorkspace {
         const size_t o_hscmx8  = bump(P * (kInkInter / 32));
         const size_t o_xqsk    = bump(M * (kInkHidden / 64) * sizeof(InkQ8_1_G64));
         const size_t o_hqsk    = bump(P * (kInkInter / 64) * sizeof(InkQ8_1_G64));
+        const size_t o_ntiles2 = bump(16);
+        const size_t o_tiles2  = bump(MT * sizeof(int2));
 
         raw_bytes = off;
         INK_CK(cudaMalloc(&raw_buf, raw_bytes));
@@ -137,6 +141,8 @@ struct InkMoeWorkspace {
         hsc_mx8    = base + o_hscmx8;
         xq_sk      = (InkQ8_1_G64*)(base + o_xqsk);
         hq_sk      = (InkQ8_1_G64*)(base + o_hqsk);
+        n_tiles2   = (int32_t*)(base + o_ntiles2);
+        tiles2     = (int2*)(base + o_tiles2);
     }
 
     void free_all() {
@@ -255,8 +261,11 @@ __global__ void __launch_bounds__(128) k_ink_moe_bin(
     const int32_t* __restrict__ topk_idx,
     int M,
     int tile_rows,
-    InkMoeTables tb) {
-    __shared__ int s_cnt[128], s_off[128], s_act[128], s_fill[128], s_tcnt[128];
+    InkMoeTables tb,
+    int tile_rows2 = 0,           // fork: > 0 also writes a list of tile_rows2-row tiles to tiles2 / n_tiles2
+    int2* tiles2 = nullptr,
+    int32_t* n_tiles2 = nullptr) {
+    __shared__ int s_cnt[128], s_off[128], s_act[128], s_fill[128], s_tcnt[128], s_tcnt2[128];
     const int t = threadIdx.x;
     const int P = M * kInkTopK;
 
@@ -273,20 +282,23 @@ __global__ void __launch_bounds__(128) k_ink_moe_bin(
     const int cv = s_cnt[t];
     const int is_act = cv > 0 ? 1 : 0;
     const int nt = (cv + tile_rows - 1) / tile_rows;
+    const int nt2 = (tile_rows2 > 0) ? (cv + tile_rows2 - 1) / tile_rows2 : 0;
     s_off[t] = cv;
     s_act[t] = is_act;
     s_tcnt[t] = nt;
+    s_tcnt2[t] = nt2;
     __syncthreads();
 
     // Inclusive Hillis-Steele prefix sum over 128 elements (7 steps)
 #pragma unroll
     for (int d = 1; d < 128; d <<= 1) {
-        int a0 = 0, a1 = 0, a2 = 0;
-        if (t >= d) { a0 = s_off[t - d]; a1 = s_act[t - d]; a2 = s_tcnt[t - d]; }
+        int a0 = 0, a1 = 0, a2 = 0, a3 = 0;
+        if (t >= d) { a0 = s_off[t - d]; a1 = s_act[t - d]; a2 = s_tcnt[t - d]; a3 = s_tcnt2[t - d]; }
         __syncthreads();
         s_off[t] += a0;
         s_act[t] += a1;
         s_tcnt[t] += a2;
+        s_tcnt2[t] += a3;
         __syncthreads();
     }
 
@@ -297,6 +309,7 @@ __global__ void __launch_bounds__(128) k_ink_moe_bin(
         tb.off[128] = s_off[127];
         *tb.nact = s_act[127];
         *tb.n_tiles = s_tcnt[127];
+        if (tile_rows2 > 0) *n_tiles2 = s_tcnt2[127];
     }
     if (is_act) tb.active[s_act[t] - 1] = t;
     if (nt > 0) {
@@ -304,6 +317,10 @@ __global__ void __launch_bounds__(128) k_ink_moe_bin(
         for (int ti = 0; ti < nt; ++ti) {
             tb.tiles[tbase + ti] = make_int2(t, off_e + ti * tile_rows);
         }
+    }
+    if (nt2 > 0) {
+        const int tbase = s_tcnt2[t] - nt2;
+        for (int ti = 0; ti < nt2; ++ti) tiles2[tbase + ti] = make_int2(t, off_e + ti * tile_rows2);
     }
     s_off[t] = off_e;
     __syncthreads();
@@ -325,15 +342,21 @@ __global__ void __launch_bounds__(256) k_ink_moe_reduce8(
     const float* __restrict__ y_pair,  // [M * 8, 2304]
     float* __restrict__ y_out,         // [M, 2304]
     int M) {
+    // fork: one float4 per thread (grid ((kInkHidden / 4 + 255) / 256, M)); same left-to-right sum per element
     const int tok = blockIdx.y;
-    const int d = blockIdx.x * 256 + threadIdx.x;
-    if (tok >= M || d >= kInkHidden) return;
-    const float* base = y_pair + (size_t)tok * kInkTopK * kInkHidden + d;
-    float s = base[0 * kInkHidden] + base[1 * kInkHidden]
-            + base[2 * kInkHidden] + base[3 * kInkHidden]
-            + base[4 * kInkHidden] + base[5 * kInkHidden]
-            + base[6 * kInkHidden] + base[7 * kInkHidden];
-    y_out[(size_t)tok * kInkHidden + d] = s;
+    const int d4 = blockIdx.x * 256 + threadIdx.x;
+    if (tok >= M || d4 >= kInkHidden / 4) return;
+    const float4* base = reinterpret_cast<const float4*>(y_pair + (size_t)tok * kInkTopK * kInkHidden) + d4;
+    constexpr int H4 = kInkHidden / 4;
+    float4 v[8];
+#pragma unroll
+    for (int k = 0; k < 8; ++k) v[k] = base[k * H4];
+    float4 r;
+    r.x = v[0].x + v[1].x + v[2].x + v[3].x + v[4].x + v[5].x + v[6].x + v[7].x;
+    r.y = v[0].y + v[1].y + v[2].y + v[3].y + v[4].y + v[5].y + v[6].y + v[7].y;
+    r.z = v[0].z + v[1].z + v[2].z + v[3].z + v[4].z + v[5].z + v[6].z + v[7].z;
+    r.w = v[0].w + v[1].w + v[2].w + v[3].w + v[4].w + v[5].w + v[6].w + v[7].w;
+    reinterpret_cast<float4*>(y_out + (size_t)tok * kInkHidden)[d4] = r;
 }
 
 // ============================================================================
@@ -2436,9 +2459,20 @@ inline void launch_ink_moe_dispatch_only(
     const bool use_sm120_tc = (!force_exact_dec && M >= 24 && sm120::available());
     const bool use_fp16_tc  = (!use_sm120_tc && M >= 24 && ink_has_int8_tc());
     const bool use_wmma_tc  = (!use_sm120_tc && !use_fp16_tc && M >= 24 && ink_has_wmma_f16());
-    const int tile_rows = use_wmma_tc ? ((M <= 128) ? 16 : 64)
+    // fork: prompt chunks (M >= 1024) run the S_K experts on 128-row tiles (an expert gets ~M/16 rows, so 64-row tiles
+    // unpacked every weight tile twice); the SF4/MX8 kernels handle at most 64 rows, so they get a second tile list
+    static const bool tr128_off = std::getenv("INK_MOE_TR128_OFF") != nullptr;
+    const bool sk_tr128 = !tr128_off && !use_wmma_tc && M >= 1024 && info.has_sk && ink_has_int8_tc();
+    const int base_rows = use_wmma_tc ? ((M <= 128) ? 16 : 64)
                                       : ((M <= 128 || use_fp16_tc) ? 16 : 64);
-    k_ink_moe_bin<<<1, 128, 0, st>>>(experts, ws.topk_idx, M, tile_rows, ws.tb);
+    const int tile_rows = sk_tr128 ? 128 : base_rows;
+    // SF4/MX8 experts on a 128-row-tile layer get their own list of base_rows-row tiles (same sorted pairs)
+    const bool mixed = sk_tr128 && (info.has_sf4 || info.has_mx8);
+    k_ink_moe_bin<<<1, 128, 0, st>>>(experts, ws.topk_idx, M, tile_rows, ws.tb,
+                                     mixed ? base_rows : 0, ws.tiles2, ws.n_tiles2);
+    InkMoeTables tb_f = ws.tb;   // tables for the SF4/MX8 kernels
+    if (mixed) { tb_f.tiles = ws.tiles2; tb_f.n_tiles = ws.n_tiles2; }
+    const int rows_f = mixed ? base_rows : tile_rows;
 
     const int P = M * kInkTopK;
     const int max_act = std::min(P, kInkExperts);
@@ -2475,22 +2509,22 @@ inline void launch_ink_moe_dispatch_only(
     // 2B. Dispatch SF4 & MX8 experts (Blackwell sm_120a TC for M>=16 prefill, exact FP16 TC for M>=16 sm_80..89, 8-lane uint4 for M<16!)
     if (info.has_sf4 || info.has_mx8) {
         if (use_sm120_tc) {
-            const int mt = ink_moe_max_tiles(M, tile_rows);
+            const int mt = ink_moe_max_tiles(M, rows_f);
             if (info.has_sf4) {
                 if (!quant_x_done) sm120::quantize_act_fp4(x_f32, M, kInkHidden, ws.xa_fp4, st);
-                sm120::moe_sf4_gu_tc(sec4_base, experts, ws.tb, ws.xa_fp4, ws.ha_fp4, mt, tile_rows, st);
-                sm120::moe_sf4_dn_tc(sec4_base, experts, ws.tb, ws.ha_fp4, ws.topk_w, ws.y_pair, mt, tile_rows, st);
+                sm120::moe_sf4_gu_tc(sec4_base, experts, tb_f, ws.xa_fp4, ws.ha_fp4, mt, rows_f, st);
+                sm120::moe_sf4_dn_tc(sec4_base, experts, tb_f, ws.ha_fp4, ws.topk_w, ws.y_pair, mt, rows_f, st);
             }
             if (info.has_mx8) {
                 if (!quant_x_done) sm120::quantize_act_mx8(x_f32, M, kInkHidden, ws.xq_mx8, ws.xsc_mx8, st);
-                sm120::moe_mx8_gu_tc(sec4_base, experts, ws.tb, ws.xq_mx8, ws.xsc_mx8, ws.hq_mx8, ws.hsc_mx8, mt, tile_rows, st);
-                sm120::moe_mx8_dn_tc(sec4_base, experts, ws.tb, ws.hq_mx8, ws.hsc_mx8, ws.topk_w, ws.y_pair, mt, tile_rows, st);
+                sm120::moe_mx8_gu_tc(sec4_base, experts, tb_f, ws.xq_mx8, ws.xsc_mx8, ws.hq_mx8, ws.hsc_mx8, mt, rows_f, st);
+                sm120::moe_mx8_dn_tc(sec4_base, experts, tb_f, ws.hq_mx8, ws.hsc_mx8, ws.topk_w, ws.y_pair, mt, rows_f, st);
             }
         } else if (use_fp16_tc) {
             const int mt = ink_moe_max_tiles(M, 16);
             const unsigned grid = (unsigned)std::min(std::max(1, mt * 18), 2048);
-            k_ink_moe_sf4_mx8_fp16tc<true><<<grid, 256, 0, st>>>(sec4_base, experts, ws.tb, x_f32, nullptr, ws.h_f32);
-            k_ink_moe_sf4_mx8_fp16tc<false><<<grid, 256, 0, st>>>(sec4_base, experts, ws.tb, ws.h_f32, ws.topk_w, ws.y_pair);
+            k_ink_moe_sf4_mx8_fp16tc<true><<<grid, 256, 0, st>>>(sec4_base, experts, tb_f, x_f32, nullptr, ws.h_f32);
+            k_ink_moe_sf4_mx8_fp16tc<false><<<grid, 256, 0, st>>>(sec4_base, experts, tb_f, ws.h_f32, ws.topk_w, ws.y_pair);
         } else {
             dim3 g16(kInkInter / 16, max_act);
             if (M == 1) {
@@ -2512,12 +2546,14 @@ inline void launch_ink_moe_dispatch_only(
         if (M >= 24 && ink_has_int8_tc()) {
             const int mt = ink_moe_max_tiles(M, tile_rows);
             const unsigned grid = (unsigned)std::min(std::max(1, mt * 18), 2048);
-            if (tile_rows <= 16) k_ink_moe_sk_tc<true, 16><<<grid, 256, 0, st>>>(sec4_base, experts, ws.tb, ws.xq_sk, nullptr, ws.h_f32);
-            else                 k_ink_moe_sk_tc<true, 64><<<grid, 256, 0, st>>>(sec4_base, experts, ws.tb, ws.xq_sk, nullptr, ws.h_f32);
+            if (tile_rows <= 16)      k_ink_moe_sk_tc<true, 16><<<grid, 256, 0, st>>>(sec4_base, experts, ws.tb, ws.xq_sk, nullptr, ws.h_f32);
+            else if (tile_rows <= 64) k_ink_moe_sk_tc<true, 64><<<grid, 256, 0, st>>>(sec4_base, experts, ws.tb, ws.xq_sk, nullptr, ws.h_f32);
+            else                      k_ink_moe_sk_tc<true, 128><<<grid, 256, 0, st>>>(sec4_base, experts, ws.tb, ws.xq_sk, nullptr, ws.h_f32);
             const int nblk_h = P * (kInkInter / 64);
             k_ink_quant_q8_1<<<(nblk_h + 7) / 8, 256, 0, st>>>(ws.h_f32, ws.hq_sk, P, kInkInter);
-            if (tile_rows <= 16) k_ink_moe_sk_tc<false, 16><<<grid, 256, 0, st>>>(sec4_base, experts, ws.tb, ws.hq_sk, ws.topk_w, ws.y_pair);
-            else                 k_ink_moe_sk_tc<false, 64><<<grid, 256, 0, st>>>(sec4_base, experts, ws.tb, ws.hq_sk, ws.topk_w, ws.y_pair);
+            if (tile_rows <= 16)      k_ink_moe_sk_tc<false, 16><<<grid, 256, 0, st>>>(sec4_base, experts, ws.tb, ws.hq_sk, ws.topk_w, ws.y_pair);
+            else if (tile_rows <= 64) k_ink_moe_sk_tc<false, 64><<<grid, 256, 0, st>>>(sec4_base, experts, ws.tb, ws.hq_sk, ws.topk_w, ws.y_pair);
+            else                      k_ink_moe_sk_tc<false, 128><<<grid, 256, 0, st>>>(sec4_base, experts, ws.tb, ws.hq_sk, ws.topk_w, ws.y_pair);
         } else {
             dim3 g32(kInkInter / 32, max_act);
             if (M == 1)       k_ink_moe_gu_sk<1><<<g32, 128, 0, st>>>(sec4_base, experts, ws.tb, ws.xq_sk, ws.h_f32);
@@ -2569,7 +2605,7 @@ inline void launch_ink_moe(
 
     // 3. Deterministic 8-slot weighted sum -> y_out [M, 2304] (skipped when caller fuses reduce8 + post-MLP ShortConv4!)
     if (run_reduce8) {
-        dim3 rgrid((kInkHidden + 255) / 256, M);
+        dim3 rgrid((kInkHidden / 4 + 255) / 256, M);
         k_ink_moe_reduce8<<<rgrid, 256, 0, st>>>(ws.y_pair, y_out, M);
     }
 }

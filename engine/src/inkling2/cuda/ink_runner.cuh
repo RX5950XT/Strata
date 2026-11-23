@@ -6,6 +6,7 @@
 
 #include "ink_attn.cuh"
 #include <condition_variable>
+#include <map>
 #include <mutex>
 #include <thread>
 #include "ink_attn_dispatch.cuh"
@@ -176,6 +177,12 @@ struct InkCudaModel {
                 else if (e.gu_code_id == FMT_MX8) moe_info[il].has_mx8 = true;
                 else moe_info[il].has_sk = true;
             }
+        }
+        if (std::getenv("INK_VRAM_LOG")) {   // fork: which expert codecs the file uses (picks the MoE kernels)
+            std::map<std::pair<int, int>, int> n_code;
+            for (const auto& e : dir) ++n_code[{(int)e.gu_code_id, (int)e.dn_code_id}];
+            for (const auto& kv : n_code)
+                std::fprintf(stderr, "[ink] experts gu_code %d dn_code %d: %d\n", kv.first.first, kv.first.second, kv.second);
         }
 
         double t1 = now_s();
@@ -1190,7 +1197,7 @@ struct InkCudaRunner {
                 in_v = is_swa ? d_mixed : (d_mixed + 2 * n_hid);
             } else {
                 // FUSED 1-Launch: bank msg_0..3 + depth mixed_0..2 + cat3_rms (when M <= 16)!
-                k_ink_attn_res_3x_cat_rms<<<dim3(M, 4), 256, 0, st>>>(
+                k_ink_attn_res_3x_cat_rms<<<dim3(4, M), 256, 0, st>>>(
                     stp, q_res, is_swa, *bank_stp, m.d_msg_queries[ip - m.man.c.core_start],
                     d_mixed, d_msgs, (M <= 16) ? d_ctrl_cat : nullptr, M, kInkHidden);
                 const float* src0 = d_mixed;

@@ -1,13 +1,15 @@
 # 上游 0.2.19 合併＋Inkling-2-Mini 去拒答版（2026-11-22）
 
-- [x] 合併 upstream/main（0.2.11 → 0.2.19，引擎 0.1.65，2,545 個 commit）。上游搬目錄：`src/`→`engine/src/`、`serve/`、`setup.py`、`data/`→`terminal/`。分支 `merge/upstream-0.2.19`，未 push。
+- [x] 合併 upstream/main（0.2.11 → 0.2.19，引擎 0.1.65，2,545 個 commit）。上游搬目錄：`src/`→`engine/src/`、`serve/`、`setup.py`、`data/`→`terminal/`。11/23 合併進 main 並 push，分支已刪。
 - [x] fork 的資料仍在 repo 根目錄（configs/、models/、packs/、engine-local/、.panel/）；面板用 `REPO = terminal/..` 找它們，server 從 `terminal/` 跑。SC117 設定的 expert-profile 改指 `terminal/data/`。
 - [x] 雙卡主引擎用 `build-dual.bat`（`-S engine`，vendored ggml）重編，engine-local 換 0.1.65，舊版 `engine-local/strata-0.1.57.exe`。SC117 雙卡 A/B 一輪：解碼新 42–48、舊 42–50 tok/s，worker 正常。
 - [x] Inkling：跑官方 SQ-10＋OpenUncensored 的 20 個 `wo_ud`（`tools/inkling_uncensor_patch.py`），單卡、fp8 KV、看圖、DSpark。數字與原因在 docs/INKLING-UNCENSORED.md。
 - [x] Inkling 長上下文（11/23）：讀 prompt 注意力分段（固定記憶體）、DSpark 環狀緩衝、`--kv-gpu 1` 把全域 KV／注意力放 3060 Ti（門鈴＋keep-warm）、64 段 split-K、`--draft-max-pos`。200K 兩張卡：prompt 364 秒、解碼 22.8 tok/s；112K 單卡設定照舊。數字與極限在 docs/INKLING-UNCENSORED.md。舊 exe：engine-local/inkling/strata-inkling-112k.exe、-ctx64k.exe。
 - [x] 離極限第二輪（11/23）：融合 flash prefill（`ink_pf_flash.cuh`，FP16 MMA，KLD 比原版好）、詞表輸出層直接讀 S6_K（每 token 少搬約 2 GB）、16-lane 解碼注意力、`--chunk 2048/1024`、`--draft-max-pos 40960`。200K 雙卡：prompt 185 秒、解碼 26.3 tok/s；面板預設改成雙卡 200K（設定 `"default": true`），單卡改名 `-112k`。舊 exe：`strata-inkling-prev.exe`。
 - [x] 第三輪（11/23）：解碼／樹驗證注意力和 DSpark 草稿全域層改 tensor core（`ink_dec_tc.cuh`）、讀 prompt 兩張卡同時做（一段拆兩半交錯，`emit_two_lanes`，交接改兩組緩衝區）。200K 雙卡：prompt 129 秒、解碼投機 42.6／不投機 36.0 tok/s；投機在每個長度都贏，兩份設定拿掉 `--draft-max-pos`。上一版 exe：`strata-inkling-r2.exe`。
-- [ ] 還沒做：主卡矩陣乘法（讀 prompt 前段的瓶頸）、樹驗證的專家讀取；HIP/SYCL 沒編（只改了共用的參數與 CUDA 檔）。
+- [x] 第四輪（11/23）：專家讀 prompt 改 128 列一塊（SF4 另一份 64 列清單）、注意力前混合 kernel 排程改相鄰、8 路相加 float4。KLD 不變；200K 雙卡 prompt 125.4 → 118.7 秒（同一天對照），156,703 token 真實長文 85.8 秒答對。上一版 exe：`strata-inkling-r3.exe`。
+- [x] HIP：WSL ROCm 7.2.4（補裝 hipblas/rocblas/hipblaslt-dev）gfx1100 編得過、`--help` 能跑；連結要 `-DCMAKE_EXE_LINKER_FLAGS=-no-pie`（上游 HIP 物件沒 -fPIC，跟這次改動無關）。SYCL：WSL 裝 oneAPI 2026.2，`build_inkling_sycl.sh jit` 原始碼全編過，連結缺 `quant::dequant_row`（上游腳本少編一個檔，跟這次無關）；SYCL 引擎沒用到改過的共用檔。
+- [ ] 還沒做：專家 INT8 只到峰值約 2 成（沒有 ncu 計數器權限，要管理員開）；後段卡在 3060 Ti 全域注意力（約峰值 7 成）；樹驗證的專家讀取沒動。
 - [x] Abiray Q3_K_M GGUF：載入器加主線命名、EP 後端加 Q3_K／Q5_0／Q5_1、修 `d_dense_x_` 溢位；能跑但只有 EP 慢路徑（約 5 tok/s）。
 - [x] 面板支援 Inkling（DSpark、引擎內建看圖、從 server log 讀速度）；PANEL.bat 改 `terminal\serve\panel.py`。
 - [ ] setup.py 的 fork 雙卡設定流程（choose_expert_gpu、orca 家族設定）上游改到 strata_control/setup_config.py，沒移植：重跑 setup 不會自動產生 expert_gpu 設定，現有設定檔不受影響。

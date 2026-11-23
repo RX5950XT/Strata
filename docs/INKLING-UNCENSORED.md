@@ -120,7 +120,8 @@ python -I tools/inkling_uncensor_patch.py models/inkling2-strata/Inkling-2-Mini-
 7. 除錯開關（環境變數）：`INK_VRAM_LOG`、`INK_BENCH_PROGRESS`、`INK_KLD_CHUNKS`、`INK_RA_PROF`、`INK_RA_CHECK`、`INK_MQ_OFF`、
    `INK_PF_FLASH_OFF`（關融合 kernel）、`INK_PF_FLASH_BF16`、`INK_PF_FLASH_CHECK`（兩條路都算再比）、`INK_SK_GEMV_OFF`、
    `INK_ARGMAX_FULL_MAX`、`INK_ARGMAX_CHECK`、`INK_DEC16_OFF`、`INK_DEC_SPLITS`、`INK_DEC_TC_OFF`、`INK_DSPARK_TC_OFF`、
-   `INK_LANES_OFF`、`INK_SPEC_PROF`（投機每一步各段的時間）、`INK_KLD_DECODE_FROM=N`（KLD 從第 N 個 token 起逐個解碼，量解碼路徑）。
+   `INK_LANES_OFF`、`INK_SPEC_PROF`（投機每一步各段的時間）、`INK_KLD_DECODE_FROM=N`（KLD 從第 N 個 token 起逐個解碼，量解碼路徑）、
+   `INK_PF_PROF`（讀 prompt 每一段的時間，要配 `INK_LANES_OFF`）、`INK_MOE_TR128_OFF`（專家改回 64 列一塊）。
 
 第三輪（同一天稍晚）：
 
@@ -140,6 +141,21 @@ python -I tools/inkling_uncensor_patch.py models/inkling2-strata/Inkling-2-Mini-
     0.005471 → 0.005612，不值得。`--chunk 3072` 200K 讀 prompt 124.6 秒（2,048 是 129 秒），但主卡只剩 199 MB、峰值 15.45 GB，
     超過約 14.2 GB 的安全線，維持 2,048。4,096 直接爆顯存（解碼 2.3 tok/s）。
 
+第四輪（主卡讀 prompt 的 kernel）：
+
+12. 先量 tensor core 實際峰值（`mma.sync` 空跑）：5060 Ti INT8 175.6 TOPS、FP16 輸入 FP32 累加 42.0、FP16 累加 83.8 TFLOPS；
+    3060 Ti 138.8／35.0／70.0。專家（S2_K／S3_K，INT8 tensor core）讀 prompt 時只跑到約 30 TOPS，是主卡最大的一塊
+    （單卡 8K：gate/up 32%、down 16%）。
+13. 讀 prompt 時（一次 1,024 個 token 以上）專家改成 128 列一塊：2,048 個 token 時每個專家平均分到約 128 列，
+    原本 64 列一塊，同一份權重要解壓兩次。少數 SF4 專家的 kernel 最多 64 列，排序時多寫一份 64 列的清單給它用。
+    專家時間 gate/up 1,138 → 812 ms、down 555 → 386 ms（單卡 8K，nsys 加總）。每個輸出的算法和順序不變，KLD 跟上一版完全相同。
+14. 注意力前的混合 kernel（`k_ink_attn_res_3x_cat_rms`）一個 token 有 4 個 block 讀同一批資料，原本這 4 個 block 在排程上
+    隔 2,048 個 block，資料早就不在 L2；改成相鄰：1.35 → 0.78 ms。專家輸出的 8 路相加改用 float4：0.456 → 0.421 ms。
+    單卡 8K 讀 prompt 的 GPU 時間合計 3.56 → 2.89 秒。
+15. 試過不採用：專家 k-loop 雙緩衝（暫存器變多，每個 SM 只放得下 1 個 block，反而慢）、把 INT8 轉 float 的 I2F 換成加常數的技巧
+    （沒有差）、128 列改 2×4 的 warp 排法（慢）。`__launch_bounds__(256, 1)` 會讓編譯器把暫存器從 128 加到 160–200，
+    每個 SM 少一半 block，要寫成 `(256)`。
+
 量精度時注意：從 `build-inkling/` 直接跑的 exe 會載入 CUDA 13.4 的 cuBLAS，`engine-local/inkling/` 裡的用發行包附的；
 同一份原始碼兩邊 KLD 就差 0.0038。要比，先把 exe 放到 `engine-local/inkling/`。
 
@@ -150,9 +166,12 @@ python -I tools/inkling_uncensor_patch.py models/inkling2-strata/Inkling-2-Mini-
 | 原版引擎，單卡 200K（專家 24% 在主記憶體） | 678 秒 | 10.0 tok/s | 49.3 tok/s（1K） |
 | 兩張卡，第一版（cuBLAS 注意力） | 364 秒（平均 549 tok/s） | 22.8 tok/s | 106.5／39.3 tok/s |
 | 兩張卡，第二輪 | 185 秒（平均 1,101 tok/s） | 26.3 tok/s | 117／60 tok/s（單卡、2K prompt 量的） |
-| 兩張卡，現在（第三輪） | **129 秒**（平均 1,550 tok/s） | **42.6 tok/s**（投機）／36.0（不投機） | 85–89 tok/s（雙卡、2K、投機） |
+| 兩張卡，第三輪 | 129 秒（平均 1,550 tok/s） | 42.6 tok/s（投機）／36.0（不投機） | 85–89 tok/s（雙卡、2K、投機） |
+| 兩張卡，現在（第四輪） | **118.7 秒**（平均 1,684 tok/s） | 40.3 tok/s（投機，128 個 token） | 73–75 tok/s（server 短答） |
 
-讀 prompt 每 8K 的速度（兩張卡，現在，含看圖模組）：64K 1,773、131K 1,561、197K 1,074 tok/s（第二輪 1,330、1,000、795）。
+第四輪同一天對照（雙卡、含看圖模組、200K、生成 128 個 token）：第三輪的 exe 125.4 秒、解碼 40.5 tok/s；新版 118.7 秒、40.3 tok/s。
+讀 prompt 每 8K 的速度（兩張卡，第四輪，含看圖模組）：64K 2,242、131K 1,602、197K 1,087 tok/s（第三輪同一天 1,942、1,563、1,082）。
+雙卡 64K prompt：33.0 → 31.4 秒（只改專家 128 列，兩輪交錯）。
 長文解碼（雙卡，投機／不投機，tok/s）：32K 60.6／47.0、64K 53.3／42.3、128K 49.7／36.4、200K 42.6／36.0。
 單卡 112K 設定：32K 65.8／44.6、64K 53.3／40.7、100K 48.2／43.2。投機時 200K 每步平均 2.03 個 token（合成 prompt）。
 16K prompt（單卡）：1,408 → 2,207 tok/s。單卡 112K 設定：32K 讀 prompt 1,916 tok/s。
@@ -164,6 +183,7 @@ python -I tools/inkling_uncensor_patch.py models/inkling2-strata/Inkling-2-Mini-
 | 200K 雙卡（第一版） | 178,435 token | 320 秒 | 答對 |
 | 200K 雙卡（第二輪） | 172,981 token | 152 秒 | 答對 |
 | 200K 雙卡（第三輪） | 164,100 token | 104 秒 | 答對 |
+| 200K 雙卡（第四輪） | 156,703 token | 85.8 秒 | 答對 |
 | 200K 雙卡（現在） | 60,271 token | 42 秒 | 答對 |
 | 112K 單卡（第二輪） | 101,986 token | 68 秒 | 答對 |
 | 112K 單卡（第三輪） | 99,177 token | 72.5 秒 | 答對 |
@@ -176,8 +196,10 @@ python -I tools/inkling_uncensor_patch.py models/inkling2-strata/Inkling-2-Mini-
 
 ### 離極限還差多少
 
-- 200K 讀 prompt 129 秒。主卡單獨的工作約 105 秒（開頭沒有注意力時約 1,900 tok/s），3060 Ti 的注意力約 73 秒（融合 kernel
-  已到 FP32 累加 tensor core 峰值的約 7 成）；兩張卡同時做之後，前段卡在主卡、後段卡在 3060 Ti。再快要減少主卡的矩陣乘法時間。
+- 200K 讀 prompt 118.7 秒。前段卡在主卡（64K 時 2,242 tok/s），後段卡在 3060 Ti 的全域注意力（197K 時 1,087 tok/s，
+  兩輪都一樣）。全域注意力約 2 PFLOP，3060 Ti 實測 FP32 累加峰值 35 TFLOPS，滿載也要 56 秒，現在約 7 成。
+  主卡剩下的大塊：專家（INT8 只用到峰值約 2 成，卡在 k-loop 的同步和延遲，沒有效能計數器權限可以細看）、
+  BF16 投影矩陣（cuBLAS，已接近 FP32 累加的峰值 42 TFLOPS，要更快只能改 FP16 累加或量化，會影響精度）。
 - 200K 解碼：不投機 36.0 tok/s（每個 token 約 28 ms，3060 Ti 的 KV 讀取約 10 ms，已到約 8 成頻寬），投機 42.6 tok/s。
   投機每步約 2 個 token，驗證一步（約 4.4 個節點）的主卡時間約是單 token 的 1.8 倍（每個節點選的專家不同，要讀更多權重）。
 - 3060 Ti 只負責全域注意力。把專家也分過去，每層都要跨卡交接（每次約 0.13 ms，每個 token 48 次），解碼會更慢，所以沒做。
