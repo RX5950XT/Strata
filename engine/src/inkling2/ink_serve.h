@@ -129,6 +129,13 @@ inline int32_t sample_logits(float* lg, int V, const SampleOpts& s, const std::v
     return idx[keep - 1];
 }
 
+// fork: prompts of at least this many tokens keep their state for the next request (INK_PROMPT_CACHE_MIN=N; 0 = off)
+inline const int kPromptSnapMin = [] {
+    const char* e = std::getenv("INK_PROMPT_CACHE_MIN");
+    const int v = e ? std::atoi(e) : 1024;
+    return v > 0 ? v : (1 << 30);
+}();
+
 inline bool finite_logits(const float* lg, int V) noexcept {
     for (int i = 0; i < V; i += 67) if (!std::isfinite(lg[i])) return false;
     return true;
@@ -327,10 +334,13 @@ struct ActiveReq {
     std::vector<int32_t> hist;
     std::vector<int32_t> gen_ids;
     std::vector<int32_t> cached_prefix;  // tokens currently resident in slot KV
+    std::vector<int32_t> snap_ids;       // fork: the prompt tokens before the saved prompt state (save_prompt_state)
+    int snap_target = 0;                 // fork: save the prompt state when prefill reaches this position (0: no)
     double t_start = 0.0;
     double prompt_ms = 0.0;
     double decode_t0 = 0.0;
     int drafts_offered = 0;
+    int reused = 0;                      // fork: prompt tokens taken from the slot instead of read again
     int drafts_accepted = 0;
     bool cancelled = false;
     bool admitted = false;
@@ -395,7 +405,10 @@ inline int run_serve_loop(const ServeConfig& cfg, InkModelFile& mf, InkBackend& 
     auto finish_req = [&](ActiveReq& rq, const char* reason) {
         const double dec_ms = (rq.decode_t0 > 0.0) ? (now_s() - rq.decode_t0) * 1000.0 : 0.0;
         if (rq.is_solo) {
-            proto("DONE %d %d %.1f %.1f %s", rq.generated, rq.prompt_len, rq.prompt_ms, dec_ms, reason);
+            // fork: + drafts_accepted drafts_offered reused, the main engine's DONE fields 6-8 (serve/server.py reads the
+            // reused count as the OpenAI usage's cached_tokens)
+            proto("DONE %d %d %.1f %.1f %s %d %d %d", rq.generated, rq.prompt_len, rq.prompt_ms, dec_ms, reason,
+                  rq.drafts_accepted, rq.drafts_offered, rq.reused);
         } else if (rq.is_ext_gen) {
             proto("DONE %s %d %d %.1f %.1f %s", rq.req_id.c_str(), rq.generated, rq.prompt_len, rq.prompt_ms, dec_ms, reason);
             req_id_to_slot.erase(rq.req_id);
@@ -481,13 +494,29 @@ inline int run_serve_loop(const ServeConfig& cfg, InkModelFile& mf, InkBackend& 
                 reuse = 0;  // Safe reset when SWA/ShortConv state diverged
             }
         }
+        // fork: a prompt that starts with the tokens of the last saved prompt state (the previous prompt minus its
+        // last token: the next turn of a chat, or the same prompt again) continues from that state.
+        if (reuse == 0 && pg.images.empty()) {
+            const int sn = static_cast<int>(rq.snap_ids.size());
+            if (sn > 0 && sn < rq.prompt_len &&
+                std::equal(rq.snap_ids.begin(), rq.snap_ids.end(), rq.prompt_ids.begin()) &&
+                backend.restore_prompt_state(rq.slot)) {
+                reuse = sn;
+                rq.cached_prefix = rq.snap_ids;
+            }
+        }
         if (reuse == 0) {
             backend.reset_slot(rq.slot);
             rq.cached_prefix.clear();
+            rq.snap_ids.clear();
         } else {
             proto("RESUME %d", reuse);
         }
+        // fork: keep the state before the last prompt token for the next request (long, text-only prompts)
+        rq.snap_target = (pg.images.empty() && rq.prompt_len - 1 >= kPromptSnapMin && rq.prompt_len - 1 > reuse)
+                         ? rq.prompt_len - 1 : 0;
         rq.prefill_pos = reuse;
+        rq.reused = reuse;
         rq.cur_pos = reuse;
         rq.hist = rq.prompt_ids;
         rq.next_tok = -1;
@@ -539,6 +568,7 @@ inline int run_serve_loop(const ServeConfig& cfg, InkModelFile& mf, InkBackend& 
                 if (s >= 0 && s < P && !reqs[s].active && parse_id_list(line.substr(sp + 1), cids, cerr)) {
                     backend.reset_slot(s);
                     reqs[s].cached_prefix.clear();
+                    reqs[s].snap_ids.clear();
                     proto("BCOK %d %zu", s, cids.size());
                 }
             }
@@ -772,7 +802,8 @@ inline int run_serve_loop(const ServeConfig& cfg, InkModelFile& mf, InkBackend& 
                 for (int s : pf_slots) {
                     auto& rq = reqs[s];
                     const int rem = rq.prompt_len - rq.prefill_pos;
-                    const int take = std::min(rem, per_slot);
+                    int take = std::min(rem, per_slot);
+                    if (rq.snap_target > rq.prefill_pos) take = std::min(take, rq.snap_target - rq.prefill_pos);   // fork: stop there to save
                     const int img_base = static_cast<int>(merged_img_embeds.size()) / c.hidden;
                     if (!rq.img_embeds.empty()) {
                         merged_img_embeds.insert(merged_img_embeds.end(), rq.img_embeds.begin(), rq.img_embeds.end());
@@ -806,6 +837,12 @@ inline int run_serve_loop(const ServeConfig& cfg, InkModelFile& mf, InkBackend& 
                 for (int k = 0; k < prefill_fed[s]; ++k) rq.cached_prefix.push_back(rq.prompt_ids[rq.prefill_pos + k]);
                 rq.prefill_pos += prefill_fed[s];
                 rq.cur_pos = rq.prefill_pos;
+                if (rq.snap_target > 0 && rq.prefill_pos == rq.snap_target) {     // fork: prompt cache (see prepare_req)
+                    rq.snap_ids.clear();
+                    if (backend.save_prompt_state(s))
+                        rq.snap_ids.assign(rq.prompt_ids.begin(), rq.prompt_ids.begin() + rq.snap_target);
+                    rq.snap_target = 0;
+                }
                 rq.prompt_ms += step_ms;
                 if (rq.is_solo || !rq.admitted) {
                     const double ppts = step_ms > 0.0 ? (prefill_fed[s] * 1000.0 / step_ms) : 0.0;

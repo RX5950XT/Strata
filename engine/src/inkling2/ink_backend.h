@@ -65,6 +65,13 @@ public:
     virtual void snapshot_slot(int slot) = 0;
     virtual void rollback_slot(int slot, int keep_len) = 0;
 
+    // fork: prompt cache across requests. save_prompt_state keeps the slot's position-independent state (SWA rings,
+    // ShortConv, DSpark rings) as it is right now; restore_prompt_state puts it back, so a later prompt that starts with
+    // the same tokens continues from there (the global KV is indexed by position and is still in place).
+    // Backends without it return false and the server reads the whole prompt as before.
+    virtual bool save_prompt_state(int slot) { (void)slot; return false; }
+    virtual bool restore_prompt_state(int slot) { (void)slot; return false; }
+
     // Batched 48-visit forward across 1..64 active slots!
     // logits_out: [batch.count_logits(), vocab_unpadded] FP32 (already softcapped by 30*tanh(z/30) and sliced to 200058).
     virtual bool forward_batch(

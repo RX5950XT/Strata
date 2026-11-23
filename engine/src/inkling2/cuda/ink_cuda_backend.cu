@@ -188,6 +188,7 @@ public:
         snap_active_.assign(max_slots_, false);
         snap_p0_.assign(max_slots_, 0);
         snap_M_.assign(max_slots_, 0);
+        prompt_snap_.assign(max_slots_, PromptSnap{});
         initialized_ = true;
         return true;
     }
@@ -224,6 +225,87 @@ public:
         snap_active_[slot] = true;
         snap_M_[slot] = 0;
         if (slot == 0) tree_snap_ready_ = false;
+    }
+
+    // fork: the device regions that hold a slot's position-independent state: every ring-indexed KV visit (the 40 SWA
+    // visits and, with --kv-gpu, the global visits' staging rings), the ShortConv state and, for slot 0, DSpark's SWA
+    // context rings and its f_rnn ring. Position-indexed KV (global visits, DSpark's global layer) is not included.
+    std::vector<std::pair<void*, size_t>> prompt_state_regions(int slot) const {
+        namespace sk = strata::ink;
+        std::vector<std::pair<void*, size_t>> r;
+        const auto& rn = *runner_;
+        const size_t row = (size_t)sk::kInkKVHeads * sk::kInkHeadDim;
+        for (int v = 0; v < sk::kInkVisits; ++v) {
+            const auto& d = rn.kv_desc[v];
+            if (!d.is_swa) continue;
+            const size_t pos0 = (size_t)slot * d.cap_pos, n = (size_t)d.cap_pos;
+            if (d.is_fp8) {
+                r.push_back({d.k_f8 + pos0 * row, n * row});
+                r.push_back({d.v_f8 + pos0 * row, n * row});
+                r.push_back({d.k_sc + pos0 * sk::kInkKVHeads, n * sk::kInkKVHeads * sizeof(float)});
+                r.push_back({d.v_sc + pos0 * sk::kInkKVHeads, n * sk::kInkKVHeads * sizeof(float)});
+            } else {
+                r.push_back({d.k_f16 + pos0 * row, n * row * sizeof(__half)});
+                r.push_back({d.v_f16 + pos0 * row, n * row * sizeof(__half)});
+            }
+        }
+        constexpr int c_off[4] = {0, sk::kInkKVDim, 2 * sk::kInkKVDim, 2 * sk::kInkKVDim + sk::kInkHidden};
+        constexpr int c_len[4] = {sk::kInkKVDim, sk::kInkKVDim, sk::kInkHidden, sk::kInkHidden};
+        for (int v = 0; v < sk::kInkVisits; ++v)       // same layout as InkCudaRunner::reset_slot
+            for (int s = 0; s < 4; ++s)
+                r.push_back({rn.d_sconv_pool[v] + (size_t)c_off[s] * 3 * rn.max_slots + (size_t)slot * 3 * c_len[s],
+                             (size_t)3 * c_len[s] * sizeof(float)});
+        if (slot == 0 && dspark_ && dspark_->ready) {
+            for (int il = 0; il < 3; ++il) {
+                if (dspark_->ctx_cap[il] >= dspark_->max_ctx) continue;
+                const size_t n = (size_t)dspark_->ctx_cap[il] * row * sizeof(__half);
+                r.push_back({dspark_->d_ctx_k[il], n});
+                r.push_back({dspark_->d_ctx_v[il], n});
+            }
+            r.push_back({dspark_->d_f_rnn, (size_t)dspark_->f_cap * sk::kInkHidden * sizeof(float)});
+        }
+        return r;
+    }
+
+    bool save_prompt_state(int slot) override {
+        if (!initialized_ || slot < 0 || slot >= max_slots_) return false;
+        const auto regions = prompt_state_regions(slot);
+        size_t total = 0;
+        for (const auto& g : regions) total += g.second;
+        auto& h = prompt_snap_[slot];
+        if (h.cap < total) {
+            if (h.ptr) cudaFreeHost(h.ptr);
+            h.ptr = nullptr; h.cap = 0;
+            if (cudaMallocHost(&h.ptr, total) != cudaSuccess) { h.ptr = nullptr; cudaGetLastError(); return false; }
+            h.cap = total;
+        }
+        size_t off = 0;
+        for (const auto& g : regions) {
+            INK_CK(cudaMemcpyAsync(static_cast<uint8_t*>(h.ptr) + off, g.first, g.second, cudaMemcpyDeviceToHost, runner_->st));
+            off += g.second;
+        }
+        INK_CK(cudaStreamSynchronize(runner_->st));
+        h.bytes = total;
+        h.dspark = (slot == 0 && dspark_slot_ == 0);
+        return true;
+    }
+
+    bool restore_prompt_state(int slot) override {
+        if (!initialized_ || slot < 0 || slot >= max_slots_) return false;
+        auto& h = prompt_snap_[slot];
+        const auto regions = prompt_state_regions(slot);
+        size_t total = 0;
+        for (const auto& g : regions) total += g.second;
+        if (!h.ptr || h.bytes != total) return false;
+        size_t off = 0;
+        for (const auto& g : regions) {
+            INK_CK(cudaMemcpyAsync(g.first, static_cast<const uint8_t*>(h.ptr) + off, g.second, cudaMemcpyHostToDevice, runner_->st));
+            off += g.second;
+        }
+        INK_CK(cudaStreamSynchronize(runner_->st));
+        snap_active_[slot] = false;
+        if (slot == 0) { tree_snap_ready_ = false; dspark_slot_ = h.dspark ? 0 : -1; }
+        return true;
     }
 
     void rollback_slot(int slot, int keep_len) override {
@@ -645,6 +727,7 @@ private:
         if (d_h_sel_)      { cudaFree(d_h_sel_); d_h_sel_ = nullptr; }
         if (d_sel_idx_)    { cudaFree(d_sel_idx_); d_sel_idx_ = nullptr; }
         if (h_logits_pin_) { cudaFreeHost(h_logits_pin_); h_logits_pin_ = nullptr; h_logits_cap_ = 0; }
+        for (auto& h : prompt_snap_) if (h.ptr) { cudaFreeHost(h.ptr); h = PromptSnap{}; }
         model_.free_all();
         initialized_ = false;
     }
@@ -675,6 +758,8 @@ private:
     int tree_snap_p0_ = 0;
     int tree_snap_M_ = 0;
     int32_t tree_snap_path_[strata::ink::kInkMaxTree] = {};
+    struct PromptSnap { void* ptr = nullptr; size_t cap = 0, bytes = 0; bool dspark = false; };   // fork: pinned host copy (save_prompt_state)
+    std::vector<PromptSnap> prompt_snap_;
 };
 
 std::unique_ptr<InkBackend> make_cuda_backend() {
