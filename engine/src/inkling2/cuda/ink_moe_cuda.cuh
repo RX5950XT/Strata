@@ -1475,6 +1475,13 @@ __device__ __forceinline__ void ink_cp_wait() {
     asm volatile("cp.async.wait_group %0;\n" :: "n"(N));
 #endif
 }
+// fork: same, copying only the first n (0..16) bytes and zero-filling the rest (no read past the end of a block)
+__device__ __forceinline__ void ink_cp16_n(void* sdst, const void* gsrc, int n) {
+#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800)
+    const unsigned d = (unsigned)__cvta_generic_to_shared(sdst);
+    asm volatile("cp.async.cg.shared.global [%0], [%1], 16, %2;\n" :: "r"(d), "l"(gsrc), "r"(n));
+#endif
+}
 
 // Persistent Coalesced 256-Thread INT8 Tensor Core S_K MoE Kernel (sm_80..sm_121: GU=true -> Gate+Up+SITU, GU=false -> Paired-2-Row Down)
 // All 256 threads cooperate (8 coalesced lanes/row x 32 rows/wave x 4 waves = 128 rows) with compile-time FMT dispatch!
@@ -1491,6 +1498,7 @@ __device__ __forceinline__ void ink_moe_sk_tc_kloop(
     int8_t (&s_wq)[128][80],
     int8_t (&s_aq)[2][TR][80],   // fork: two buffers, each row is one InkQ8_1_G64 (qs, then d and s at byte 64)
     float (&s_wsc)[128],
+    uint8_t (&s_wsb)[128][128],
     float (&acc)[(128 / (8 / (TR / 16))) / 16][2][4]) {
     constexpr int kWR      = 128;
     constexpr int NG       = GU ? (kInkHidden / 64) : (kInkInter / 64);
@@ -1521,26 +1529,52 @@ __device__ __forceinline__ void ink_moe_sk_tc_kloop(
     };
     load_act(0, 0);
 
+    // the 256-weight superblock (header + payload) holding weight row row_s's columns of group xg_, and the 64-column
+    // quarter of it (sg_) that group xg_ uses
+    auto row_blk = [&](int row_s, int xg_, int& sg_) -> const uint8_t* {
+        const int phys_row = GU ? (2 * (fb * 64 + 8 * (row_s >> 4) + (row_s & 7)) + ((row_s >> 3) & 1))
+                                : (fb * kWR + row_s);
+        if constexpr (GU) {
+            sg_ = xg_ & 3;
+            return gu_base + (size_t)phys_row * gu_row_b + (size_t)(xg_ >> 2) * SB;
+        } else {
+            const int sub_glob = xg_ + (phys_row & 1) * 18;
+            sg_ = sub_glob & 3;
+            return body + dn_off + (size_t)(phys_row >> 1) * dn_pair_b + (size_t)(sub_glob >> 2) * SB;
+        }
+    };
+    // fork: S2_K / S3_K superblocks (70 / 102 B, only 2-byte aligned) are copied whole into s_wsb when a row moves to
+    // a new one (every 4 groups; odd down rows start mid-block), as the 16-byte-aligned chunks that cover them, so the
+    // four groups read them from shared memory: each 32-byte sector is fetched once instead of once per group.
+    constexpr bool STAGE = (FMT == FMT_S2_K || FMT == FMT_S3_K);
+    static_assert(!STAGE || SB + 14 <= 128, "a staged superblock must fit its s_wsb row");
+
     for (int xg = 0; xg < NG; ++xg) {
         const int buf = xg & 1;
+        if constexpr (STAGE) {
+            if (GU ? ((xg & 3) == 0) : ((xg & 1) == 0)) {      // a down pair's odd row changes block at xg = 2 mod 4
+                for (int c = tid; c < kWR * 8; c += 256) {
+                    const int row_s = c >> 3, q = c & 7;
+                    int sg_;
+                    const uint8_t* src = row_blk(row_s, xg, sg_);
+                    if (xg != 0 && sg_ != 0) continue;           // this row still uses the block it has
+                    const uint8_t* a16 = reinterpret_cast<const uint8_t*>(reinterpret_cast<uintptr_t>(src) & ~(uintptr_t)15);
+                    const int left = (int)(src + SB - (a16 + 16 * q));
+                    if (left > 0) ink_cp16_n(&s_wsb[row_s][16 * q], a16 + 16 * q, left < 16 ? left : 16);
+                }
+                ink_cp_commit();
+                ink_cp_wait<0>();                                  // also completes group xg's activations
+                __syncthreads();
+            }
+        }
         if (xg + 1 < NG) load_act(xg + 1, buf ^ 1);
         // 1. ALL 256 threads unpack 128 weight rows x 64 weights in 4 coalesced waves of 32 rows!
 #pragma unroll
         for (int wave = 0; wave < 4; ++wave) {
             const int row_s = wave * 32 + r_in_w;
-            const int phys_row = GU ? (2 * (fb * 64 + 8 * (row_s >> 4) + (row_s & 7)) + ((row_s >> 3) & 1))
-                                    : (fb * kWR + row_s);
-            const uint8_t* blk;
             int sg;
-            if constexpr (GU) {
-                blk = gu_base + (size_t)phys_row * gu_row_b + (size_t)(xg >> 2) * SB;
-                sg  = xg & 3;
-            } else {
-                const int pair_r = phys_row >> 1;
-                const int sub_glob = xg + (phys_row & 1) * 18;
-                blk = body + dn_off + (size_t)pair_r * dn_pair_b + (size_t)(sub_glob >> 2) * SB;
-                sg  = sub_glob & 3;
-            }
+            const uint8_t* blk = row_blk(row_s, xg, sg);
+            if constexpr (STAGE) blk = &s_wsb[row_s][reinterpret_cast<uintptr_t>(blk) & 15];
             uint32_t w0, w1;
             sk_unpack8_lane8<FMT>(blk + 6, sg, lg, w0, w1);
             uint32_t* d4 = reinterpret_cast<uint32_t*>(s_wq[row_s]);
@@ -1653,6 +1687,7 @@ __global__ void __launch_bounds__(256) k_ink_moe_sk_tc(
     __shared__ float               s_wsc[kWR];
     __shared__ int32_t             s_row[TR];
     __shared__ float               s_rw[TR];
+    __shared__ alignas(16) uint8_t s_wsb[kWR][128];   // fork: staged S2_K / S3_K superblocks (see the k loop)
 
     const int tid  = threadIdx.x;
     const int warp = tid >> 5;
@@ -1700,13 +1735,13 @@ __global__ void __launch_bounds__(256) k_ink_moe_sk_tc(
         const bool on1 = nb0 + 8 < nrows;
 
         switch (fmt) {
-            case FMT_S2_K: ink_moe_sk_tc_kloop<GU, TR, FMT_S2_K>(body, ed.dn_off, fb, nrows, tid, wf, nb0, g, tig, on0, on1, act_sk, s_row, s_wq, s_aq, s_wsc, acc); break;
-            case FMT_S3_K: ink_moe_sk_tc_kloop<GU, TR, FMT_S3_K>(body, ed.dn_off, fb, nrows, tid, wf, nb0, g, tig, on0, on1, act_sk, s_row, s_wq, s_aq, s_wsc, acc); break;
-            case FMT_S4_K: ink_moe_sk_tc_kloop<GU, TR, FMT_S4_K>(body, ed.dn_off, fb, nrows, tid, wf, nb0, g, tig, on0, on1, act_sk, s_row, s_wq, s_aq, s_wsc, acc); break;
-            case FMT_S5_K: ink_moe_sk_tc_kloop<GU, TR, FMT_S5_K>(body, ed.dn_off, fb, nrows, tid, wf, nb0, g, tig, on0, on1, act_sk, s_row, s_wq, s_aq, s_wsc, acc); break;
-            case FMT_S6_K: ink_moe_sk_tc_kloop<GU, TR, FMT_S6_K>(body, ed.dn_off, fb, nrows, tid, wf, nb0, g, tig, on0, on1, act_sk, s_row, s_wq, s_aq, s_wsc, acc); break;
-            case FMT_S8_K: ink_moe_sk_tc_kloop<GU, TR, FMT_S8_K>(body, ed.dn_off, fb, nrows, tid, wf, nb0, g, tig, on0, on1, act_sk, s_row, s_wq, s_aq, s_wsc, acc); break;
-            case FMT_S1_5: ink_moe_sk_tc_kloop<GU, TR, FMT_S1_5>(body, ed.dn_off, fb, nrows, tid, wf, nb0, g, tig, on0, on1, act_sk, s_row, s_wq, s_aq, s_wsc, acc); break;
+            case FMT_S2_K: ink_moe_sk_tc_kloop<GU, TR, FMT_S2_K>(body, ed.dn_off, fb, nrows, tid, wf, nb0, g, tig, on0, on1, act_sk, s_row, s_wq, s_aq, s_wsc, s_wsb, acc); break;
+            case FMT_S3_K: ink_moe_sk_tc_kloop<GU, TR, FMT_S3_K>(body, ed.dn_off, fb, nrows, tid, wf, nb0, g, tig, on0, on1, act_sk, s_row, s_wq, s_aq, s_wsc, s_wsb, acc); break;
+            case FMT_S4_K: ink_moe_sk_tc_kloop<GU, TR, FMT_S4_K>(body, ed.dn_off, fb, nrows, tid, wf, nb0, g, tig, on0, on1, act_sk, s_row, s_wq, s_aq, s_wsc, s_wsb, acc); break;
+            case FMT_S5_K: ink_moe_sk_tc_kloop<GU, TR, FMT_S5_K>(body, ed.dn_off, fb, nrows, tid, wf, nb0, g, tig, on0, on1, act_sk, s_row, s_wq, s_aq, s_wsc, s_wsb, acc); break;
+            case FMT_S6_K: ink_moe_sk_tc_kloop<GU, TR, FMT_S6_K>(body, ed.dn_off, fb, nrows, tid, wf, nb0, g, tig, on0, on1, act_sk, s_row, s_wq, s_aq, s_wsc, s_wsb, acc); break;
+            case FMT_S8_K: ink_moe_sk_tc_kloop<GU, TR, FMT_S8_K>(body, ed.dn_off, fb, nrows, tid, wf, nb0, g, tig, on0, on1, act_sk, s_row, s_wq, s_aq, s_wsc, s_wsb, acc); break;
+            case FMT_S1_5: ink_moe_sk_tc_kloop<GU, TR, FMT_S1_5>(body, ed.dn_off, fb, nrows, tid, wf, nb0, g, tig, on0, on1, act_sk, s_row, s_wq, s_aq, s_wsc, s_wsb, acc); break;
             default: break;
         }
 

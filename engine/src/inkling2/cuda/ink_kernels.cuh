@@ -1470,15 +1470,15 @@ __global__ void __launch_bounds__(128) k_ink_gemv_multi_q8row_m1(
 }
 
 // 256B-Coalesced 16-Lane Pre-Quantized Q8_ROW Multi-Projection GEMV (8 rows/CTA, pure dp4a_i8, ZERO per-CTA quantization!)
-template <int MAX_M>
-__global__ void __launch_bounds__(128) k_ink_gemv_multi_q8row_preq(
+template <int MAX_M, int RPC = 8>   // fork: RPC rows per CTA; 16 halves the X staged per weight byte
+__global__ void __launch_bounds__(RPC * 16) k_ink_gemv_multi_q8row_preq(
     InkMultiProj mp,
     const InkQ8_1_G64* __restrict__ Xq,  // [M, K/64]
     int M, int K) {
     const int tid  = threadIdx.x;
     const int sub  = tid >> 4;       // 0..7 output rows per CTA (2x wave occupancy!)
     const int lg   = tid & 15;       // 0..15 lanes per row (16 x 16B = 256B!)
-    const int grow = blockIdx.x * 8 + sub;
+    const int grow = blockIdx.x * RPC + sub;
 
     int pid = -1, lrow = 0;
     if (grow < mp.cumN[mp.count]) {
@@ -1505,7 +1505,7 @@ __global__ void __launch_bounds__(128) k_ink_gemv_multi_q8row_preq(
         for (int m = 0; m < M; ++m) {
             const uint4* sx = reinterpret_cast<const uint4*>(Xq + (size_t)m * ng_tot + g0);
             uint4* dx = reinterpret_cast<uint4*>(s_xq[m]);
-            for (int i = tid; i < n4; i += 128) dx[i] = sx[i];
+            for (int i = tid; i < n4; i += RPC * 16) dx[i] = sx[i];
         }
         __syncthreads();
         if (pid >= 0) {

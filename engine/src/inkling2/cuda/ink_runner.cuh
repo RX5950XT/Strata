@@ -960,8 +960,8 @@ struct InkCudaRunner {
                 } else {
                     const int nblk = M * (K / 64);
                     k_ink_quant_q8_1<<<(nblk + 7) / 8, 256, 0, st>>>(X, moe_ws.xq_sk, M, K);
-                    if (M <= 4)      k_ink_gemv_multi_q8row_preq<4><<<grid, 128, 0, st>>>(mp, moe_ws.xq_sk, M, K);
-                    else if (M <= 8) k_ink_gemv_multi_q8row_preq<8><<<grid, 128, 0, st>>>(mp, moe_ws.xq_sk, M, K);
+                    if (M <= 4)      k_ink_gemv_multi_q8row_preq<4, 16><<<(mp.cumN[mp.count] + 15) / 16, 256, 0, st>>>(mp, moe_ws.xq_sk, M, K);
+                    else if (M <= 8) k_ink_gemv_multi_q8row_preq<8, 16><<<(mp.cumN[mp.count] + 15) / 16, 256, 0, st>>>(mp, moe_ws.xq_sk, M, K);
                     else             k_ink_gemv_multi_q8row_preq<16><<<grid, 128, 0, st>>>(mp, moe_ws.xq_sk, M, K);
                 }
             } else {
@@ -1069,8 +1069,8 @@ struct InkCudaRunner {
                     const int nblk = M * (K / 64);
                     if ((size_t)nblk <= (size_t)moe_ws.cap_M * (kInkHidden / 64)) {
                         k_ink_quant_q8_1<<<(nblk + 7) / 8, 256, 0, st>>>(X, moe_ws.xq_sk, M, K);
-                        if (M <= 4)      k_ink_gemv_multi_q8row_preq<4><<<grid, 128, 0, st>>>(mp, moe_ws.xq_sk, M, K);
-                        else if (M <= 8) k_ink_gemv_multi_q8row_preq<8><<<grid, 128, 0, st>>>(mp, moe_ws.xq_sk, M, K);
+                        if (M <= 4)      k_ink_gemv_multi_q8row_preq<4, 16><<<(mp.cumN[mp.count] + 15) / 16, 256, 0, st>>>(mp, moe_ws.xq_sk, M, K);
+                        else if (M <= 8) k_ink_gemv_multi_q8row_preq<8, 16><<<(mp.cumN[mp.count] + 15) / 16, 256, 0, st>>>(mp, moe_ws.xq_sk, M, K);
                         else             k_ink_gemv_multi_q8row_preq<16><<<grid, 128, 0, st>>>(mp, moe_ws.xq_sk, M, K);
                         return;
                     }
