@@ -7,4 +7,4 @@ if not exist ".venv\Scripts\pythonw.exe" (
   pause
   exit /b 1
 )
-start "" ".venv\Scripts\pythonw.exe" serve\panel.py --open
+start "" ".venv\Scripts\pythonw.exe" terminal\serve\panel.py --open
