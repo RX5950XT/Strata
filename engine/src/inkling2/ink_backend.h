@@ -19,6 +19,8 @@ struct BackendOpts {
     int parallel = 1;            // 1..64 concurrent slots
     int chunk = 512;
     int gpu_index = 0;
+    int draft_max_pos = 0;       // fork: stop speculative steps past this position (--draft-max-pos N), 0 = never
+    int kv_gpu = -1;             // fork: CUDA device that holds the global-attention KV (--kv-gpu N), -1 = main GPU
     int gpus = 1;                // 1 or 2 (--gpus 2 activates Dual-GPU Expert Parallelism, #6506)
     double ep_split = 0.5;       // GPU 1 expert share in (0, 1) (--ep-split / IK2_EP_SPLIT)
     int vram_reserve_mib = -1;   // >= 0 reserves N MiB free VRAM & activates hybrid offload (#6520)

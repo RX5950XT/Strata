@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -133,24 +134,50 @@ public:
                             : ((prop.totalGlobalMem >= (20ull << 30)) ? (1200ull << 20)
                              : (prop.totalGlobalMem <= (13ull << 30)) ? (260ull << 20)
                                                                       : (320ull << 20));
+        // fork: also keep room for what grows with --max-context (global KV, DSpark's global-layer context, the
+        // prefill K/V pack and score tile). Without it a long context overcommits VRAM and Windows pages it to
+        // system RAM (prompt speed fell from ~1,200 to ~49 tok/s at 58K); with it experts spill to the host instead.
+        const size_t ctx = (size_t)std::max(256, opts.max_ctx);
+        const size_t glob_kv = (size_t)8 * max_slots_ * ctx * ((size_t)strata::ink::kInkKVDim * bpe + sc_per_pos);
+        const size_t dspark_ctx = (opts.enable_dspark && mf.m.dspark.present)
+            ? ctx * (size_t)strata::ink::kInkKVDim * 2 * 2 + (32ull << 20) : 0;
+        // fork: with the fused prefill kernel (sm_80+) the cuBLAS prefill buffers are not allocated
+        const size_t pf_pack = strata::ink::ink_pf_flash_needs_old_bufs(prop.major * 10 + prop.minor)
+            ? strata::ink::InkCudaRunner::pf_attn_bytes(std::max(eff_chunk, (int)strata::ink::kInkMaxTree)) : 0;
         const size_t min_reserve_bytes = min_kv_bytes + ws_pad;
+        // Only for 1..4 slots; with more slots the runner still shrinks max_ctx to what fits, as upstream does.
+        // --kv-gpu: the global KV lives on the other GPU; this one only keeps a small ring for it
+        const bool kv_remote = opts.kv_gpu >= 0 && opts.kv_gpu != gpu_id_ && max_slots_ <= 4;
+        const size_t ctx_growth_bytes = (max_slots_ <= 4) ? (kv_remote ? 0 : glob_kv) + dspark_ctx + pf_pack : 0;
 
         // Load .strata v1.1 trunk + experts (100% VRAM or 3x loop-weighted vram_load_order!)
         const bool build_screen = opts.enable_dspark && mf.m.dspark.present;
-        if (!model_.load(mf.path, gpu_id_, build_screen, err, min_reserve_bytes)) return false;
+        // fork: INK_VRAM_LOG=1 prints free VRAM after each stage (where the memory goes at long contexts)
+        static const bool vram_log = std::getenv("INK_VRAM_LOG") != nullptr;
+        auto vlog = [&](const char* what) {
+            if (!vram_log) return;
+            size_t f = 0, t = 0; cudaDeviceSynchronize(); cudaMemGetInfo(&f, &t);
+            std::fprintf(stderr, "[vram] %-14s free %6.0f MiB of %6.0f\n", what, f / 1048576.0, t / 1048576.0);
+        };
+        vlog("start");
+        if (!model_.load(mf.path, gpu_id_, build_screen, err, min_reserve_bytes, ctx_growth_bytes)) return false;
+        vlog("model");
 
         auto cuda_kvd = (kv_dtype_ == KvDtype::FP8_E4M3) ? strata::ink::InkKvDtype::FP8
                                                           : strata::ink::InkKvDtype::FP16;
 
         runner_ = std::make_unique<strata::ink::InkCudaRunner>(model_);
         runner_->use_cuda_graph = true;
+        runner_->kv_gpu = kv_remote ? opts.kv_gpu : -1;
         runner_->init(max_slots_, std::max(256, opts.max_ctx), std::max(64, opts.chunk), cuda_kvd);
         eff_max_ctx_ = runner_->max_ctx;
+        vlog("model+runner");
 
         if (opts.enable_dspark && model_.man.has_dspark) {
             dspark_ = std::make_unique<strata::ink::InkDSpark>(*runner_);
             dspark_->init(eff_max_ctx_, 512);
         }
+        vlog("dspark");
 
         // Allocate snapshot buffer (3.83 MB) + selected hidden gather buffers + pinned D2H logits staging
         d_sconv_snap_ = strata::ink::dalloc<float>((size_t)strata::ink::kInkVisits * 3 * strata::ink::kInkSconvCh);
@@ -356,8 +383,7 @@ public:
                     INK_CK(cudaMemcpyAsync(runner_->d_acc_path, path, (size_t)M * 4, cudaMemcpyHostToDevice, runner_->st));
                     strata::ink::k_ink_commit_sconv_all48<<<dim3(strata::ink::kInkVisits, 4), 256, 0, runner_->st>>>(
                         runner_->d_sconv_pool_arr, runner_->d_stage_sconv, runner_->d_acc_path, M, slot, runner_->max_slots, runner_->tree_cap);
-                    strata::ink::k_ink_commit_kv_all48<<<dim3(strata::ink::kInkVisits, strata::ink::kInkKVHeads), 128, 0, runner_->st>>>(
-                        runner_->d_kv_desc_arr, runner_->d_stage_k, runner_->d_stage_v, runner_->d_acc_path, p0, M, slot, runner_->tree_cap);
+                    strata::ink::ink_commit_kv(*runner_, path, p0, M, slot);
                     snap_p0_[slot] = p0;
                     snap_M_[slot] = M;
                 } else {
@@ -523,8 +549,7 @@ public:
         INK_CK(cudaMemcpyAsync(runner_->d_acc_path, path, (size_t)n_emit * 4, cudaMemcpyHostToDevice, runner_->st));
         strata::ink::k_ink_commit_sconv_all48<<<dim3(strata::ink::kInkVisits, 4), 256, 0, runner_->st>>>(
             runner_->d_sconv_pool_arr, runner_->d_stage_sconv, runner_->d_acc_path, n_emit, 0, runner_->max_slots, runner_->tree_cap);
-        strata::ink::k_ink_commit_kv_all48<<<dim3(strata::ink::kInkVisits, strata::ink::kInkKVHeads), 128, 0, runner_->st>>>(
-            runner_->d_kv_desc_arr, runner_->d_stage_k, runner_->d_stage_v, runner_->d_acc_path, anchor_pos, n_emit, 0, runner_->tree_cap);
+        strata::ink::ink_commit_kv(*runner_, path, anchor_pos, n_emit, 0);
         for (int t = 0; t < 4; ++t) {
             strata::ink::k_ink_compact_taps<<<n_emit, 256, 0, runner_->st>>>(
                 runner_->d_taps[t], runner_->d_taps_compact[t], runner_->d_acc_path, n_emit);

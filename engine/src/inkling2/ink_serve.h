@@ -631,7 +631,8 @@ inline int run_serve_loop(const ServeConfig& cfg, InkModelFile& mf, InkBackend& 
         // 2. Fast-path: Single-stream DSpark Adaptive Beam Tree / Block-8 speculative step (when decoding)
         if (use_dspark && n_active == 1 && reqs[sole_slot].prefill_pos >= reqs[sole_slot].prompt_len &&
             reqs[sole_slot].s.greedy() && reqs[sole_slot].generated + 2 <= reqs[sole_slot].max_new &&
-            reqs[sole_slot].cur_pos + 8 < cfg.bopts.max_ctx) {
+            reqs[sole_slot].cur_pos + 8 < cfg.bopts.max_ctx &&
+            (cfg.bopts.draft_max_pos <= 0 || reqs[sole_slot].cur_pos < cfg.bopts.draft_max_pos)) {
             auto& rq = reqs[sole_slot];
             // 2a. Zero-D2H fused greedy Beam Tree speculative step (when no penalties and headroom >= 12)
             if (!rq.s.penalties() && rq.cur_pos + 12 < cfg.bopts.max_ctx) {

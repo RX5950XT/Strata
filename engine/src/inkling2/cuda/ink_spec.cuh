@@ -79,6 +79,7 @@ __global__ void __launch_bounds__(128) k_ink_commit_kv_all48(
     if (v >= kInkVisits || h >= kInkKVHeads) return;
 
     const InkKvVisitDesc kv = kv_descs[v];
+    if (!kv.k_f16 && !kv.k_f8) return;  // fork: this visit's KV lives on the KV GPU (or nowhere)
     for (int k = 0; k < n_acc; ++k) {
         const int node = path[k];
         const int p = p0 + k;
@@ -113,6 +114,16 @@ __global__ void __launch_bounds__(128) k_ink_commit_kv_all48(
             __syncthreads();
         }
     }
+}
+
+// fork: commit accepted K/V on the main GPU and, with --kv-gpu, the global visits' K/V on the KV GPU too
+inline void ink_commit_kv_launch(const InkKvVisitDesc* descs, const float* sk, const float* sv, const int32_t* path,
+                                 int p0, int n, int slot0, int tcap, cudaStream_t s) {
+    k_ink_commit_kv_all48<<<dim3(kInkVisits, kInkKVHeads), 128, 0, s>>>(descs, sk, sv, path, p0, n, slot0, tcap);
+}
+inline void ink_commit_kv(InkCudaRunner& r, const int32_t* host_path, int p0, int n, int slot0) {
+    ink_commit_kv_launch(r.d_kv_desc_arr, r.d_stage_k, r.d_stage_v, r.d_acc_path, p0, n, slot0, r.tree_cap, r.st);
+    if (r.ra) r.ra->commit(host_path, p0, n, slot0, &ink_commit_kv_launch);
 }
 
 // Compact accepted path's taps [4, M, 2304] -> [4, n_acc, 2304] in-place (for DSpark ingest_taps!)
@@ -202,8 +213,7 @@ inline int ink_spec_step_block8(
     INK_CK(cudaMemcpyAsync(runner.d_acc_path, path, (size_t)n_acc_nodes * 4, cudaMemcpyHostToDevice, runner.st));
     k_ink_commit_sconv_all48<<<dim3(kInkVisits, 4), 256, 0, runner.st>>>(
         runner.d_sconv_pool_arr, runner.d_stage_sconv, runner.d_acc_path, n_acc_nodes, 0, runner.max_slots, runner.tree_cap);
-    k_ink_commit_kv_all48<<<dim3(kInkVisits, kInkKVHeads), 128, 0, runner.st>>>(
-        runner.d_kv_desc_arr, runner.d_stage_k, runner.d_stage_v, runner.d_acc_path, pos, n_acc_nodes, 0, runner.tree_cap);
+    ink_commit_kv(runner, path, pos, n_acc_nodes, 0);
     for (int t = 0; t < 4; ++t) {
         k_ink_compact_taps<<<n_acc_nodes, 256, 0, runner.st>>>(runner.d_taps[t], runner.d_taps_compact[t], runner.d_acc_path, n_acc_nodes);
     }
@@ -302,8 +312,7 @@ inline int ink_spec_step_tree(
     INK_CK(cudaMemcpyAsync(runner.d_acc_path, path, (size_t)n_acc_nodes * 4, cudaMemcpyHostToDevice, runner.st));
     k_ink_commit_sconv_all48<<<dim3(kInkVisits, 4), 256, 0, runner.st>>>(
         runner.d_sconv_pool_arr, runner.d_stage_sconv, runner.d_acc_path, n_acc_nodes, 0, runner.max_slots, runner.tree_cap);
-    k_ink_commit_kv_all48<<<dim3(kInkVisits, kInkKVHeads), 128, 0, runner.st>>>(
-        runner.d_kv_desc_arr, runner.d_stage_k, runner.d_stage_v, runner.d_acc_path, pos, n_acc_nodes, 0, runner.tree_cap);
+    ink_commit_kv(runner, path, pos, n_acc_nodes, 0);
     for (int t = 0; t < 4; ++t) {
         k_ink_compact_taps<<<n_acc_nodes, 256, 0, runner.st>>>(runner.d_taps[t], runner.d_taps_compact[t], runner.d_acc_path, n_acc_nodes);
     }
@@ -368,8 +377,7 @@ inline int ink_spec_step_beam_tree(
     INK_CK(cudaMemcpyAsync(runner.d_acc_path, path, (size_t)n_acc_nodes * 4, cudaMemcpyHostToDevice, runner.st));
     k_ink_commit_sconv_all48<<<dim3(kInkVisits, 4), 256, 0, runner.st>>>(
         runner.d_sconv_pool_arr, runner.d_stage_sconv, runner.d_acc_path, n_acc_nodes, 0, runner.max_slots, runner.tree_cap);
-    k_ink_commit_kv_all48<<<dim3(kInkVisits, kInkKVHeads), 128, 0, runner.st>>>(
-        runner.d_kv_desc_arr, runner.d_stage_k, runner.d_stage_v, runner.d_acc_path, pos, n_acc_nodes, 0, runner.tree_cap);
+    ink_commit_kv(runner, path, pos, n_acc_nodes, 0);
     for (int t = 0; t < 4; ++t) {
         k_ink_compact_taps<<<n_acc_nodes, 256, 0, runner.st>>>(runner.d_taps[t], runner.d_taps_compact[t], runner.d_acc_path, n_acc_nodes);
     }

@@ -5,6 +5,8 @@
 #pragma once
 
 #include "ink_attn.cuh"
+#include "ink_attn_dispatch.cuh"
+#include "ink_remote_attn.cuh"
 #include "ink_cuda.cuh"
 #include "ink_hybrid.cuh"
 #include "ink_kernels.cuh"
@@ -14,6 +16,7 @@
 #include "strata/artifact/strata_reader.hpp"
 
 #include <algorithm>
+#include <memory>
 #include <array>
 #include <cmath>
 #include <cstdio>
@@ -98,7 +101,8 @@ struct InkCudaModel {
         return man.get(name);
     }
 
-    bool load(const std::string& strata_path, int gpu_id, bool build_screen, std::string& err, size_t extra_reserve_bytes = 0) {
+    bool load(const std::string& strata_path, int gpu_id, bool build_screen, std::string& err, size_t extra_reserve_bytes = 0,
+              size_t ctx_growth_bytes = 0) {
         path = strata_path;
         primary_gpu = gpu_id;
         INK_CK(cudaSetDevice(primary_gpu));
@@ -177,7 +181,8 @@ struct InkCudaModel {
         const size_t base_reserve = (vtot >= (20ull << 30)) ? (1600ull << 20)
                                   : (vtot <= (13ull << 30)) ? (780ull << 20)
                                                             : (1280ull << 20);
-        const size_t reserve = std::max(base_reserve, extra_reserve_bytes);
+        // fork: buffers that grow with --max-context come on top of the base headroom, not instead of it
+        const size_t reserve = std::max(base_reserve, extra_reserve_bytes) + ctx_growth_bytes;
         for (int il = 0; il < 24; ++il) layer_has_host[il] = false;
         if (vfree > sec4_bytes + reserve) {
             // 100% VRAM resident! Single sequential streaming DMA!
@@ -384,6 +389,10 @@ struct InkCudaRunner {
 
     // KV Cache (48 visits: 40 SWA, 8 Global)
     InkKvVisitDesc kv_desc[kInkVisits]{};
+    // fork: --kv-gpu N puts the global visits' KV and attention on CUDA device N (ink_remote_attn.cuh);
+    // kv_desc[v] of those visits is then a small ring that only stages each new token's K/V row.
+    int kv_gpu = -1;
+    std::unique_ptr<InkRemoteAttn> ra;
     // ShortConv state pool: [48 visits] x 4 states (k [1024], v [1024], attn [2304], mlp [2304]) -> 1 contiguous buffer!
     // Layout: visit -> [max_slots, 3, 6656] F32 (or 256 MB for 64 slots)
     float* d_sconv_pool[kInkVisits] = {};
@@ -410,6 +419,8 @@ struct InkCudaRunner {
     __nv_bfloat16 *d_pf_q = nullptr, *d_pf_k = nullptr, *d_pf_v = nullptr, *d_pf_p = nullptr;  // TC prefill attention
     float *d_pf_s = nullptr, *d_pf_o = nullptr;
     int pf_kv_cap = 0;
+    float *d_pf_ot = nullptr, *d_pf_m = nullptr;  // fork: tiled prefill O tile, [4][24*256] max/sum stats
+    float *d_mq_pm = nullptr, *d_mq_pl = nullptr, *d_mq_po = nullptr;  // fork: multi-query decode partials
     float *d_stage_k = nullptr, *d_stage_v = nullptr, *d_stage_sconv = nullptr;  // Tree-16 verify staging
     InkKvVisitDesc* d_kv_desc_arr = nullptr;
     float** d_sconv_pool_arr = nullptr;
@@ -499,6 +510,7 @@ struct InkCudaRunner {
         INK_CUBLAS_CK(cublasCreate(&cublas));
         INK_CUBLAS_CK(cublasSetStream(cublas, st));
         INK_CUBLAS_CK(cublasSetMathMode(cublas, CUBLAS_DEFAULT_MATH));
+        ink_vram_log("runner cublas");
 
         // Auto-fit max_ctx to free VRAM so c = 32 / 64 never OOMs on 32 GiB RTX 5090!
         {
@@ -518,7 +530,7 @@ struct InkCudaRunner {
             const size_t ws_reserve   = (max_slots >= 8) ? (1400ull << 20) : (480ull << 20);  // activation workspaces + DSpark + cuBLAS headroom
             if (vfree > swa_kv_bytes + sconv_bytes + ws_reserve) {
                 const size_t avail_glob = vfree - swa_kv_bytes - sconv_bytes - ws_reserve;
-                const size_t per_pos_glob = (size_t)8 * max_slots * ((size_t)kInkKVDim * bpe + sc_per_pos);
+                const size_t per_pos_glob = (kv_gpu >= 0) ? 0 : (size_t)8 * max_slots * ((size_t)kInkKVDim * bpe + sc_per_pos);
                 const int fit_ctx = (int)std::min<size_t>((size_t)max_ctx, (avail_glob / std::max<size_t>(1, per_pos_glob)) & ~(size_t)63);
                 if (fit_ctx < max_ctx) {
                     const int clamped = std::max(256, fit_ctx);
@@ -537,9 +549,10 @@ struct InkCudaRunner {
         for (int v = 0; v < kInkVisits; ++v) {
             const int ip = ink_visit_phys(v);
             const bool swa = m.man.c.is_swa[ip] != 0;
-            const int cap = swa ? swa_ring : max_ctx;
+            const bool remote = (kv_gpu >= 0 && !swa);
+            const int cap = swa ? swa_ring : (remote ? max_batch + 64 : max_ctx);
             kv_desc[v].cap_pos = cap;
-            kv_desc[v].is_swa = swa;
+            kv_desc[v].is_swa = swa || remote;  // remote: ring index p % cap
             kv_desc[v].is_fp8 = (kv_dtype == InkKvDtype::FP8);
             const size_t elems = (size_t)max_slots * cap * kInkKVHeads * kInkHeadDim;
             if (!kv_desc[v].is_fp8) {
@@ -555,6 +568,7 @@ struct InkCudaRunner {
             INK_CK(cudaMemset(d_sconv_pool[v], 0, (size_t)max_slots * 3 * kInkSconvCh * sizeof(float)));
         }
 
+        ink_vram_log("runner kv");
         const size_t MB = (size_t)max_batch;
         d_cur       = dalloc<float>(MB * kInkHidden);
         d_res       = dalloc<float>(MB * kInkHidden);
@@ -578,7 +592,7 @@ struct InkCudaRunner {
         d_v_dyn     = dalloc<float>(MB * kInkKVHeads * 4);
         d_sinks     = dalloc<float>(MB * kInkHeads);
         d_gate_attn = dalloc<float>(MB * kInkQDim);
-        d_rel_table = dalloc<float>(MB * kInkHeads * (kInkRelExtent + 1));
+        d_rel_table = dalloc<float>((size_t)ink_rel_table_rows(m.sm_cc, max_batch) * kInkHeads * (kInkRelExtent + 1));
         d_attn_out  = dalloc<float>(MB * kInkQDim);
         d_wo_raw    = dalloc<float>(MB * kInkHidden);
         d_wo_conv   = dalloc<float>(MB * kInkHidden);
@@ -597,11 +611,23 @@ struct InkCudaRunner {
         d_attn_pm     = dalloc<float>((size_t)tree_cap * kInkHeads * kInkAttnSplits);
         d_attn_pl     = dalloc<float>((size_t)tree_cap * kInkHeads * kInkAttnSplits);
         d_attn_po     = dalloc<float>((size_t)tree_cap * kInkHeads * kInkAttnSplits * kInkHeadDim);
+        if (max_slots <= 4) {   // fork: k_ink_flash_mq for global decode / tree visits (one KV pass for all tree tokens)
+            d_mq_pm = dalloc<float>((size_t)tree_cap * kInkHeads * kInkMqSplits);
+            d_mq_pl = dalloc<float>((size_t)tree_cap * kInkHeads * kInkMqSplits);
+            d_mq_po = dalloc<float>((size_t)tree_cap * kInkHeads * kInkMqSplits * kInkHeadDim);
+        }
         d_stage_k     = dalloc<float>((size_t)kInkVisits * tree_cap * kInkKVDim);
         d_stage_v     = dalloc<float>((size_t)kInkVisits * tree_cap * kInkKVDim);
         d_stage_sconv = dalloc<float>((size_t)kInkVisits * tree_cap * kInkSconvCh);
         d_kv_desc_arr = dalloc<InkKvVisitDesc>(kInkVisits);
-        INK_CK(cudaMemcpy(d_kv_desc_arr, kv_desc, sizeof(kv_desc), cudaMemcpyHostToDevice));
+        {
+            InkKvVisitDesc commit_desc[kInkVisits];
+            for (int v = 0; v < kInkVisits; ++v) {
+                commit_desc[v] = kv_desc[v];
+                if (kv_gpu >= 0 && m.man.c.is_swa[ink_visit_phys(v)] == 0) commit_desc[v] = InkKvVisitDesc{};  // committed on the KV GPU
+            }
+            INK_CK(cudaMemcpy(d_kv_desc_arr, commit_desc, sizeof(commit_desc), cudaMemcpyHostToDevice));
+        }
         d_sconv_pool_arr = dalloc<float*>(kInkVisits);
         INK_CK(cudaMemcpy(d_sconv_pool_arr, d_sconv_pool, sizeof(d_sconv_pool), cudaMemcpyHostToDevice));
         d_acc_path    = dalloc<int32_t>(kInkMaxTree);
@@ -651,12 +677,30 @@ struct InkCudaRunner {
         meta_ring_idx = 0;
         h_meta_pin  = halloc_pinned<int32_t>(64ull * meta_ring_stride);
 
+        ink_vram_log("runner act");
         moe_ws.alloc(max_batch);
+        ink_vram_log("runner moe");
         // Pre-allocate Tensor Core prefill attention workspace outside timed prefill loop when VRAM allows (~140 MB)!
-        if (m.sm_cc >= 60 && max_slots <= 4 && max_batch >= 128) {
+        if (m.sm_cc >= 60 && max_slots <= 4 && max_batch >= 128 && ink_pf_flash_needs_old_bufs(m.sm_cc)) {
             size_t vf = 0, vt = 0;
             INK_CK(cudaMemGetInfo(&vf, &vt));
             if (vf > (640ull << 20)) ensure_pf_attn(std::min(max_ctx, std::max(max_batch, 2048)));
+        }
+        ink_vram_log("runner pf");
+        if (kv_gpu >= 0) {
+            bool swa_visit[kInkVisits];
+            std::vector<std::vector<float>> rel_host(kInkPhysLayers);
+            for (int v = 0; v < kInkVisits; ++v) swa_visit[v] = m.man.c.is_swa[ink_visit_phys(v)] != 0;
+            for (int ip = 0; ip < kInkPhysLayers; ++ip) {
+                if (m.man.c.is_swa[ip] != 0) continue;
+                const std::string nm = "model.llm.layers." + std::to_string(ip) + ".attn.rel_logits_proj.proj";
+                rel_host[ip].resize(m.tinfo(nm).bytes / 4);
+                INK_CK(cudaMemcpy(rel_host[ip].data(), m.trunk_ptr(nm), m.tinfo(nm).bytes, cudaMemcpyDeviceToHost));
+            }
+            ra = std::make_unique<InkRemoteAttn>();
+            ra->init(m.primary_gpu, kv_gpu, max_slots, max_ctx, max_batch, tree_cap, kv_dtype == InkKvDtype::FP8, swa_visit, rel_host);
+            std::fprintf(stderr, "[InkCUDA] global attention on CUDA device %d: %.2f GB (KV %d x %d tokens)\n",
+                         kv_gpu, ra->gpu1_bytes / 1e9, max_slots, max_ctx);
         }
     }
 
@@ -1010,6 +1054,25 @@ struct InkCudaRunner {
                 gemm_bf16_compat(w_dst, X, Y, M, N, K, N, reuse_x_bf16, true);
             }
         } else {
+            // fork: small M reads the S_K weights directly (k_ink_gemv_sk), INK_SK_GEMV_OFF=1 for the old path
+            static const bool sk_gemv_off = std::getenv("INK_SK_GEMV_OFF") != nullptr;
+            if (M <= 16 && (K % 256) == 0 && !sk_gemv_off) {
+                const int grid = (N + 7) / 8;
+                for (int m0 = 0; m0 < M; m0 += 8) {
+                    const int mc = std::min(8, M - m0);
+                    const float* Xm = X + (size_t)m0 * K;
+                    float* Ym = Y + (size_t)m0 * N;
+#define INK_SK_GEMV(F)                                                                                   \
+                    if (mc == 1)      k_ink_gemv_sk<F, 1><<<grid, 256, 0, st>>>(W, Xm, Ym, mc, N, K, N); \
+                    else if (mc <= 4) k_ink_gemv_sk<F, 4><<<grid, 256, 0, st>>>(W, Xm, Ym, mc, N, K, N); \
+                    else              k_ink_gemv_sk<F, 8><<<grid, 256, 0, st>>>(W, Xm, Ym, mc, N, K, N);
+                    if (ti.fmt == FMT_S5_K)      { INK_SK_GEMV(FMT_S5_K) }
+                    else if (ti.fmt == FMT_S6_K) { INK_SK_GEMV(FMT_S6_K) }
+                    else                         { INK_SK_GEMV(FMT_S8_K) }
+#undef INK_SK_GEMV
+                }
+                return;
+            }
             // S5_K / S6_K / S8_K dense trunk tensor (dequant tile -> cuBLAS BF16/FP16/FP32 GEMM!)
             const size_t cap = (size_t)kInkDsparkInter * kInkHidden;
             const size_t max_tile = (m.sm_cc < 70) ? (cap / 3) : cap;
@@ -1028,20 +1091,45 @@ struct InkCudaRunner {
         }
     }
 
-    void ensure_pf_attn(int K_len) {
-        constexpr int Q_CH = 512;
-        if (K_len <= pf_kv_cap && d_pf_q) return;
-        INK_CK(cudaStreamSynchronize(st));
-        auto fr = [](auto*& p) { if (p) { cudaFree(p); p = nullptr; } };
-        fr(d_pf_q); fr(d_pf_k); fr(d_pf_v); fr(d_pf_p); fr(d_pf_s); fr(d_pf_o);
-        pf_kv_cap = std::max(K_len, 2048);
-        d_pf_q = dalloc<__nv_bfloat16>((size_t)kInkHeads * max_batch * kInkHeadDim);
-        d_pf_k = dalloc<__nv_bfloat16>((size_t)kInkHeads * pf_kv_cap * kInkHeadDim);
-        d_pf_v = dalloc<__nv_bfloat16>((size_t)kInkHeads * pf_kv_cap * kInkHeadDim);
-        d_pf_s = dalloc<float>((size_t)kInkHeads * Q_CH * pf_kv_cap);
-        d_pf_p = dalloc<__nv_bfloat16>((size_t)kInkHeads * Q_CH * pf_kv_cap);
-        d_pf_o = dalloc<float>((size_t)kInkHeads * Q_CH * kInkHeadDim);
+    // fork: fixed-size prefill attention workspace (~180 MiB whatever the context). K/V are packed once per KV head
+    // (GQA: 8 copies, not 24). Keys up to kPfTile go through the original one-shot softmax; longer ranges are walked
+    // in kPfTile-key tiles with an online softmax merge, so memory no longer grows with --max-context
+    // (it was ~86 KB per context token: 17 GB at 200K).
+    static constexpr int kPfTile = kInkPfTile;
+    static constexpr int kPfQCh = kInkPfQCh;
+    InkAttnBufs attn_bufs() const {
+        InkAttnBufs b;
+        b.st = st; b.cublas = cublas; b.sm_cc = m.sm_cc;
+        b.q = d_q; b.r = d_r; b.rel_table = d_rel_table; b.sinks = d_sinks; b.gate = d_gate_attn; b.out = d_attn_out;
+        b.pos = d_pos; b.slots = d_slots; b.anc = d_tree_anc; b.dep = d_tree_dep; b.tk = d_k; b.tv = d_v;
+        b.pm = d_attn_pm; b.pl = d_attn_pl; b.po = d_attn_po;
+        b.pf_q = d_pf_q; b.pf_k = d_pf_k; b.pf_v = d_pf_v; b.pf_p = d_pf_p;
+        b.pf_s = d_pf_s; b.pf_o = d_pf_o; b.pf_ot = d_pf_ot; b.pf_m = d_pf_m;
+        b.mq_pm = d_mq_pm; b.mq_pl = d_mq_pl; b.mq_po = d_mq_po;
+        return b;
     }
+    void ensure_pf_attn(int /*K_len*/) {
+        if (d_pf_q) return;
+        pf_kv_cap = kPfTile;
+        const size_t rows = (size_t)kInkHeads * kPfQCh;
+        d_pf_q  = dalloc<__nv_bfloat16>((size_t)kInkHeads * max_batch * kInkHeadDim);
+        d_pf_k  = dalloc<__nv_bfloat16>((size_t)kInkKVHeads * kPfTile * kInkHeadDim);
+        d_pf_v  = dalloc<__nv_bfloat16>((size_t)kInkKVHeads * kPfTile * kInkHeadDim);
+        d_pf_s  = dalloc<float>(rows * kPfTile);
+        d_pf_p  = dalloc<__nv_bfloat16>(rows * kPfTile);
+        d_pf_o  = dalloc<float>(rows * kInkHeadDim);
+        d_pf_ot = dalloc<float>(rows * kInkHeadDim);
+        d_pf_m  = dalloc<float>(rows * 4);   // running max, running sum, tile max, tile sum
+    }
+    static size_t pf_attn_bytes(int max_batch_) {
+        const size_t rows = (size_t)kInkHeads * kPfQCh;
+        return (size_t)kInkHeads * max_batch_ * kInkHeadDim * 2 + 2 * (size_t)kInkKVHeads * kPfTile * kInkHeadDim * 2
+             + rows * kPfTile * 6 + 2 * rows * kInkHeadDim * 4 + rows * 16;
+    }
+
+    // fork: prefill attention over more than kPfTile keys. Per 256-query chunk: start from the sink (max = sink,
+    // sum = 1, O = 0), then for each key tile pack K/V, S = QK^T (cuBLAS, tensor cores), P = exp(S + rel - tile max),
+    // O_tile = PV, and merge O/max/sum online. Same maths as the one-shot path; memory is fixed.
 
     // ---- Execute 1 virtual visit (visit in 0..47, phys layer ip in 0..23) ----
     // mode: 0 = single-slot sequential (prefill or M=1 decode), 1 = batched multi-slot (B=1..64, 1 tok/slot), 2 = Tree-32 verify
@@ -1212,72 +1300,18 @@ struct InkCudaRunner {
         // 7. RelPos Table + Fused Sink Flash-GQA (Split-K for M<=16 or Tree-32, BF16 TC Batched GEMM for prefill M>=128!)
         prof_mark_end(2); prof_mark_start();
         {
-            dim3 gr(kInkHeads, M);
-            k_ink_rel_table<<<gr, 256, 0, st>>>(d_r, (const float*)m.trunk_ptr(p + ".attn.rel_logits_proj.proj"), d_rel_table, M);
-            if (M <= 16 || mode == 2) {
-                dim3 gsp(kInkKVHeads, kInkAttnSplits, M);
-                k_ink_flash_gqa_splitk<<<gsp, 128, 0, st>>>(
-                    d_q, d_rel_table, d_sinks,
-                    kv_desc[visit], (mode == 1) ? d_slots : nullptr, slot0, d_pos,
-                    (mode == 2) ? d_k : nullptr, (mode == 2) ? d_v : nullptr,
-                    (mode == 2) ? d_tree_anc : nullptr, (mode == 2) ? d_tree_dep : nullptr,
-                    p0_val, d_attn_pm, d_attn_pl, d_attn_po, M);
-                k_ink_flash_gqa_merge<<<gr, 128, 0, st>>>(d_attn_pm, d_attn_pl, d_attn_po, d_gate_attn, d_attn_out, M);
-            } else if (mode == 0 && M >= 128 && (m.sm_cc >= 70 || m.sm_cc == 60) && (d_pf_q != nullptr || [&](){ size_t vf=0,vt=0; cudaMemGetInfo(&vf,&vt); return vf > (480ull<<20); }())) {
-                // High-speed Causal/SWA-Sliced Tensor Core Prefill Attention (BF16 on sm_80+, FP16 on sm_60..75!)
-                const bool use_fp16_pf = (m.sm_cc < 80);
-                const cudaDataType_t pf_dt = use_fp16_pf ? CUDA_R_16F : CUDA_R_16BF;
-                const cublasGemmAlgo_t pf_algo = (m.sm_cc >= 70) ? CUBLAS_GEMM_DEFAULT_TENSOR_OP : CUBLAS_GEMM_DEFAULT;
-                const int k_start = is_swa ? std::max(0, p0_val - kInkSwaWin + 1) : 0;
-                const int K_len = (p0_val + M) - k_start;
-                ensure_pf_attn(K_len);
-                if (use_fp16_pf) {
-                    k_ink_pf_pack_q<true><<<dim3(kInkHeads, M), 128, 0, st>>>(d_q, d_pf_q, M);
-                    k_ink_pf_pack_kv<true><<<dim3(kInkKVHeads, K_len), 128, 0, st>>>(kv_desc[visit], slot0, k_start, K_len, d_pf_k, d_pf_v);
-                } else {
-                    k_ink_pf_pack_q<false><<<dim3(kInkHeads, M), 128, 0, st>>>(d_q, d_pf_q, M);
-                    k_ink_pf_pack_kv<false><<<dim3(kInkKVHeads, K_len), 128, 0, st>>>(kv_desc[visit], slot0, k_start, K_len, d_pf_k, d_pf_v);
-                }
-                constexpr int Q_CH = 256;
-                const float sc_qk = 0.08838834764831845f;
-                const float one = 1.0f, zero = 0.0f;
-                for (int q0 = 0; q0 < M; q0 += Q_CH) {
-                    const int C = std::min(Q_CH, M - q0);
-                    const int k_sub_beg = is_swa ? std::max(k_start, p0_val + q0 - kInkSwaWin + 1) : k_start;
-                    const int k_sub_end = p0_val + q0 + C;
-                    const int k_off = k_sub_beg - k_start;
-                    const int K_sub = std::max(1, k_sub_end - k_sub_beg);
-                    // S[h, C, K_sub] = (1/sqrt(128)) * Q[h, q0..q0+C, 128] @ K[h, k_off..k_off+K_sub, 128]^T
-                    INK_CUBLAS_CK(cublasGemmStridedBatchedEx(
-                        cublas, CUBLAS_OP_T, CUBLAS_OP_N,
-                        K_sub, C, kInkHeadDim, &sc_qk,
-                        d_pf_k + (size_t)k_off * kInkHeadDim, pf_dt, kInkHeadDim, (long long)K_len * kInkHeadDim,
-                        d_pf_q + (size_t)q0 * kInkHeadDim, pf_dt, kInkHeadDim, (long long)M * kInkHeadDim,
-                        &zero, d_pf_s, CUDA_R_32F, K_sub, (long long)C * K_sub,
-                        kInkHeads, CUBLAS_COMPUTE_32F, pf_algo));
-                    if (use_fp16_pf) {
-                        k_ink_pf_softmax_rel_sink<true><<<dim3(C, kInkHeads), 256, 0, st>>>(
-                            d_pf_s, d_rel_table, d_sinks, d_pf_p, q0, C, k_sub_beg, K_sub, p0_val, is_swa);
-                    } else {
-                        k_ink_pf_softmax_rel_sink<false><<<dim3(C, kInkHeads), 256, 0, st>>>(
-                            d_pf_s, d_rel_table, d_sinks, d_pf_p, q0, C, k_sub_beg, K_sub, p0_val, is_swa);
-                    }
-                    // O[h, C, 128] = P[h, C, K_sub] @ V[h, k_off..k_off+K_sub, 128]
-                    INK_CUBLAS_CK(cublasGemmStridedBatchedEx(
-                        cublas, CUBLAS_OP_N, CUBLAS_OP_N,
-                        kInkHeadDim, C, K_sub, &one,
-                        d_pf_v + (size_t)k_off * kInkHeadDim, pf_dt, kInkHeadDim, (long long)K_len * kInkHeadDim,
-                        d_pf_p, pf_dt, K_sub, (long long)C * K_sub,
-                        &zero, d_pf_o, CUDA_R_32F, kInkHeadDim, (long long)C * kInkHeadDim,
-                        kInkHeads, CUBLAS_COMPUTE_32F, pf_algo));
-                    k_ink_pf_unpack_o_gate<<<dim3(kInkHeads, C), 128, 0, st>>>(d_pf_o, d_gate_attn, d_attn_out, q0, C);
-                }
+            if (mode == 0 && M >= 128 && (m.sm_cc >= 70 || m.sm_cc == 60) && d_pf_q == nullptr &&
+                ink_pf_flash_needs_old_bufs(m.sm_cc)) {
+                size_t vf = 0, vt = 0;
+                cudaMemGetInfo(&vf, &vt);
+                if (vf > (480ull << 20)) ensure_pf_attn(0);
+            }
+            if (ra && !is_swa) {
+                ra->post_and_wait(st, visit, mode, M, slot0, p0_val, d_q, d_r, d_sinks, d_gate_attn, d_pos,
+                                  (mode == 1) ? d_slots : nullptr, d_tree_anc, d_tree_dep, d_k, d_v, kv_desc[visit], d_attn_out);
             } else {
-                dim3 g3(kInkKVHeads, M);
-                k_ink_flash_gqa_gqa3<<<g3, 128, 0, st>>>(
-                    d_q, d_rel_table, d_sinks, d_gate_attn,
-                    kv_desc[visit], (mode == 1) ? d_slots : nullptr, slot0, d_pos,
-                    d_attn_out, M);
+                ink_attention(attn_bufs(), kv_desc[visit], (const float*)m.trunk_ptr(p + ".attn.rel_logits_proj.proj"),
+                              mode, M, slot0, p0_val, is_swa);
             }
         }
         prof_mark_end(3); prof_mark_start();
@@ -1548,7 +1582,11 @@ struct InkCudaRunner {
     void head_argmax_exact(int M, int32_t* h_out_ids) {
         prof_mark_start();
         const auto& ui = m.tinfo("model.llm.unembed.weight");
-        if (m.unembed_screen.ready && (ui.fmt == FMT_BF16 || ui.fmt == FMT_S6_K) && M <= kInkMaxTree) {
+        // fork: up to 16 rows the full S6_K logits (k_ink_gemv_sk) + argmax beat the screened argmax (5 ms per 8 rows
+        // on the 5060 Ti): DSpark decode 110 -> 117 tok/s, 1,204 rows checked identical (INK_ARGMAX_CHECK=1).
+        // INK_ARGMAX_FULL_MAX=0 restores the screened path.
+        static const int full_max = [] { const char* e = std::getenv("INK_ARGMAX_FULL_MAX"); return e ? std::atoi(e) : 16; }();
+        if (m.unembed_screen.ready && (ui.fmt == FMT_BF16 || ui.fmt == FMT_S6_K) && M <= kInkMaxTree && (M > (ui.fmt == FMT_S6_K ? full_max : 0) || argmax_force_screen)) {
             const int V = m.man.c.vocab_unpadded;
             const int g1 = (V + 7) / 8;
             for (int m0 = 0; m0 < M; m0 += 8) {
@@ -1590,7 +1628,18 @@ struct InkCudaRunner {
         prof_mark_end(7);
         INK_CK(cudaMemcpyAsync(h_out_ids, d_argmax, (size_t)M * 4, cudaMemcpyDeviceToHost, st));
         INK_CK(cudaStreamSynchronize(st));
+        static const bool check = std::getenv("INK_ARGMAX_CHECK") != nullptr;   // fork: debug, full vs screened
+        if (check && m.unembed_screen.ready && M <= kInkMaxTree) {
+            std::vector<int32_t> ref(M);
+            argmax_force_screen = true;
+            head_argmax_exact(M, ref.data());
+            argmax_force_screen = false;
+            static long n_rows = 0, n_diff = 0;
+            for (int i = 0; i < M; ++i) { ++n_rows; n_diff += (ref[i] != h_out_ids[i]); }
+            if (n_rows % 200 < (long)M) std::fprintf(stderr, "[argmax-check] rows %ld, differ %ld\n", n_rows, n_diff);
+        }
     }
+    bool argmax_force_screen = false;
 
     // Full exact softcapped logits [n_want, 200058] for selected hidden rows in d_h_src -> d_logits
     void head_logits_from(const float* d_h_src, int n_want) {
@@ -1607,6 +1656,7 @@ struct InkCudaRunner {
     }
 
     void free_all() {
+        if (ra) ra->shutdown();
         for (auto& e : graph_cache) if (e.exec) cudaGraphExecDestroy(e.exec);
         graph_cache.clear();
         moe_ws.free_all();
@@ -1632,7 +1682,7 @@ struct InkCudaRunner {
         for (int i = 0; i < 4; ++i) { fr(d_taps[i]); fr(d_taps_compact[i]); }
         fr(d_ctrl_cat); fr(d_ctrl_gate); fr(d_ctrl_gain); fr(d_ctrl_forget);
         fr(d_attn_pm); fr(d_attn_pl); fr(d_attn_po);
-        fr(d_pf_q); fr(d_pf_k); fr(d_pf_v); fr(d_pf_p); fr(d_pf_s); fr(d_pf_o);
+        fr(d_pf_q); fr(d_pf_k); fr(d_pf_v); fr(d_pf_p); fr(d_pf_s); fr(d_pf_o); fr(d_pf_ot); fr(d_pf_m); fr(d_mq_pm); fr(d_mq_pl); fr(d_mq_po);
         fr(d_stage_k); fr(d_stage_v); fr(d_stage_sconv);
         fr(d_kv_desc_arr); fr(d_sconv_pool_arr); fr(d_acc_path);
         fr(d_x_bf16); fr(d_w_scratch); fr(d_logits);

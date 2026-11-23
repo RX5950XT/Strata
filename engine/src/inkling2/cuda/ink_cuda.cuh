@@ -106,6 +106,16 @@ inline cudaError_t ink_cuda_mem_info(size_t* vfree, size_t* vtot, int dev = -1) 
 }
 
 // ---- Exact Inkling-2-Mini model constants ----
+// fork: INK_VRAM_LOG=1 prints free VRAM at init stages (where the memory goes at long contexts)
+inline void ink_vram_log(const char* what) {
+    static const bool on = std::getenv("INK_VRAM_LOG") != nullptr;
+    if (!on) return;
+    size_t f = 0, t = 0;
+    cudaDeviceSynchronize();
+    cudaMemGetInfo(&f, &t);
+    std::fprintf(stderr, "[vram] %-14s free %6.0f MiB of %6.0f%c", what, f / 1048576.0, t / 1048576.0, 10);
+}
+
 constexpr int kInkPhysLayers  = 24;
 constexpr int kInkVisits      = 48;
 constexpr int kInkCoreStart   = 6;

@@ -163,6 +163,14 @@ static int cmd_bench(const std::string& model_path, const BackendOpts& bopts, in
             fprintf(stderr, "bench prefill err: %s\n", err.c_str());
             return 1;
         }
+        // fork: INK_BENCH_PROGRESS=1 prints prompt speed per 8K tokens (shows how speed falls with depth)
+        static const bool progress = std::getenv("INK_BENCH_PROGRESS") != nullptr;
+        static double t_last = t_pf0;
+        if (progress && ((p0 + len) % 8192 < len) && p0 + len < prompt_len) {
+            const double t = now_s();
+            fprintf(stderr, "[bench] prompt %d: %.0fs total, last 8K %.0f tok/s\n", p0 + len, t - t_pf0, 8192.0 * P / (t - t_last));
+            t_last = t;
+        }
     }
     double pf_s = now_s() - t_pf0;
     for (int s = 0; s < P; ++s) {
@@ -178,7 +186,7 @@ static int cmd_bench(const std::string& model_path, const BackendOpts& bopts, in
         int cur_pos = prompt_len;
         while (total_gen < gen_len) {
             const int rem = gen_len - total_gen;
-            if (rem >= 2 && cur_pos + 12 < bo.max_ctx) {
+            if (rem >= 2 && cur_pos + 12 < bo.max_ctx && (bo.draft_max_pos <= 0 || cur_pos < bo.draft_max_pos)) {
                 int32_t emitted[16]{};
                 int drafted = 0;
                 const int n_emit = backend->dspark_spec_step_greedy(
@@ -294,6 +302,15 @@ static int cmd_kld_eval(const std::string& model_path, const std::string& ref_pa
         }
         kld_sum += kld;
         nll_sum += -(q_lg[ids[t + 1]] - lzq);
+        // fork: INK_KLD_CHUNKS=1 prints the mean KLD of each 512-token stretch (shows where a difference starts)
+        static const bool by_chunk = std::getenv("INK_KLD_CHUNKS") != nullptr;
+        static double part = 0.0;
+        part += kld;
+        if (by_chunk && ((t + 1) % 512 == 0 || t == n_tok - 2)) {
+            const int n_part = (t + 1) % 512 == 0 ? 512 : (t + 1) % 512;
+            printf("[kld-eval] tokens %5d-%5d: mean KLD %.6f\n", t + 1 - n_part, t, part / n_part);
+            part = 0.0;
+        }
     }
     const int n_eval = n_tok - 1;
     printf("[kld-eval] n=%d | Mean KLD=%.6f | Top-1=%.2f%% | PPL=%.3f\n",
@@ -405,6 +422,10 @@ int main(int argc, char** argv) {
             cfg.bopts.cpu_threads = std::atoi(next().c_str());
         } else if (a == "--gpu") {
             cfg.bopts.gpu_index = std::atoi(next().c_str());
+        } else if (a == "--draft-max-pos") {
+            cfg.bopts.draft_max_pos = std::max(0, std::atoi(next().c_str()));
+        } else if (a == "--kv-gpu") {
+            cfg.bopts.kv_gpu = std::atoi(next().c_str());
         } else if (a == "--gpus") {
             cfg.bopts.gpus = std::max(1, std::atoi(next().c_str()));
         } else if (a == "--ep-split") {
@@ -431,7 +452,7 @@ int main(int argc, char** argv) {
                    "  --selfcheck [--native PATH] [--verify-hash] [--cpu] [--gpus 1|2] [--kv fp16|fp8|k8v8|k8v4]\n"
                    "  --bench --native PATH [--parallel 1..64] [--gpus 1|2] [--ep-split F] [--vram-reserve-mib N] [--cpu-threads N] [--kv auto|fp16|fp8|k8v8|k8v4] [--prompt-len N] [--gen N]\n"
                    "  --kld-eval REF.bin --native PATH\n"
-                   "  --serve --native PATH [--vision VISION] [--dspark PATH] [--max-context N] [--parallel 1..64] [--gpus 1|2] [--draft auto|dspark|off]\n",
+                   "  --serve --native PATH [--vision VISION] [--dspark PATH] [--max-context N] [--parallel 1..64] [--gpus 1|2] [--kv-gpu N] [--draft auto|dspark|off] [--draft-max-pos N]\n",
                    INKLING_VERSION);
             return 0;
         } else {

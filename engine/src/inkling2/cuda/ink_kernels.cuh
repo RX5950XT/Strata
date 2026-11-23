@@ -1747,6 +1747,64 @@ __global__ void __launch_bounds__(256) k_ink_sk_to_bf16(const uint8_t* __restric
     dst[(size_t)row * K + col] = __float2bfloat16_rn(v);
 }
 
+// fork: direct small-M GEMV on S_K weights (S5_K / S6_K / S8_K), Y[m, n] = sum_k W[n, k] * X[m, k], FP32 throughout.
+// Used for M <= 16 instead of "dequantize tiles to BF16 + cuBLAS": for the 201K-row unembed that path moved ~2 GB per
+// decoded token (22 tiles); this reads the 6-bit weights once (~360 MB). One warp per row, lane = 8 consecutive
+// columns of each 256-wide superblock; MT query rows share each weight read. K must be a multiple of 256.
+template <int FMT, int MT>
+__global__ void __launch_bounds__(256) k_ink_gemv_sk(const uint8_t* __restrict__ raw, const float* __restrict__ X,
+                                                     float* __restrict__ Y, int M, int N, int K, int ldy) {
+    const int row = blockIdx.x * 8 + (threadIdx.x >> 5);
+    const int lane = threadIdx.x & 31;
+    if (row >= N) return;
+    constexpr int SB = ink_sb_bytes(FMT);
+    constexpr float HALF = ink_sk_half(FMT);
+    const int nsb = K >> 8;
+    float acc[MT];
+#pragma unroll
+    for (int i = 0; i < MT; ++i) acc[i] = 0.0f;
+    for (int s = 0; s < nsb; ++s) {
+        const uint8_t* blk = raw + ((size_t)row * nsb + s) * SB;
+        const float eff = f16_to_f32(ld16_u(blk)) * ((float)__ldg(blk + 2 + (lane >> 3)) * (1.0f / 255.0f));
+        const uint8_t* pl = blk + 6;
+        float w[8];
+#pragma unroll
+        for (int j = 0; j < 8; ++j) {
+            const int idx = lane * 8 + j;
+            float v;
+            if constexpr (FMT == FMT_S5_K) {
+                const uint32_t lo = (__ldg(pl + (idx >> 1)) >> ((idx & 1) * 4)) & 0x0Fu;
+                const uint32_t hi = (__ldg(pl + 128 + (idx >> 3)) >> (idx & 7)) & 1u;
+                v = (float)(lo | (hi << 4)) - HALF;
+            } else if constexpr (FMT == FMT_S6_K) {
+                const uint32_t lo = (__ldg(pl + (idx >> 1)) >> ((idx & 1) * 4)) & 0x0Fu;
+                const uint32_t hi = (__ldg(pl + 128 + (idx >> 2)) >> ((idx & 3) * 2)) & 3u;
+                v = (float)(lo | (hi << 4)) - HALF;
+            } else {
+                v = (float)((int8_t)__ldg(pl + idx));
+            }
+            w[j] = v * eff;
+        }
+        const int col = s * 256 + lane * 8;
+#pragma unroll
+        for (int i = 0; i < MT; ++i) {
+            if (i >= M) break;
+            const float4 xa = __ldg(reinterpret_cast<const float4*>(X + (size_t)i * K + col));
+            const float4 xb = __ldg(reinterpret_cast<const float4*>(X + (size_t)i * K + col + 4));
+            float a = acc[i];
+            a = fmaf(w[0], xa.x, a); a = fmaf(w[1], xa.y, a); a = fmaf(w[2], xa.z, a); a = fmaf(w[3], xa.w, a);
+            a = fmaf(w[4], xb.x, a); a = fmaf(w[5], xb.y, a); a = fmaf(w[6], xb.z, a); a = fmaf(w[7], xb.w, a);
+            acc[i] = a;
+        }
+    }
+#pragma unroll
+    for (int i = 0; i < MT; ++i) {
+        if (i >= M) break;
+        const float a = warp_sum(acc[i]);
+        if (lane == 0) Y[(size_t)i * ldy + row] = a;
+    }
+}
+
 // ============================================================================
 // 7. Exact 2-Stage Cauchy-Schwarz Screened Unembed (0.25 ms on RTX 5090, 100.000% Bit-Exact Argmax!)
 //    Coarse plane: symmetric INT8 per-row quantized unembed [V, 2304] (460 MB) + per-row scale sc[V] + exact L2 error eps[V]!
