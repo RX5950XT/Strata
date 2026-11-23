@@ -31,8 +31,11 @@ __global__ void __launch_bounds__(32 * T) k_ink_flash_dec_tc(
     const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5;
     const int g = lane >> 2, t = lane & 3;
     const int kc = (DRAFT || tree) ? q_pos[0] : q_pos[M - 1] + 1;
-    const int per_sp = (((kc + nsp - 1) / nsp) + 15) & ~15;
-    const int s_beg = sp * per_sp, s_end = min(kc, s_beg + per_sp);
+    // fork: a sliding-window visit reads only the last kInkSwaWin keys before its first query, from its ring
+    const bool swa = !DRAFT && kv.is_swa;
+    const int k_lo = swa ? max(0, q_pos[0] - kInkSwaWin + 1) : 0;
+    const int per_sp = (((kc - k_lo + nsp - 1) / nsp) + 15) & ~15;
+    const int s_beg = k_lo + sp * per_sp, s_end = min(kc, s_beg + per_sp);
 
     // this thread's two rows (g and g + 8 of the warp's tile)
     int qp[2], hrow[2], mrow[2];
@@ -89,7 +92,7 @@ __global__ void __launch_bounds__(32 * T) k_ink_flash_dec_tc(
 #pragma unroll
         for (int j = 0; j < 2; ++j) {
             const int kp = base + 8 * j + g;
-            const size_t rk = (row0 + kp) * kInkKVHeads + kh;
+            const size_t rk = (row0 + (swa ? kp % kv.cap_pos : kp)) * kInkKVHeads + kh;
 #pragma unroll
             for (int w = 0; w < KW; ++w) {
                 if (kp < s_end) {
@@ -102,7 +105,7 @@ __global__ void __launch_bounds__(32 * T) k_ink_flash_dec_tc(
 #pragma unroll
             for (int e = 0; e < 2; ++e) {
                 const int vp = base + 8 * j + 2 * t + e;
-                const size_t ri = (row0 + vp) * kInkKVHeads + kh;
+                const size_t ri = (row0 + (swa ? vp % kv.cap_pos : vp)) * kInkKVHeads + kh;
 #pragma unroll
                 for (int w = 0; w < VW; ++w) {
                     if (vp < s_end) {
@@ -156,7 +159,7 @@ __global__ void __launch_bounds__(32 * T) k_ink_flash_dec_tc(
                     float v = s[j][2 * i + e] * ks[j][e];
                     if (tail) {
                         const int dist = qp[i] - kp;
-                        if (dist < 0) v = -INFINITY;
+                        if (dist < 0 || (swa && dist >= kInkSwaWin)) v = -INFINITY;
                         else if (dist < kInkRelExtent) v = fmaf(__ldg(rt[i] + dist), kLog2e, v);
                     }
                     if (kp >= s_end || !valid[i]) v = -INFINITY;
@@ -352,7 +355,8 @@ inline void ink_dspark_attn_tc(cudaStream_t st, const float* q, const float* kd,
 // true when the tensor-core path applies (sm_80+, FP8 KV, <= 16 queries); INK_DEC_TC_OFF=1 keeps k_ink_flash_dec16
 inline bool ink_dec_tc_ok(int sm_cc, const InkKvVisitDesc& kv, int M) {
     static const bool off = std::getenv("INK_DEC_TC_OFF") != nullptr;
-    return !off && sm_cc >= 80 && kv.is_fp8 && !kv.is_swa && M >= 1 && M <= 16;
+    static const bool swa_off = std::getenv("INK_DEC_TC_SWA_OFF") != nullptr;   // fork: A/B for sliding-window visits
+    return !off && sm_cc >= 80 && kv.is_fp8 && (!kv.is_swa || !swa_off) && M >= 1 && M <= 16;
 }
 
 // nsp = total partial slots the merge reads; tree mode uses the last one for the tree keys

@@ -1017,7 +1017,12 @@ struct InkCudaRunner {
                 gemm_bf16_compat(reinterpret_cast<const __nv_bfloat16*>(W), X, Y, M, N, K, N, reuse_x_bf16, false);
             }
         } else if (ti.fmt == FMT_F32) {
-            if (M <= 16) {
+            if (M <= 16 && N <= 128 && (K % 4) == 0) {       // fork: few rows: one CTA per row (k_ink_gemv_f32_row)
+                if (M == 1)      k_ink_gemv_f32_row<1><<<N, 256, 0, st>>>((const float*)W, X, Y, M, N, K);
+                else if (M <= 4) k_ink_gemv_f32_row<4><<<N, 256, 0, st>>>((const float*)W, X, Y, M, N, K);
+                else if (M <= 8) k_ink_gemv_f32_row<8><<<N, 256, 0, st>>>((const float*)W, X, Y, M, N, K);
+                else             k_ink_gemv_f32_row<16><<<N, 256, 0, st>>>((const float*)W, X, Y, M, N, K);
+            } else if (M <= 16) {
                 const int grid = (N + 7) / 8;
                 if (M == 1)      k_ink_gemv_f32<1><<<grid, 256, 0, st>>>((const float*)W, X, Y, M, N, K);
                 else if (M <= 4) k_ink_gemv_f32<4><<<grid, 256, 0, st>>>((const float*)W, X, Y, M, N, K);

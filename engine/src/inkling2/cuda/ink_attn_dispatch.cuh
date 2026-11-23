@@ -40,7 +40,9 @@ inline int ink_flash_wide_splits() {
 
 // fork: decode / tree attention for a global visit, split-K with queries fastest in the grid
 inline void ink_flash_wide(const InkAttnBufs& b, const InkKvVisitDesc& kv, int mode, int M, int slot0, int p0_val) {
-    const int nsp = ink_flash_wide_splits();
+    // fork: a sliding-window visit has at most 1,024 + M keys: 16 splits of 64 keys (INK_SWA_SPLITS overrides)
+    static const int swa_nsp = [] { const char* e = std::getenv("INK_SWA_SPLITS"); return e ? std::max(2, std::min(kInkMqSplits, std::atoi(e))) : 16; }();
+    const int nsp = kv.is_swa ? swa_nsp : ink_flash_wide_splits();
     static const bool dec16_off = std::getenv("INK_DEC16_OFF") != nullptr;   // A/B: the 32-lane kernel
     if (ink_dec_tc_ok(b.sm_cc, kv, M)) {
         ink_dec_tc_launch(b.st, b.q, b.rel_table, b.sinks, kv, slot0, b.pos, mode == 2, b.tk, b.tv, b.anc,
@@ -111,7 +113,9 @@ inline void ink_attention_cublas(const InkAttnBufs& b, const InkKvVisitDesc& kv,
     dim3 gr(kInkHeads, M);
     k_ink_rel_table<<<gr, 256, 0, b.st>>>(b.r, rel_proj, b.rel_table, M);
     static const bool mq_off = std::getenv("INK_MQ_OFF") != nullptr;   // fork: A/B switch for the wide split-K
-    if ((M <= 16 || mode == 2) && !is_swa && mode != 1 && b.mq_po != nullptr && M <= 32 && !mq_off) {
+    // fork: sliding-window visits take the same path when the tensor-core kernel applies (it reads their ring)
+    if ((M <= 16 || mode == 2) && (!is_swa || ink_dec_tc_ok(b.sm_cc, kv, M)) && mode != 1 && b.mq_po != nullptr &&
+        M <= 32 && !mq_off) {
         ink_flash_wide(b, kv, mode, M, slot0, p0_val);
     } else if (M <= 16 || mode == 2) {
         dim3 gsp(kInkKVHeads, kInkAttnSplits, M);

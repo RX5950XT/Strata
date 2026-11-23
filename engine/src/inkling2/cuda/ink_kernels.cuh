@@ -1287,6 +1287,43 @@ __global__ void __launch_bounds__(256) k_ink_gemv_q8row(
     }
 }
 
+// fork: the same for a matrix with few rows (decode's small F32 projections, N = 24..40): one CTA per row, so a row's
+// K is read by 256 threads at once instead of one warp walking it (k_ink_gemv_f32 left 3..5 CTAs on the card).
+template <int MAX_M>
+__global__ void __launch_bounds__(256) k_ink_gemv_f32_row(
+    const float* __restrict__ W, const float* __restrict__ X, float* __restrict__ Y, int M, int N, int K) {
+    const int row = blockIdx.x, tid = threadIdx.x, warp = tid >> 5, lane = tid & 31;
+    const float4* wr = reinterpret_cast<const float4*>(W + (size_t)row * K);
+    const int K4 = K >> 2;
+    float acc[MAX_M] = {};
+    for (int k4 = tid; k4 < K4; k4 += 256) {
+        const float4 wv = __ldg(wr + k4);
+#pragma unroll
+        for (int m = 0; m < MAX_M; ++m) {
+            if (m < M) {
+                const float4 xv = *reinterpret_cast<const float4*>(X + (size_t)m * K + k4 * 4);
+                acc[m] = fmaf(wv.x, xv.x, acc[m]); acc[m] = fmaf(wv.y, xv.y, acc[m]);
+                acc[m] = fmaf(wv.z, xv.z, acc[m]); acc[m] = fmaf(wv.w, xv.w, acc[m]);
+            }
+        }
+    }
+    __shared__ float s_red[MAX_M][8];
+#pragma unroll
+    for (int m = 0; m < MAX_M; ++m) {
+        if (m < M) {
+            const float v = warp_sum(acc[m]);
+            if (lane == 0) s_red[m][warp] = v;
+        }
+    }
+    __syncthreads();
+    if (tid < M) {
+        float v = 0.0f;
+#pragma unroll
+        for (int w = 0; w < 8; ++w) v += s_red[tid][w];
+        Y[(size_t)tid * N + row] = v;
+    }
+}
+
 // High-bandwidth F32 GEMV for small M (1..16)
 template <int MAX_M>
 __global__ void __launch_bounds__(256) k_ink_gemv_f32(
