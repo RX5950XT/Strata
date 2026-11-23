@@ -137,7 +137,9 @@ __global__ void __launch_bounds__(kPfFlThreads, 1) k_ink_pf_flash(
     const float* __restrict__ sinks,     // [M, 24]
     const float* __restrict__ gate,      // [M, 24, 128] or null
     float* __restrict__ out,             // [M, 24, 128]
-    InkKvVisitDesc kv, int slot0, int p0, int M, int k_start, int is_swa) {
+    InkKvVisitDesc kv, int slot0, int p0, int M, int k_start, int is_swa,
+    float* __restrict__ part_o,          // fork, split-K (gridDim.z > 1): [splits, M, 24, 128] unnormalized O
+    float* __restrict__ part_ml) {       //                               [splits, M, 24, 2] row max (log2) and sum
     extern __shared__ __align__(128) unsigned char pffl_smem[];
     unsigned char* qs = pffl_smem;
     unsigned char* ks = qs + kPfFlQBytes;
@@ -155,9 +157,19 @@ __global__ void __launch_bounds__(kPfFlThreads, 1) k_ink_pf_flash(
     const int qlo = p0 + m0, qhi = p0 + m0 + nrows - 1;
     const int kb = is_swa ? max(k_start, qlo - kInkSwaWin + 1) : k_start;
     const int ke = qhi + 1;
+    // fork: split-K. The whole 64-key tiles that every row of this block sees ([kb, qlo]) are shared out among the
+    // splits; the last split also takes the rest (the diagonal), so each split's first tile is unmasked for all rows.
+    // Split 0 carries the sink. k_ink_pf_flash_merge combines the splits.
+    const int nsplit = gridDim.z, split = blockIdx.z;
+    int t_lo = kb, t_hi = ke;
+    if (nsplit > 1) {
+        const int nt_full = max(0, (qlo + 1 - kb) / kPfFlBN);
+        t_lo = kb + (int)((long long)nt_full * split / nsplit) * kPfFlBN;
+        t_hi = (split + 1 == nsplit) ? ke : kb + (int)((long long)nt_full * (split + 1) / nsplit) * kPfFlBN;
+    }
 
     PfFlStage<FP8> stg;
-    pffl_fetch<FP8>(stg, kv, slot0, kh, kb, ke);
+    pffl_fetch<FP8>(stg, kv, slot0, kh, t_lo, ke);
 
     // Q -> BF16 smem [3 heads][64 rows][128]
     for (int c = tid; c < kPfFlGQ * kPfFlBM * 16; c += kPfFlThreads) {
@@ -181,6 +193,7 @@ __global__ void __launch_bounds__(kPfFlThreads, 1) k_ink_pf_flash(
     const float* r1p = r + ((size_t)mr1 * kInkHeads + h) * kInkDRel;
     float row_m[2] = {sinks[(size_t)mr0 * kInkHeads + h] * kLog2e, sinks[(size_t)mr1 * kInkHeads + h] * kLog2e};
     float row_l[2] = {t == 0 ? 1.0f : 0.0f, t == 0 ? 1.0f : 0.0f};     // the sink counted once per quad
+    if (split > 0) { row_m[0] = row_m[1] = -INFINITY; row_l[0] = row_l[1] = 0.0f; }
     float o[16][4];
 #pragma unroll
     for (int i = 0; i < 16; ++i) o[i][0] = o[i][1] = o[i][2] = o[i][3] = 0.0f;
@@ -190,7 +203,7 @@ __global__ void __launch_bounds__(kPfFlThreads, 1) k_ink_pf_flash(
     const uint32_t vs_a = (uint32_t)__cvta_generic_to_shared(vs);
     const int qrow = hr * kPfFlBM + rb * 16 + (lane & 7) + ((lane >> 3) & 1) * 8;
 
-    for (int t0 = kb; t0 < ke; t0 += kPfFlBN) {
+    for (int t0 = t_lo; t0 < t_hi; t0 += kPfFlBN) {
         const int kmax = min(t0 + kPfFlBN, ke) - 1;
         const bool need_bias = kmax > qlo - kInkRelExtent;         // some distance < 1024
         const bool need_mask = kmax > qlo || t0 + kPfFlBN > ke || (is_swa && qhi - t0 >= kInkSwaWin);
@@ -204,7 +217,7 @@ __global__ void __launch_bounds__(kPfFlThreads, 1) k_ink_pf_flash(
             }
         }
         __syncthreads();
-        if (t0 + kPfFlBN < ke) pffl_fetch<FP8>(stg, kv, slot0, kh, t0 + kPfFlBN, ke);
+        if (t0 + kPfFlBN < t_hi) pffl_fetch<FP8>(stg, kv, slot0, kh, t0 + kPfFlBN, ke);
 
         float s[8][4];
 #pragma unroll
@@ -302,6 +315,23 @@ __global__ void __launch_bounds__(kPfFlThreads, 1) k_ink_pf_flash(
         }
     }
 
+    if (nsplit > 1) {      // fork: split-K partial: unnormalized O, row max and sum (k_ink_pf_flash_merge finishes)
+#pragma unroll
+        for (int hh = 0; hh < 2; ++hh) {
+            float l = row_l[hh];
+            l += __shfl_xor_sync(0xffffffffu, l, 1);
+            l += __shfl_xor_sync(0xffffffffu, l, 2);
+            const int pi = hh ? pi1 : pi0;
+            if (pi >= nrows) continue;
+            const size_t ri = ((size_t)split * M + m0 + pi) * kInkHeads + h;
+#pragma unroll
+            for (int nd = 0; nd < 16; ++nd)
+                *reinterpret_cast<float2*>(part_o + ri * kInkHeadDim + nd * 8 + 2 * t) = make_float2(o[nd][2 * hh], o[nd][2 * hh + 1]);
+            if (t == 0) *reinterpret_cast<float2*>(part_ml + ri * 2) = make_float2(row_m[hh], l);
+        }
+        return;
+    }
+
     // finish: O / l * sigmoid(gate)
 #pragma unroll
     for (int hh = 0; hh < 2; ++hh) {
@@ -326,6 +356,27 @@ __global__ void __launch_bounds__(kPfFlThreads, 1) k_ink_pf_flash(
     }
 }
 
+// fork: split-K merge. One CTA per (row, head), one thread per dimension: out = sum_s O_s 2^(m_s - m) / sum_s l_s 2^(m_s - m),
+// times sigmoid(gate).
+__global__ void __launch_bounds__(kInkHeadDim) k_ink_pf_flash_merge(const float* __restrict__ part_o,
+                                                                    const float* __restrict__ part_ml,
+                                                                    const float* __restrict__ gate, float* __restrict__ out,
+                                                                    int rows, int nsplit) {
+    const size_t ri = blockIdx.x, d = threadIdx.x;
+    float mx = -INFINITY;
+    for (int s = 0; s < nsplit; ++s) mx = fmaxf(mx, part_ml[((size_t)s * rows + ri) * 2]);
+    float l = 0.0f, acc = 0.0f;
+    for (int s = 0; s < nsplit; ++s) {
+        const size_t si = (size_t)s * rows + ri;
+        const float w = exp2f(part_ml[si * 2] - mx);
+        l = fmaf(part_ml[si * 2 + 1], w, l);
+        acc = fmaf(part_o[si * kInkHeadDim + d], w, acc);
+    }
+    float v = acc / l;
+    if (gate) v *= 1.0f / (1.0f + __expf(-gate[ri * kInkHeadDim + d]));
+    out[ri * kInkHeadDim + d] = v;
+}
+
 // The fused kernel handles every prefill (M >= 128) on this card, so the cuBLAS path's buffers (K/V pack, score tiles,
 // a [M, 24, 1025] bias table) are not needed. INK_PF_FLASH_CHECK runs both paths, so it keeps them.
 inline bool ink_pf_flash_needs_old_bufs(int sm_cc) {
@@ -336,6 +387,48 @@ inline bool ink_pf_flash_needs_old_bufs(int sm_cc) {
 // rows of rel_table still needed: decode, batched decode, tree and the 17..127-token path
 inline int ink_rel_table_rows(int sm_cc, int max_batch) {
     return ink_pf_flash_needs_old_bufs(sm_cc) ? max_batch : std::min(max_batch, 128);
+}
+
+// fork: split-K for long global visits. With one 384-thread CTA per SM, a [M / 64, 8] grid leaves the last wave part
+// empty (M = 1024: 128 CTAs on a 38-SM 3060 Ti is 3.4 waves, 84% busy). Splitting the keys gives more, shorter CTAs.
+// Picks the split count (1..4) with the fullest last wave, each split at least 32 tiles of keys; the partials need
+// a workspace, allocated once per device, and only on a card with more than 1 GiB free at the first long call (the
+// 200K main card is left alone) and never during stream capture. INK_PF_SPLIT=N forces N (1 = off).
+inline float* g_pf_split_ws[64] = {};
+inline size_t g_pf_split_cap[64] = {};
+inline int ink_pf_flash_splits(cudaStream_t st, int dev, int ctas, int keys, int M) {
+    static const int forced = [] { const char* e = std::getenv("INK_PF_SPLIT"); return e ? std::atoi(e) : 0; }();
+    static int sms[64] = {};
+    static int roomy[64] = {};   // 0 unknown, 1 yes, -1 no
+    if (dev < 0 || dev >= 64 || forced == 1) return 1;
+    if (!sms[dev]) cudaDeviceGetAttribute(&sms[dev], cudaDevAttrMultiProcessorCount, dev);
+    int best = 1;
+    if (forced > 1) {
+        best = std::min(forced, 8);
+    } else {
+        double best_eff = 0.0;
+        for (int s = 1; s <= 4; ++s) {
+            if (s > 1 && keys < s * 32 * kPfFlBN) break;
+            const int n = ctas * s, waves = (n + sms[dev] - 1) / sms[dev];
+            const double eff = (double)n / ((double)waves * sms[dev]);
+            if (eff > best_eff + 0.02) { best_eff = eff; best = s; }
+        }
+    }
+    if (best == 1) return 1;
+    const size_t need = (size_t)best * M * kInkHeads * (kInkHeadDim + 2) * sizeof(float);
+    if (need <= g_pf_split_cap[dev]) return best;
+    cudaStreamCaptureStatus cs = cudaStreamCaptureStatusNone;
+    if (cudaStreamIsCapturing(st, &cs) != cudaSuccess || cs != cudaStreamCaptureStatusNone) return 1;
+    if (!roomy[dev]) {
+        size_t f = 0, t = 0;
+        roomy[dev] = (cudaMemGetInfo(&f, &t) == cudaSuccess && f > (1ull << 30)) ? 1 : -1;
+    }
+    if (roomy[dev] < 0) return 1;
+    const size_t want = std::max(need, (size_t)4 * 2048 * kInkHeads * (kInkHeadDim + 2) * sizeof(float));
+    if (g_pf_split_ws[dev]) { cudaStreamSynchronize(st); cudaFree(g_pf_split_ws[dev]); g_pf_split_ws[dev] = nullptr; g_pf_split_cap[dev] = 0; }
+    if (cudaMalloc(&g_pf_split_ws[dev], want) != cudaSuccess) { cudaGetLastError(); g_pf_split_ws[dev] = nullptr; roomy[dev] = -1; return 1; }
+    g_pf_split_cap[dev] = want;
+    return best;
 }
 
 template <bool FP8, bool F16>
@@ -349,9 +442,18 @@ inline void ink_pf_flash_go(cudaStream_t st, const float* q, const float* r, con
         cudaFuncSetAttribute(k_ink_pf_flash<FP8, F16>, cudaFuncAttributeMaxDynamicSharedMemorySize, kPfFlSmem);
         attr_set[dev] = true;
     }
-    const dim3 grid((M + kPfFlBM - 1) / kPfFlBM, kInkKVHeads);
+    const int gx = (M + kPfFlBM - 1) / kPfFlBM;
+    const int ns = is_swa ? 1 : ink_pf_flash_splits(st, dev, gx * kInkKVHeads, p0 - k_start, M);
+    float* po = nullptr;
+    float* pml = nullptr;
+    if (ns > 1) {
+        po = g_pf_split_ws[dev];
+        pml = po + (size_t)ns * M * kInkHeads * kInkHeadDim;
+    }
+    const dim3 grid(gx, kInkKVHeads, ns);
     k_ink_pf_flash<FP8, F16><<<grid, kPfFlThreads, kPfFlSmem, st>>>(q, r, rel_proj, sinks, gate, out, kv, slot0, p0, M,
-                                                                     k_start, is_swa ? 1 : 0);
+                                                                     k_start, is_swa ? 1 : 0, po, pml);
+    if (ns > 1) k_ink_pf_flash_merge<<<M * kInkHeads, kInkHeadDim, 0, st>>>(po, pml, gate, out, M * kInkHeads, ns);
 }
 
 // Host launcher. Returns false when the kernel does not apply (pre-sm_80); the caller keeps its older path.
