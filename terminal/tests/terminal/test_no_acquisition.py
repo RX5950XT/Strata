@@ -48,6 +48,7 @@ NETWORK_ALLOWED = {
     ("strata_control/tune_session.py", "urlopen"): "the loopback engine (127.0.0.1) the auto-tuner a user started measures",
     ("strata_control/loopback.py", "urlopen"): "the one opener for this computer's own servers (no proxy); any other address is passed on unchanged",
     ("strata_control/components.py", "urlopen"): "the component fetcher: only `strata install`/UPDATE call it",
+    ("serve/panel.py", "urlopen"): "(fork) loopback only: the control panel's own port and the model server it started, 127.0.0.1",
 }
 #: Modules that import the installer on purpose, with the explicit command that reaches them.
 INSTALLER_IMPORT_ALLOWED = {
@@ -224,7 +225,7 @@ class StartNeverAcquiresTests(unittest.TestCase):
         self.assertEqual(rec.network, [])
         self.assertEqual(rec.installers(), [])
         self.assertEqual(len(started), 1, text)                        # the server was started
-        self.assertIn("server.py", " ".join(started[0]))
+        self.assertIn("panel.py" if setup.WIN else "server.py", " ".join(started[0]))   # fork: the panel on Windows
         self.assertEqual(self.env_of_start, "1")                         # the server is told, too
         self.assertIn("is older than this Strata expects", text)
         self.assertIn("--update", text)                                 # START-HERE.bat --update on Windows, ./setup.sh --update elsewhere

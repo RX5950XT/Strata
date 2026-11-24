@@ -233,7 +233,10 @@ class LowRamGpus(unittest.TestCase):
         code, out, cfg, _ = install(ram, found, ["--family", "qwen", "--model", "IQ3_XXS", "--no-start",
                                                  "--gpus", "0,1"])
         one = setup.low_ram_gpu_gb("IQ3_XXS", 15.9, 131072, "int8")   # the 128K default
-        self.assertIn(f"the GPUs hold ~{100 * 2 * one / setup.MODELS['IQ3_XXS']['arena_gb']:.0f}% of them", out)
+        # fork: the picture reader goes on a GPU here, and its room comes out of the main card's share
+        reader = setup.VISION["gpu"]["reserve_mib"] / 1024 if "--vram-reserve-mib" in cfg["args"] else 0
+        main = setup.low_ram_gpu_gb("IQ3_XXS", 15.9 - reader, 131072, "int8")
+        self.assertIn(f"the GPUs hold ~{100 * (main + one) / setup.MODELS['IQ3_XXS']['arena_gb']:.0f}% of them", out)
 
     def test_asked_and_answered_two(self):
         ram, found = PROFILES["32GB-2x24GB"]

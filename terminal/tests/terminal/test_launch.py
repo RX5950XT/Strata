@@ -112,7 +112,8 @@ class CatalogRules(unittest.TestCase):
             own = cat.strata.own_families()                # #5869: Qwen3.6's sizes are its own table's (a size name can repeat across families)
             sizes = {(f["family"], s["model"]): s for f in cat.strata.model_table(cat.hardware()) for s in f["sizes"]}
             for r in rows:
-                want = sizes[(r.family, r.model)]["download_gb"] if r.family in own else models[r.model]["download_gb"]
+                fam_gb = (families.get(r.family) or {}).get("download_gb")     # a family with a size of its own (orca)
+                want = sizes[(r.family, r.model)]["download_gb"] if r.family in own else fam_gb or models[r.model]["download_gb"]
                 self.assertAlmostEqual(r.download_gb, want)
             rec = [r for r in rows if r.recommended]
             self.assertEqual([(r.family, r.model) for r in rec], [("qwen", "IQ3_S")])      # 64 + 12 GB: the 64 GB tier

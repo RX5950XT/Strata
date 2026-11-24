@@ -177,7 +177,8 @@ class ExistingInstallIsFoundInPlace(unittest.TestCase):
                 contextlib.redirect_stdout(out):
             self.assertEqual(setup.main(), 0, out.getvalue())
         self.assertEqual(len(started), 1)
-        self.assertIn("server.py", " ".join(map(str, started[0])))
+        # fork: on Windows the control panel starts it (panel.py --start <model>, which runs serve/server.py)
+        self.assertIn("panel.py" if setup.WIN else "server.py", " ".join(map(str, started[0])))
         self.assertEqual(setup.data_folder_in_place(), (self.data, []))
         # starting touches the most recently used config (its mtime) and nothing else
         after = snapshot(self.base)

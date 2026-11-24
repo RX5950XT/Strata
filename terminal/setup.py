@@ -944,6 +944,12 @@ def build_inkling_import_args(
 # Every model file Strata downloads has a fixed size and SHA-256: (repository, file name) -> (bytes, sha256).  download()
 # checks the file against it as soon as it is whole (a wrong file is deleted and setup stops), and stops before the
 # download when the server's size is not the pinned one.  The files are fetched from the commits in HF_REVISIONS.
+# orcarouter's files at HF_REVISIONS' commit (the fork's orca family): name -> (bytes, sha256)
+ORCA_FILES = {
+    "Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf": (44637691008, "aaf57046943c6638480e8984835ce5ec29c486180ff71169d3c22c6929851b7b"),
+    "Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00002-of-00002.gguf": (40564977024, "a19cf9bbe87bce45f312ef11401c88b675f3784c927d02fa2272822229e6a224"),
+    "mmproj-Qwen3.8-Flash-Next-Uncensored-F16.gguf": (907543296, "f0f352a97a62a057f3aecdb597cac664762cea2ca23f7b16ec92eee28c5572d9"),
+}
 REPO_PINS = {
     "ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF": ISTA_FILES,
     "ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF": SWIFT_FILES,
@@ -951,6 +957,7 @@ REPO_PINS = {
     UNSLOTH_REPO: {**UNSLOTH_V31_SHARDS, **UNSLOTH_SHARDS, **UNSLOTH_IQ4_XS_SHARDS, **UNSLOTH_BIG_SHARDS},
     "unsloth/Qwen3.6-35B-A3B-MTP-GGUF": QWEN36_FILES,
     "agentionai/Qwen3.8-Flash-Next-Gyro-GGUF": GYRO_FILES,
+    "orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF": ORCA_FILES,
 }
 # the files of a repository at a commit other than HF_REVISIONS' (UNSLOTH_V31_REVISION): (repository, commit) -> name -> (bytes, sha256); file_pin looks here first
 REV_PINS = {(UNSLOTH_REPO, UNSLOTH_V31_REVISION): {**UNSLOTH_V31_SHARDS, **UNSLOTH_Q4_V31_SHARDS}}
@@ -8752,7 +8759,8 @@ def _start(cfg_path: Path, port: int | None, gpu: int | list | None = None, open
                "--start", cfg_path.stem.removeprefix("strata-")] + (["--open"] if browser else [])
         # `start` detaches the panel and returns at once; through subprocess.call, which the setup tests replace, so a
         # test never starts a real panel (one did, and took port 8091 from the running one)
-        subprocess.call(["cmd", "/c", "start", "", *cmd], cwd=str(ROOT))
+        # the server the panel starts inherits the no-acquisition switch, as a direct start passes it
+        subprocess.call(["cmd", "/c", "start", "", *cmd], cwd=str(ROOT), env={**os.environ, acquisition.ENV: "1"})
         say()
         for n, line in enumerate(textwrap.wrap(f"Settings ({cfg_path.name}): {settings_summary(cfg, port)}", 100,
                                                break_on_hyphens=False)):   # #564: what this start uses
