@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""fork: make an uncensored Inkling-2-Mini .strata from an official Strata build (SQ-10 / SQ-15).
+"""fork: make an uncensored Inkling-2-Mini .strata from an official Strata build (SQ-10 / SQ-15 / SQ-20).
 
 OpenUncensored's Inkling-2-Mini-Uncensored (the source of Abiray's GGUFs) changes only the 20 attention output
 projections `model.llm.layers.{4..23}.attn.wo_ud.weight` (BF16); experts, vision and DSpark are the original bytes.
-The official SQ-10 / SQ-15 builds store wo_ud as Q8_ROW ([rows] f32 scale = absmax/127, then [rows, cols] int8 =
-round-half-even(w / scale)); this encoder reproduces the official bytes exactly on the unedited layers 0..3 (checked
-below). The tool copies the build, re-encodes the uncensored wo_ud into the same slots (same sizes, Section 1 only),
-and rewrites Section 1's SHA-256 in the header so `--selfcheck --verify-hash` still passes.
+The official builds store each wo_ud as Q8_ROW ([rows] f32 scale = absmax/127, then [rows, cols] int8 =
+round-half-even(w / scale)) or as BF16 (SQ-15's global layers 5/11/17/23, all of SQ-20; copied as is). The encoder
+reproduces the official bytes exactly on the unedited layers 0..3 (checked below). The tool copies the build, writes
+the uncensored wo_ud into the same slots (same sizes, Section 1 only), and rewrites Section 1's SHA-256 in the header
+so `--selfcheck --verify-hash` still passes.
 
 Usage: python -I tools/inkling_uncensor_patch.py SRC.strata OUT.strata
 The uncensored BF16 tensors are read with HTTP range requests (about 340 MB) from the pinned Hugging Face commit.
@@ -30,6 +31,7 @@ FILE = "model-00001-of-00001.safetensors"
 EDITED = range(4, 24)          # layers OpenUncensored edited (README: wo_ud on layers 4 to 23)
 CHECK = range(0, 4)            # unedited layers: our Q8_ROW bytes must equal the official ones
 ROWS, COLS = 2304, 3072
+SLOT_BYTES = {"Q8_ROW": ROWS * 4 + ROWS * COLS, "BF16": ROWS * COLS * 2}   # the two wo_ud formats SQ-10/15/20 use
 
 
 def http_range(url: str, start: int, end: int) -> bytes:
@@ -88,21 +90,22 @@ def main(argv: list[str]) -> int:
     def wanted(layer: int) -> tuple[dict, bytes]:
         name = f"model.llm.layers.{layer}.attn.wo_ud.weight"
         t = tensors[name]
-        if t["format"] != "Q8_ROW" or t["shape"] != [ROWS, COLS] or t["bytes"] != ROWS * 4 + ROWS * COLS:
+        if t["shape"] != [ROWS, COLS] or t["bytes"] != SLOT_BYTES.get(t["format"]):
             raise ValueError(f"{name}: unexpected {t['format']} {t['shape']} {t['bytes']}")
         info = st[name]
         if info["dtype"] != "BF16" or info["shape"] != [ROWS, COLS]:
             raise ValueError(f"{name}: source is {info['dtype']} {info['shape']}")
         a, b = info["data_offsets"]
-        return t, q8_row(bf16_to_f32(http_range(url, base + a, base + b - 1)))
+        raw = http_range(url, base + a, base + b - 1)
+        return t, raw if t["format"] == "BF16" else q8_row(bf16_to_f32(raw))
 
     with src.open("rb") as f:
         for layer in CHECK:
             t, enc = wanted(layer)
             f.seek(sec1[0] + t["offset"])
             if f.read(t["bytes"]) != enc:
-                raise SystemExit(f"layer {layer}: our Q8_ROW bytes differ from the official build; not patching")
-    print(f"layers {CHECK.start}..{CHECK.stop - 1}: Q8_ROW re-encode matches the official bytes exactly")
+                raise SystemExit(f"layer {layer}: our {t['format']} bytes differ from the official build; not patching")
+    print(f"layers {CHECK.start}..{CHECK.stop - 1}: wo_ud bytes match the official build exactly")
 
     tmp = out.with_suffix(out.suffix + ".part")
     shutil.copyfile(src, tmp)

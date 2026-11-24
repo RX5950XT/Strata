@@ -76,6 +76,13 @@ python -I tools/inkling_uncensor_patch.py models/inkling2-strata/Inkling-2-Mini-
   去拒答權重固定抓 `OpenUncensored/Inkling-2-Mini-Uncensored` 的 commit `4e5f06d7`（只讀約 340 MB）。
 - 做出來的檔案 SHA-256 應為 `82cbd007fc7f08f7de33ae7912d36112af97b148effc2a9ed17306a5afa48a5e`。
   2026-11-24 重做一次，跟正在用的檔案逐位元相同。
+- 工具也能做 SQ-15、SQ-20（BF16 的 `wo_ud` 直接複製）。三種大小已公開在
+  [RX5950XT/Inkling-2-Mini-Uncensored-Strata](https://huggingface.co/RX5950XT/Inkling-2-Mini-Uncensored-Strata)；
+  SHA-256：SQ-15 `93b244da…0d0d`、SQ-20 `6453a871…b671`。跟官方檔逐位元比，差異只在 20 個 `wo_ud` 和檔頭雜湊。
+- SQ-20 在 5060 Ti 讀 prompt 會算錯（官方原版也一樣，上游發行版 0.1.65 對話同樣亂）：第 20–23 層的 MX8 專家走
+  `mxf8f6f4` kernel，`encode_ue8m0` 把全 0 的啟動值區塊縮放值寫成 `0xFF`，硬體當成 NaN。改成 `0` 後，
+  KLD（以 CPU 跑的 SQ-20 為參考，512 token）1.663 → 0.015；一次算一個 token 是 0.003、3060 Ti 是 0.006；
+  SQ-10 改前改後完全相同（0.115477）。
 
 ## 200K：物理極限與兩張卡（2026-11-23）
 
