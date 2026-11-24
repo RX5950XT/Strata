@@ -79,10 +79,14 @@ python -I tools/inkling_uncensor_patch.py models/inkling2-strata/Inkling-2-Mini-
 - 工具也能做 SQ-15、SQ-20（BF16 的 `wo_ud` 直接複製）。三種大小已公開在
   [RX5950XT/Inkling-2-Mini-Uncensored-Strata](https://huggingface.co/RX5950XT/Inkling-2-Mini-Uncensored-Strata)；
   SHA-256：SQ-15 `93b244da…0d0d`、SQ-20 `6453a871…b671`。跟官方檔逐位元比，差異只在 20 個 `wo_ud` 和檔頭雜湊。
-- SQ-20 在 5060 Ti 讀 prompt 會算錯（官方原版也一樣，上游發行版 0.1.65 對話同樣亂）：第 20–23 層的 MX8 專家走
-  `mxf8f6f4` kernel，`encode_ue8m0` 把全 0 的啟動值區塊縮放值寫成 `0xFF`，硬體當成 NaN。改成 `0` 後，
-  KLD（以 CPU 跑的 SQ-20 為參考，512 token）1.663 → 0.015；一次算一個 token 是 0.003、3060 Ti 是 0.006；
-  SQ-10 改前改後完全相同（0.115477）。
+- 專家放不進顯示卡時（SQ-20 在 16 GB 卡上一定會），讀 prompt 要靠兩塊暫存區把主記憶體的專家搬上來算。
+  0.1.65 在放完專家、配好固定主記憶體之後才配暫存區，常常沒配到（啟動紀錄 `pf_buf=0MB`；上游的說明是
+  固定主記憶體的分頁表吃掉了顯示卡記憶體，這點我沒量）。這時每段 prompt 都悄悄跳過所有主記憶體的專家：SQ-20 回答多國語言混雜，
+  KLD（以 CPU 跑的 SQ-20 為參考，512 token）1.663；模擬同樣情況、專家放更多到主記憶體時是 4.5。
+  這是上游 #6617，0.2.20 已修（commit `4aaa1cbdc`）；fork 照同樣做法改：放完專家就從預留的 256 MiB 配暫存區，
+  萬一沒有就報錯停下。改後同樣的模擬 `pf_buf=64MB`、KLD 0.015；SQ-10 有 245 個專家在主記憶體時，
+  KLD 跟全部在顯示卡時完全相同（0.115477）。
+  先前以為是 `encode_ue8m0` 的 `0xFF`，那是錯的（改了沒差，已撤回）。
 
 ## 200K：物理極限與兩張卡（2026-11-23）
 
