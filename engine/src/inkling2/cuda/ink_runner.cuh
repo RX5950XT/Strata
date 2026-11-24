@@ -240,6 +240,7 @@ struct InkCudaModel {
                     ++n_host_experts;
                 }
             }
+            if (n_host_experts > 0) hybrid.alloc_pf_stage(max_exp_bytes);   // fork: from the 256 MiB reserved above
             INK_CK(cudaMalloc(&d_sec4, std::max<size_t>(256, vram_used)));
             if (host_used > 0) {
                 INK_CK(cudaHostAlloc(&hybrid.h_sec4_pinned, host_used, cudaHostAllocDefault));

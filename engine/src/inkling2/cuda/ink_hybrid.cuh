@@ -803,13 +803,24 @@ struct InkHybridEngine {
         active = true;
     }
 
+    // fork: the two prefill staging buffers come out of the 256 MiB the placement reserved for them, before the experts
+    // are uploaded. Allocated later from whatever VRAM was left, they were sometimes skipped (pf_buf=0MB), and then every
+    // prompt chunk left out all host experts without an error.
+    void alloc_pf_stage(size_t max_exp_bytes) {
+        if (d_pf_stage[0]) return;
+        const size_t align_b = (max_exp_bytes + 255ull) & ~255ull;
+        pf_stage_bytes = std::max(std::min<size_t>(64ull << 20, std::max<size_t>(16 * align_b, 32ull << 20)), align_b);
+        INK_CK(cudaMalloc(&d_pf_stage[0], pf_stage_bytes));
+        INK_CK(cudaMalloc(&d_pf_stage[1], pf_stage_bytes));
+    }
+
     // Allocate ping-pong prefill streaming buffers (2 x 64 MiB) + optional dynamic decode promotion ring!
     void alloc_staging(size_t max_exp_bytes, size_t vram_avail) {
         if (!active) return;
         const size_t align_b = (max_exp_bytes + 255ull) & ~255ull;
         promo_slot_bytes = align_b;
         // Reserve 2 x 16..64 MiB ping-pong staging buffers for ultra-fast prefill DMA streaming!
-        if (vram_avail > (48ull << 20)) {
+        if (!d_pf_stage[0] && vram_avail > (48ull << 20)) {
             const size_t max_each = (vram_avail - (16ull << 20)) / 2;
             pf_stage_bytes = std::min<size_t>(64ull << 20, std::min(max_each, std::max<size_t>(16 * align_b, 32ull << 20)));
             pf_stage_bytes = std::max(pf_stage_bytes, align_b);
@@ -996,6 +1007,11 @@ inline void launch_ink_moe_hybrid(
         // Partition host_list into ping-pong VRAM chunks fitting inside pf_stage_bytes!
         struct PfChunk { std::vector<int> eids; std::vector<size_t> offs; };
         std::vector<PfChunk> chunks;
+        if (!host_list.empty() && !(hyb.d_pf_stage[0] && hyb.pf_stage_bytes > 0)) {
+            // fork: never drop host experts silently; the loader always allocates the staging buffers now
+            std::fprintf(stderr, "strata-inkling: no prefill staging buffer for %zu host experts (layer %d)\n", host_list.size(), ip);
+            std::exit(3);
+        }
         if (!host_list.empty() && hyb.d_pf_stage[0] && hyb.pf_stage_bytes > 0) {
             PfChunk cur;
             size_t used = 0;
