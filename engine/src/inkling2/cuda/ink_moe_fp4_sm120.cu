@@ -113,7 +113,7 @@ __device__ __forceinline__ uint8_t encode_e4m3_signed(float x) {
 __device__ __forceinline__ uint8_t encode_ue8m0(float amax, float& inv_scale) {
     if (!(amax > 0.0f)) {
         inv_scale = 0.0f;
-        return 0u;  // fork: an all-zero block gets 2^-127 (its E4M3 codes are 0); 0xFF is NaN to the mma hardware
+        return 255u;  // zero scale sentinel
     }
     const float need = amax * (1.0f / 448.0f);
     uint32_t bits = __float_as_uint(need);
