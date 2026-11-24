@@ -2,18 +2,18 @@
 
 - [x] 合併 upstream/main（0.2.11 → 0.2.19，引擎 0.1.65，2,545 個 commit）。上游搬目錄：`src/`→`engine/src/`、`serve/`、`setup.py`、`data/`→`terminal/`。11/23 合併進 main 並 push，分支已刪。
 - [x] fork 的資料仍在 repo 根目錄（configs/、models/、packs/、engine-local/、.panel/）；面板用 `REPO = terminal/..` 找它們，server 從 `terminal/` 跑。SC117 設定的 expert-profile 改指 `terminal/data/`。
-- [x] 雙卡主引擎用 `build-dual.bat`（`-S engine`，vendored ggml）重編，engine-local 換 0.1.65，舊版 `engine-local/strata-0.1.57.exe`。SC117 雙卡 A/B 一輪：解碼新 42–48、舊 42–50 tok/s，worker 正常。
+- [x] 雙卡主引擎用 `build-dual.bat`（`-S engine`，vendored ggml）重編，engine-local 換 0.1.65。SC117 雙卡 A/B 一輪：解碼新 42–48、舊 42–50 tok/s，worker 正常。
 - [x] Inkling：跑官方 SQ-10＋OpenUncensored 的 20 個 `wo_ud`（`tools/inkling_uncensor_patch.py`），單卡、fp8 KV、看圖、DSpark。數字與原因在 docs/INKLING-UNCENSORED.md。
-- [x] Inkling 長上下文（11/23）：讀 prompt 注意力分段（固定記憶體）、DSpark 環狀緩衝、`--kv-gpu 1` 把全域 KV／注意力放 3060 Ti（門鈴＋keep-warm）、64 段 split-K、`--draft-max-pos`。200K 兩張卡：prompt 364 秒、解碼 22.8 tok/s；112K 單卡設定照舊。數字與極限在 docs/INKLING-UNCENSORED.md。舊 exe：engine-local/inkling/strata-inkling-112k.exe、-ctx64k.exe。
-- [x] 離極限第二輪（11/23）：融合 flash prefill（`ink_pf_flash.cuh`，FP16 MMA，KLD 比原版好）、詞表輸出層直接讀 S6_K（每 token 少搬約 2 GB）、16-lane 解碼注意力、`--chunk 2048/1024`、`--draft-max-pos 40960`。200K 雙卡：prompt 185 秒、解碼 26.3 tok/s；面板預設改成雙卡 200K（設定 `"default": true`），單卡改名 `-112k`。舊 exe：`strata-inkling-prev.exe`。
-- [x] 第三輪（11/23）：解碼／樹驗證注意力和 DSpark 草稿全域層改 tensor core（`ink_dec_tc.cuh`）、讀 prompt 兩張卡同時做（一段拆兩半交錯，`emit_two_lanes`，交接改兩組緩衝區）。200K 雙卡：prompt 129 秒、解碼投機 42.6／不投機 36.0 tok/s；投機在每個長度都贏，兩份設定拿掉 `--draft-max-pos`。上一版 exe：`strata-inkling-r2.exe`。
-- [x] 第四輪（11/23）：專家讀 prompt 改 128 列一塊（SF4 另一份 64 列清單）、注意力前混合 kernel 排程改相鄰、8 路相加 float4。KLD 不變；200K 雙卡 prompt 125.4 → 118.7 秒（同一天對照），156,703 token 真實長文 85.8 秒答對。上一版 exe：`strata-inkling-r3.exe`。
-- [x] HIP：WSL ROCm 7.2.4（補裝 hipblas/rocblas/hipblaslt-dev）gfx1100 編得過、`--help` 能跑；連結要 `-DCMAKE_EXE_LINKER_FLAGS=-no-pie`（上游 HIP 物件沒 -fPIC，跟這次改動無關）。SYCL：WSL 裝 oneAPI 2026.2，`build_inkling_sycl.sh jit` 原始碼全編過，連結缺 `quant::dequant_row`（上游腳本少編一個檔，跟這次無關）；SYCL 引擎沒用到改過的共用檔。
-- [x] 第五輪（11/23）：GPU 效能計數器登錄檔已開（`NVTweak\RmProfilingAdminOnly=0`，重開機後生效；之前用管理員跑 ncu）。讀 prompt 專家 activation 改 `cp.async` 預取（−3～−11%）；驗證專家 kernel 限制每 SM 3 個 block（255 → 168 暫存器，gate/up −16%、down −10%）。KLD 與輸出 token 完全相同（`INK_BENCH_TOKENS`）；雙卡 200K 117–121 秒，跟上一版一樣。HIP 編過，SYCL 沒用到這兩個檔。上一版 exe：`strata-inkling-r4.exe`。
-- [x] 第六輪（11/24）：讀 prompt 專家把 S2_K／S3_K superblock 用 `cp.async` 整塊搬進 shared memory（不改檔案格式，−9%，單卡 8K 讀 prompt +5～10%、雙卡 64K −2～3%）；投機驗證 q8 投影每 block 16 列（−11%，整步約 −2%）。KLD 與輸出 token 完全相同。短文解碼已貼著這張卡讀 2–20 MB 的實際速度（只讀就 140–300 GB/s），「122 tok/s 上限」不成立。上一版 exe：`strata-inkling-r5.exe`。
-- [x] 第七輪（11/24）：跨請求 prompt 快取（讀到倒數第 1 個 token 存非位置狀態到主機記憶體，下一輪開頭相同就還原；39K 對話之後每輪 22 → 4 秒，對齊切段的測試輸出完全相同）；讀長文注意力 split-K（3060 Ti kernel −12～−18%，192K 115 → 108 秒）；解碼 F32 小矩陣一列一個 block、滑動視窗層改 tensor core kernel（每步 −1 ms，約 +3%）。HIP gfx1100 編過；SYCL 原始碼編過（連結缺 `quant::dequant_row` 是上游舊問題）。上一版 exe：`strata-inkling-r6.exe`。
+- [x] Inkling 長上下文（11/23）：讀 prompt 注意力分段（固定記憶體）、DSpark 環狀緩衝、`--kv-gpu 1` 把全域 KV／注意力放 3060 Ti（門鈴＋keep-warm）、64 段 split-K、`--draft-max-pos`。200K 兩張卡：prompt 364 秒、解碼 22.8 tok/s；112K 單卡設定照舊。數字與極限在 docs/INKLING-UNCENSORED.md。
+- [x] 離極限第二輪（11/23）：融合 flash prefill（`ink_pf_flash.cuh`，FP16 MMA，KLD 比原版好）、詞表輸出層直接讀 S6_K（每 token 少搬約 2 GB）、16-lane 解碼注意力、`--chunk 2048/1024`、`--draft-max-pos 40960`。200K 雙卡：prompt 185 秒、解碼 26.3 tok/s；面板預設改成雙卡 200K（設定 `"default": true`），單卡改名 `-112k`。
+- [x] 第三輪（11/23）：解碼／樹驗證注意力和 DSpark 草稿全域層改 tensor core（`ink_dec_tc.cuh`）、讀 prompt 兩張卡同時做（一段拆兩半交錯，`emit_two_lanes`，交接改兩組緩衝區）。200K 雙卡：prompt 129 秒、解碼投機 42.6／不投機 36.0 tok/s；投機在每個長度都贏，兩份設定拿掉 `--draft-max-pos`。
+- [x] 第四輪（11/23）：專家讀 prompt 改 128 列一塊（SF4 另一份 64 列清單）、注意力前混合 kernel 排程改相鄰、8 路相加 float4。KLD 不變；200K 雙卡 prompt 125.4 → 118.7 秒（同一天對照），156,703 token 真實長文 85.8 秒答對。
+- [x] HIP／SYCL（11/24 合併後，WSL ROCm 7.2.4＋oneAPI 2026.2＋oneMKL）：全部 target 編，跟上游 v0.2.20 同法對照。HIP `strata`、`strata-inkling` 編過；`strata-load/-overlap/-concurrent`、`pinned_shared_test` 連結缺 `expert_layout()`，上游一樣（上游問題）。SYCL 全部編過、`build_inkling_sycl.sh jit` 編過。修了：`keep_warm.cu` 在 HIP 改成不做事、SYCL 翻譯檔跟上 fork 的 `share`／`recoverable` 參數、拿掉 fork 引擎沒有的上游 `kv_dtype_guard_test`、Inkling SYCL 腳本補編 `dequant.cpp`／`types.cpp`（上游的修法）。連結要 `-no-pie`。
+- [x] 第五輪（11/23）：GPU 效能計數器登錄檔已開（`NVTweak\RmProfilingAdminOnly=0`，重開機後生效；之前用管理員跑 ncu）。讀 prompt 專家 activation 改 `cp.async` 預取（−3～−11%）；驗證專家 kernel 限制每 SM 3 個 block（255 → 168 暫存器，gate/up −16%、down −10%）。KLD 與輸出 token 完全相同（`INK_BENCH_TOKENS`）；雙卡 200K 117–121 秒，跟上一版一樣。HIP 編過，SYCL 沒用到這兩個檔。
+- [x] 第六輪（11/24）：讀 prompt 專家把 S2_K／S3_K superblock 用 `cp.async` 整塊搬進 shared memory（不改檔案格式，−9%，單卡 8K 讀 prompt +5～10%、雙卡 64K −2～3%）；投機驗證 q8 投影每 block 16 列（−11%，整步約 −2%）。KLD 與輸出 token 完全相同。短文解碼已貼著這張卡讀 2–20 MB 的實際速度（只讀就 140–300 GB/s），「122 tok/s 上限」不成立。
+- [x] 第七輪（11/24）：跨請求 prompt 快取（讀到倒數第 1 個 token 存非位置狀態到主機記憶體，下一輪開頭相同就還原；39K 對話之後每輪 22 → 4 秒，對齊切段的測試輸出完全相同）；讀長文注意力 split-K（3060 Ti kernel −12～−18%，192K 115 → 108 秒）；解碼 F32 小矩陣一列一個 block、滑動視窗層改 tensor core kernel（每步 −1 ms，約 +3%）。HIP gfx1100 編過；SYCL 原始碼編過（連結缺 `quant::dequant_row` 是上游舊問題）。
 - [x] 去拒答三種大小（11/24）：SQ-10／15／20 已公開在 HF `RX5950XT/Inkling-2-Mini-Uncensored-Strata`。SQ-20 亂答是上游 #6617（專家在主記憶體＋`pf_buf=0MB` 時讀 prompt 跳過主記憶體的專家，0.2.20 已修），fork 照同樣做法修了；之前說的 `encode_ue8m0` 0xFF 是錯的，已撤回。
-- [x] 合併上游 0.2.20（11/24，97 個 commit）：Inkling 引擎整個留 fork 版（實測 fork 讀 prompt 快 1.1–1.6 倍、200K 快 3.4 倍），其他照上游。Inkling 輸出雜湊合併前後相同；主引擎 `build-dual.bat` 編過、SC117 能答；Terminal 測試（排除會寫 23 GB 暫存檔的 `test_progress_words.py`）合併後 51 失敗，全部是 fork main 或上游本來就失敗的。
+- [x] 合併上游 0.2.20（11/24，97 個 commit）：Inkling 引擎整個留 fork 版（實測 fork 讀 prompt 快 1.1–1.6 倍、200K 快 3.4 倍），其他照上游。Inkling 輸出雜湊合併前後相同；主引擎 `build-dual.bat` 編過、SC117 能答；Terminal 測試（排除會寫 23 GB 暫存檔的 `test_progress_words.py`）合併後 51 失敗；fork 自己造成的 6 個已修（面板 `panel.py` 的測試清單、orca 下載大小），現在 44 個都是上游本來就失敗的。setup 測試另修 orca 檔案釘 SHA-256、雙卡比例算看圖保留。
 - [x] 第八輪（11/24，試過沒採用）：投機一步只等 CPU 一次（GPU 走樹＋依接受數挑 graph 餵 DSpark＋先算下一步草稿），輸出相同但不開 nsys 兩版都 190.0 tok/s，已撤回；小 kernel 在 graph 裡一個約 0.9 µs，全部消失也只省每步 1.7%，整層合併不做。3060 Ti 注意力再快要 FP16 累加（精度變差），不做。細節在 docs/INKLING-UNCENSORED.md 第 26 點。
 - [x] Abiray Q3_K_M GGUF：載入器加主線命名、EP 後端加 Q3_K／Q5_0／Q5_1、修 `d_dense_x_` 溢位；能跑但只有 EP 慢路徑（約 5 tok/s）。
 - [x] 面板支援 Inkling（DSpark、引擎內建看圖、從 server log 讀速度）；PANEL.bat 改 `terminal\serve\panel.py`。
@@ -26,7 +26,7 @@
 - [x] 合併 upstream/main（0.2.6 → 0.2.11，引擎 0.1.57），10 檔衝突，保留雙卡 worker。分支 `merge/upstream-0.2.11`，未 push。
 - [x] 修上游「看圖要用時才啟動」誤判第二張卡的看圖模組（主卡 cache 少 1000 格、prompt 區塊減半）。
 - [x] 舊新交錯 A/B：雙卡解碼與讀 prompt 都沒變慢，數字在 docs/DUAL-GPU.md。
-- [x] engine-local 換成 0.1.57，舊版留在 `engine-local/strata-0.1.51.exe`。
+- [x] engine-local 換成 0.1.57。
 - [ ] HIP／SYCL／Metal 未編譯驗證；未做長時間穩定性測試。
 
 # 上游 0.2.6 合併＋DeepSeek V4.1 去拒答版上 Colab G4
