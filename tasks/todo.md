@@ -13,6 +13,7 @@
 - [x] 第六輪（11/24）：讀 prompt 專家把 S2_K／S3_K superblock 用 `cp.async` 整塊搬進 shared memory（不改檔案格式，−9%，單卡 8K 讀 prompt +5～10%、雙卡 64K −2～3%）；投機驗證 q8 投影每 block 16 列（−11%，整步約 −2%）。KLD 與輸出 token 完全相同。短文解碼已貼著這張卡讀 2–20 MB 的實際速度（只讀就 140–300 GB/s），「122 tok/s 上限」不成立。上一版 exe：`strata-inkling-r5.exe`。
 - [x] 第七輪（11/24）：跨請求 prompt 快取（讀到倒數第 1 個 token 存非位置狀態到主機記憶體，下一輪開頭相同就還原；39K 對話之後每輪 22 → 4 秒，對齊切段的測試輸出完全相同）；讀長文注意力 split-K（3060 Ti kernel −12～−18%，192K 115 → 108 秒）；解碼 F32 小矩陣一列一個 block、滑動視窗層改 tensor core kernel（每步 −1 ms，約 +3%）。HIP gfx1100 編過；SYCL 原始碼編過（連結缺 `quant::dequant_row` 是上游舊問題）。上一版 exe：`strata-inkling-r6.exe`。
 - [x] 去拒答三種大小（11/24）：SQ-10／15／20 已公開在 HF `RX5950XT/Inkling-2-Mini-Uncensored-Strata`。SQ-20 亂答是上游 #6617（專家在主記憶體＋`pf_buf=0MB` 時讀 prompt 跳過主記憶體的專家，0.2.20 已修），fork 照同樣做法修了；之前說的 `encode_ue8m0` 0xFF 是錯的，已撤回。
+- [x] 合併上游 0.2.20（11/24，97 個 commit）：Inkling 引擎整個留 fork 版（實測 fork 讀 prompt 快 1.1–1.6 倍、200K 快 3.4 倍），其他照上游。Inkling 輸出雜湊合併前後相同；主引擎 `build-dual.bat` 編過、SC117 能答；Terminal 測試（排除會寫 23 GB 暫存檔的 `test_progress_words.py`）合併後 51 失敗，全部是 fork main 或上游本來就失敗的。
 - [x] 第八輪（11/24，試過沒採用）：投機一步只等 CPU 一次（GPU 走樹＋依接受數挑 graph 餵 DSpark＋先算下一步草稿），輸出相同但不開 nsys 兩版都 190.0 tok/s，已撤回；小 kernel 在 graph 裡一個約 0.9 µs，全部消失也只省每步 1.7%，整層合併不做。3060 Ti 注意力再快要 FP16 累加（精度變差），不做。細節在 docs/INKLING-UNCENSORED.md 第 26 點。
 - [x] Abiray Q3_K_M GGUF：載入器加主線命名、EP 後端加 Q3_K／Q5_0／Q5_1、修 `d_dense_x_` 溢位；能跑但只有 EP 慢路徑（約 5 tok/s）。
 - [x] 面板支援 Inkling（DSpark、引擎內建看圖、從 server log 讀速度）；PANEL.bat 改 `terminal\serve\panel.py`。
