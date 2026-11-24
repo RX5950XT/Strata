@@ -50,9 +50,11 @@ if [ "$(uname -m)" = "x86_64" ]; then
 fi
 "${ICPX}" -std=c++20 -O3 "${CPU_ISA_FLAGS[@]}" -I"${ENG_ROOT}/include" \
   -c "${ENG_ROOT}/src/quant/sk_codecs.cpp" -o "${OUT_DIR}/sk_codecs.o"
+"${ICPX}" -std=c++20 -O3 "${CPU_ISA_FLAGS[@]}" -I"${ENG_ROOT}/include"   -c "${ENG_ROOT}/src/quant/dequant.cpp" -o "${OUT_DIR}/dequant.o"
+"${ICPX}" -std=c++20 -O3 "${CPU_ISA_FLAGS[@]}" -I"${ENG_ROOT}/include"   -c "${ENG_ROOT}/src/quant/types.cpp" -o "${OUT_DIR}/types.o"
 "${ICPX}" -std=c++20 -O3 "${CPU_ISA_FLAGS[@]}" -I"${ENG_ROOT}/include" \
   -c "${ENG_ROOT}/src/inkling2/inkling2_loop.cpp" -o "${OUT_DIR}/inkling2_loop.o"
-OBJS+=("${OUT_DIR}/sk_codecs.o" "${OUT_DIR}/inkling2_loop.o")
+OBJS+=("${OUT_DIR}/sk_codecs.o" "${OUT_DIR}/dequant.o" "${OUT_DIR}/types.o" "${OUT_DIR}/inkling2_loop.o")
 
 # 2. Target flags (Alchemist dg2 + Battlemage bmg_g21 + Arc Pro B70 bmg_g31 + portable spir64 JIT!)
 SYCL_FLAGS=(-fsycl -std=c++20 -O3 -fno-fast-math)

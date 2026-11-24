@@ -366,8 +366,9 @@ PinnedArena::PinnedArena(uint64_t bytes, uint64_t slice) : PinnedArena(bytes, un
 PinnedArena::PinnedArena(uint64_t bytes, const std::vector<uint64_t> &bounds,
                          uint64_t max_pinned_bytes,
                          const std::string &shared_file,
-                         uint64_t shared_pack_hash) try
+                         uint64_t shared_pack_hash, const std::string &share) try
     : capacity(bytes) {
+    (void)share;   // the fork's Windows section for the second CUDA GPU's worker; not used by the SYCL engine
     if (bytes == 0) return;
     base = reserve(bytes, backing, note, shared_file, shared_pack_hash, mapping_base, mapping_bytes);
     if (base != nullptr && mapping_base == nullptr) {

@@ -341,7 +341,8 @@ void quantize_q8_0(const float* x, uint8_t* blocks, int64_t n, void* stream) {
 /// See `quantize_q8_0_scaled_kernel`.  Writes the same 34-byte `block_q8_0` layout as `quantize_q8_0`, plus
 /// `scales[n/32]` carrying the fp32 `s` the CPU path used - so a hit can be computed with the CPU's
 /// multiplier instead of the block's fp16 `d`.  `scales` must not be null.
-void quantize_q8_0_scaled(const float* x, uint8_t* blocks, float* scales, int64_t n, void* stream) {
+void quantize_q8_0_scaled(const float* x, uint8_t* blocks, float* scales, int64_t n, void* stream,
+                          bool /*recoverable: CUDA/HIP only*/) {
     if (n <= 0) return;
     if (n % QK8_0 != 0) {
         std::fprintf(stderr, "quantize_q8_0_scaled: n %lld is not a multiple of %d\n", (long long) n, QK8_0);

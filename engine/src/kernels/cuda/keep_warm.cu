@@ -10,6 +10,10 @@
 #include <cstdint>
 
 namespace strata::kernels {
+#if defined(__HIP_PLATFORM_AMD__)
+// HIP: no %globaltimer / __nanosleep and never measured on an AMD card; the caller skips the warm-up when this says no.
+bool keep_warm(uint64_t, void*) { return false; }
+#else
 namespace {
 
 __device__ __forceinline__ uint64_t global_ns() {
@@ -29,5 +33,6 @@ bool keep_warm(uint64_t ns, void* stream) {
     keep_warm_kernel<<<1, 1, 0, (cudaStream_t) stream>>>(ns);
     return cudaGetLastError() == cudaSuccess;
 }
+#endif
 
 }  // namespace strata::kernels

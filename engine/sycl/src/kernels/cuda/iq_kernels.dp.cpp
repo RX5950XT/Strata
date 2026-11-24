@@ -6211,7 +6211,7 @@ size_t iq_row_bytes(int t, int64_t n) noexcept {
     }
 }
 
-void quantize_q8_1_rows(const float* x, int64_t n_rows, int64_t n_cols, void* y, void* stream) {
+void quantize_q8_1_rows(const float* x, int64_t n_rows, int64_t n_cols, void* y, void* stream, bool /*recoverable: CUDA/HIP only*/) {
     const long long n = (long long) n_rows * n_cols;
     if (n <= 0) return;
     {
@@ -7767,7 +7767,7 @@ void native_grouped_set_v1(bool v1) { g_grouped_v1 = v1; }
 void native_expert_grouped(const NativeExpertLayout& L, const unsigned long long* grp_ptr, const int32_t* grp_start,
                            const int32_t* n_groups, const int32_t* ent_dst, const int32_t* ent_tok, int64_t cap_groups,
                            int64_t cap_entries, const void* x_q8_1, void* scratch, float* out, void* stream,
-                           int64_t grid_groups) {
+                           int64_t grid_groups, bool /*recoverable: CUDA/HIP only*/) {
     strata::workload_trace::Scope trace("decode.expert_grouped", stream, cap_entries, L.n_ff, L.n_embd,
                                         L.gu_row, L.d_row, L.gu_type);
     if (cap_groups <= 0 || cap_entries <= 0) return;

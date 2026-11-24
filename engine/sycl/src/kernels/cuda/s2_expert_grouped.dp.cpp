@@ -1581,7 +1581,8 @@ void moe_group_resident(const int32_t* ids, int n, int k_per_tok, const uint8_t*
 
 void moe_grouped_s2(const unsigned long long* grp_ptr, const int32_t* grp_start, const int32_t* n_groups,
                     const int32_t* ent_dst, const int32_t* ent_tok, int64_t cap_groups, int64_t cap_entries,
-                    const uint8_t* x_q8_0, const float* x_scales, void* scratch, float* out, void* stream) {
+                    const uint8_t* x_q8_0, const float* x_scales, void* scratch, float* out, void* stream,
+                    bool /*recoverable: CUDA/HIP only*/) {
     if (cap_groups <= 0 || cap_entries <= 0) return;
     dpct::queue_ptr cs = strata::q_of(stream);
     const uint64_t gu_bytes = ((uint64_t) cap_entries * (uint64_t) (2 * FF) * 4 + 15) & ~15ull;
