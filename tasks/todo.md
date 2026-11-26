@@ -1,3 +1,11 @@
+# 上游 0.2.22 合併（2026-11-27，分支 `merge/upstream-0.2.22`，未 push）
+
+- [x] Inkling 引擎整個留 fork 版：本機兩邊輪流各兩輪，fork 讀 prompt 快 1.3–3.5 倍、雙卡生成快 2–3 倍（上游雙卡是 `--layer-split`，每步等 3060 Ti）。數字在 docs/INKLING-UNCENSORED.md。CMake 拿掉上游 Inkling 專屬測試，`engine/src/inkling2/`、`include/strata/inkling2/` 跟 main 完全相同；Inkling 輸出雜湊合併前後相同。
+- [x] 其他照上游；`server.py` 的 `child_env` 保留 fork 的 `expert` 參數＋上游 `pre26_metal_defaults`；`setup.py` 有 peer GPU 時兩張卡都可見。
+- [x] 測試：Terminal 合併版／純上游都是同樣 2 個失敗；serve 20／22 個失敗，全是 Inkling 假引擎測試在 Windows 刪暫存檔時檔案被占用（每跑一次失敗的不同，上游一樣）。
+- [x] 主引擎 0.1.69（`build-dual.bat`）裝進 engine-local，舊版留 `strata-0.1.66.exe`。SC117 雙卡舊新交錯兩輪：短題生成 45–49／43–49、8K 37–38／43–50 tok/s，沒變慢。
+- [ ] 上游 Inkling 0.1.69（`engine-local/inkling-022/`）與 `../Strata-up` worktree 只為測速，可刪。
+
 # 上游 0.2.19 合併＋Inkling-2-Mini 去拒答版（2026-11-22）
 
 - [x] 合併 upstream/main（0.2.11 → 0.2.19，引擎 0.1.65，2,545 個 commit）。上游搬目錄：`src/`→`engine/src/`、`serve/`、`setup.py`、`data/`→`terminal/`。11/23 合併進 main 並 push，分支已刪。
@@ -19,7 +27,7 @@
 - [x] 面板支援 Inkling（DSpark、引擎內建看圖、從 server log 讀速度）；PANEL.bat 改 `terminal\serve\panel.py`。
 - [x] setup 雙卡設定移植（11/23）：`config_for` 補回 `expert_setup`（主卡 uuid＋`expert_gpu`＋`--expert-gpu 1`，拿掉 `gpu_roles`）與看圖放第二張卡；`configs_dir()` 在這個 checkout 指到根目錄 `configs/`（setup 之前看不到已裝的模型、寫到 `terminal/`）。`move_over_old_layout` 遇到根目錄有 PANEL.bat 就不搬（它曾把 packs/、mtp/、engine/*.exe 搬進 terminal/，已搬回）。setup 測試 14 個檔由失敗轉通過，golden 補回 `--vram-reserve-mib 700`。
 - [x] 穩定性（11/23，經面板 API，短文與 30K～150K 字藏碼長文交替）：Inkling 雙卡 200K 跑 23 輪 0 錯（143K token 長文 76 秒）；SC117 雙卡 20 分鐘 21 輪 0 錯（137K token 約 90 秒），log 無錯，兩張卡 VRAM 沒有往上爬。SC117 是會思考的模型，答案可能在 `reasoning_content`，`max_tokens` 要給夠。
-- [ ] serve 測試 8 個在純上游一樣失敗（inkling_serve_e2e 2、server_script_mode、stop_closed_pipe 5）；未做 Metal 編譯。
+- [ ] 未做 Metal 編譯。
 
 # 上游 0.2.11 合併
 

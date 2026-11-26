@@ -10,7 +10,7 @@
 # building for a pre-Ampere arch would produce a binary that runs and is wrong about its own performance, which is
 # the worst of both outcomes.
 cmake_minimum_required(VERSION 3.24)
-project(strata VERSION 0.1.66 LANGUAGES CXX)
+project(strata VERSION 0.1.69 LANGUAGES CXX)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/strata_geometry.cmake)   # -DSTRATA_GEOMETRY=<name>: the model shape the kernels are compiled for (default flash_next, no flag added)
 # The build is cut by backend (cleanup 5.4): each file below only DEFINES macros (strata_<part>()), which run here, in this scope, at the place their
 # block used to be - so this file reads in the order the old single CMakeLists.txt evaluated.
@@ -32,9 +32,10 @@ if(STRATA_ENABLE_SYCL)
   return()
 endif()
 add_compile_definitions(STRATA_VERSION="${PROJECT_VERSION}")
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/strata_symbols.cmake)   # -DSTRATA_KEEP_SYMBOLS=ON: host debug information, same machine code (release scripts keep the symbol files)
 # issue #31: release builds keep a PDB beside the exe (not shipped in it), so a minidump from a stalled engine can
 # be read back to the exact source line
-if(MSVC AND CMAKE_BUILD_TYPE STREQUAL "Release")
+if(MSVC AND CMAKE_BUILD_TYPE STREQUAL "Release" AND NOT STRATA_KEEP_SYMBOLS)   # (STRATA_KEEP_SYMBOLS has its own /Z7 + /DEBUG, cmake/strata_symbols.cmake)
   add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/Zi>)
   add_link_options(/DEBUG /OPT:REF /OPT:ICF)
 endif()
@@ -365,6 +366,14 @@ if(STRATA_BUILD_TESTS)
   add_executable(resident_ram_copy_test tests/core/resident_ram_copy_test.cpp)
   target_include_directories(resident_ram_copy_test PRIVATE include)
   add_test(NAME resident_ram_copy_test COMMAND resident_ram_copy_test)
+  # #6648: the one-pool arithmetic of Hy4-Flash's expert placement on unified memory (header-only, no GPU)
+  add_executable(hy4_uma_pool_test tests/hy4flash/hy4_uma_pool_test.cpp)
+  target_include_directories(hy4_uma_pool_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/hy4flash/run")
+  add_test(NAME hy4_uma_pool_test COMMAND hy4_uma_pool_test)
+  # #6744: the Hy4-Flash work arena's context-sized score buffer, as the memory plan counts it (header-only, no GPU)
+  add_executable(hy4_plan_math_test tests/hy4flash/hy4_plan_math_test.cpp)
+  target_include_directories(hy4_plan_math_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/hy4flash/run")
+  add_test(NAME hy4_plan_math_test COMMAND hy4_plan_math_test)
   # the auto layer split's minimum stage size (#1616): header-only rule, no GPU
   add_executable(split_rules_test tests/program/split_rules_test.cpp)
   target_include_directories(split_rules_test PRIVATE include)
@@ -426,6 +435,21 @@ if(STRATA_BUILD_TESTS)
   add_executable(low_vram_rules_test src/core/low_vram_rules_test.cpp)
   target_include_directories(low_vram_rules_test PRIVATE include)
   add_test(NAME low_vram_rules_test COMMAND low_vram_rules_test)
+
+  # the 4-row dot kernels of the native expert path are opt-in (STRATA_DOT_X4=1; #6552): header-only rule
+  add_executable(dot_x4_policy_test src/core/dot_x4_policy_test.cpp)
+  target_include_directories(dot_x4_policy_test PRIVATE include)
+  add_test(NAME dot_x4_policy_test COMMAND dot_x4_policy_test)
+
+  # the serve watchdog's limits (STRATA_WATCHDOG_S / _IO_S) parse without undefined behaviour (#6861: negative seconds in the log)
+  add_executable(watchdog_limits_test src/core/watchdog_limits_test.cpp)
+  target_include_directories(watchdog_limits_test PRIVATE include)
+  add_test(NAME watchdog_limits_test COMMAND watchdog_limits_test)
+
+  # #4870 mid-coverage adaptive defaults (every 2 / 192 swaps / decay 0.92) are opt-in (STRATA_ADAPT_MID=1): header-only rule, no GPU
+  add_executable(adapt_coverage_rules_test src/core/adapt_coverage_rules_test.cpp)
+  target_include_directories(adapt_coverage_rules_test PRIVATE include)
+  add_test(NAME adapt_coverage_rules_test COMMAND adapt_coverage_rules_test)
 
   # the chunk a prompt piece below the walk floor lends its buffers for (the staged layout, not the rounded chunk's streamed one): header-only rule, no GPU
   add_executable(loan_rules_test tests/prefill/loan_rules_test.cpp)
