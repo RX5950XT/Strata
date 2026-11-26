@@ -1,10 +1,11 @@
-# 上游 0.2.22 合併（2026-11-27，分支 `merge/upstream-0.2.22`，未 push）
+# 上游 0.2.22 合併（2026-11-27，已併進 main 並 push，分支已刪）
 
 - [x] Inkling 引擎整個留 fork 版：本機兩邊輪流各兩輪，fork 讀 prompt 快 1.3–3.5 倍、雙卡生成快 2–3 倍（上游雙卡是 `--layer-split`，每步等 3060 Ti）。數字在 docs/INKLING-UNCENSORED.md。CMake 拿掉上游 Inkling 專屬測試，`engine/src/inkling2/`、`include/strata/inkling2/` 跟 main 完全相同；Inkling 輸出雜湊合併前後相同。
 - [x] 其他照上游；`server.py` 的 `child_env` 保留 fork 的 `expert` 參數＋上游 `pre26_metal_defaults`；`setup.py` 有 peer GPU 時兩張卡都可見。
 - [x] 測試：Terminal 合併版／純上游都是同樣 2 個失敗；serve 20／22 個失敗，全是 Inkling 假引擎測試在 Windows 刪暫存檔時檔案被占用（每跑一次失敗的不同，上游一樣）。
 - [x] 主引擎 0.1.69（`build-dual.bat`）裝進 engine-local，舊版留 `strata-0.1.66.exe`。SC117 雙卡舊新交錯兩輪：短題生成 45–49／43–49、8K 37–38／43–50 tok/s，沒變慢。
-- [ ] 上游 Inkling 0.1.69（`engine-local/inkling-022/`）與 `../Strata-up` worktree 只為測速，可刪。
+- [x] 經 server.py 實答兩輪（SC117、Inkling 雙卡 200K 都記得上一輪）。測速用的上游 Inkling、`../Strata-up` worktree、測試暫存資料夾已刪。
+- [ ] HIP／SYCL／Metal 這次沒編（本機只用 CUDA）。
 
 # 上游 0.2.19 合併＋Inkling-2-Mini 去拒答版（2026-11-22）
 
